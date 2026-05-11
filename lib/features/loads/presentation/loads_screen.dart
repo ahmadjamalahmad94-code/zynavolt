@@ -72,8 +72,15 @@ class _LoadsScreenState extends ConsumerState<LoadsScreen> {
               child: RefreshIndicator(
                 onRefresh: () async => ref.invalidate(loadsListProvider),
                 child: page.when(
-                  loading: () =>
-                      const AppLoading(message: 'جارٍ تحميل الأحمال...'),
+                  // v71: scrollable loading wrapper for consistent
+                  // RefreshIndicator behaviour across all states.
+                  loading: () => ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    children: const [
+                      AppLoading(message: 'جارٍ تحميل الأحمال...'),
+                    ],
+                  ),
                   error: (err, _) => ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),

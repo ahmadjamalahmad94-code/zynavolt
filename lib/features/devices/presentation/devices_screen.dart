@@ -28,7 +28,15 @@ class DevicesScreen extends ConsumerWidget {
         child: RefreshIndicator(
           onRefresh: () async => ref.invalidate(devicesListProvider),
           child: devices.when(
-            loading: () => const AppLoading(message: 'جارٍ تحميل أجهزتك...'),
+            // v71: scrollable loading wrapper for consistent
+            // RefreshIndicator behaviour across all states.
+            loading: () => ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              children: const [
+                AppLoading(message: 'جارٍ تحميل أجهزتك...'),
+              ],
+            ),
             error: (err, _) => ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),

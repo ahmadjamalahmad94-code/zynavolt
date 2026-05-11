@@ -39,8 +39,16 @@ class AccountScreen extends ConsumerWidget {
         child: RefreshIndicator(
           onRefresh: () async => ref.invalidate(accountSnapshotProvider),
           child: snapshot.when(
-            loading: () =>
-                const AppLoading(message: 'جارٍ تحميل بيانات الحساب...'),
+            // v71: wrap loading in a ListView so RefreshIndicator always
+            // has a scrollable child to drive (pull-to-refresh works
+            // even during the initial load).
+            loading: () => ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              children: const [
+                AppLoading(message: 'جارٍ تحميل بيانات الحساب...'),
+              ],
+            ),
             error: (err, _) => ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
