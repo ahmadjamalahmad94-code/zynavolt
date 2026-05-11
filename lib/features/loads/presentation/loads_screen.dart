@@ -11,6 +11,7 @@ import '../../../core/widgets/app_refresh_button.dart';
 import '../../devices/state/selected_device_provider.dart';
 import '../data/load_models.dart';
 import '../data/loads_repository.dart';
+import 'load_form_sheet.dart';
 
 /// Read-only Loads list (v48 + v53 polish).
 ///
@@ -55,6 +56,18 @@ class _LoadsScreenState extends ConsumerState<LoadsScreen> {
             onPressed: () => ref.invalidate(loadsListProvider),
           ),
         ],
+      ),
+      // v93: real "add load" FAB. The form sheet does the POST; on
+      // success the sheet returns `true` and we invalidate the list.
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppTheme.indigoPrimary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('إضافة حمل'),
+        onPressed: () async {
+          final ok = await showLoadFormSheet(context);
+          if (ok == true) ref.invalidate(loadsListProvider);
+        },
       ),
       body: SafeArea(
         child: Column(
@@ -595,8 +608,128 @@ class _LoadTileState extends ConsumerState<_LoadTile> {
                 ),
             ],
           ),
+          // v93: per-row edit / delete menu. Uses the same FAB form sheet
+          // for edit (pre-filled), and a confirm-then-delete dialog.
+          _LoadRowMenu(load: load),
         ],
       ),
+    );
+  }
+}
+
+class _LoadRowMenu extends ConsumerStatefulWidget {
+  const _LoadRowMenu({required this.load});
+  final UserLoad load;
+
+  @override
+  ConsumerState<_LoadRowMenu> createState() => _LoadRowMenuState();
+}
+
+class _LoadRowMenuState extends ConsumerState<_LoadRowMenu> {
+  bool _deleting = false;
+
+  Future<void> _onEdit() async {
+    final ok = await showLoadFormSheet(context, existing: widget.load);
+    if (ok == true) ref.invalidate(loadsListProvider);
+  }
+
+  Future<void> _onDelete() async {
+    if (_deleting) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الحمل'),
+        content: Text(
+          'هل تريد حذف الحمل "${widget.load.name}"؟ '
+          'يُزال هذا الحمل من إعداداتك فقط ولا يؤثر على أي جهاز كهربائي.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _deleting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(loadsRepositoryProvider).delete(widget.load.id);
+      ref.invalidate(loadsListProvider);
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          duration: Duration(seconds: 2),
+          content: Text('تم حذف الحمل.'),
+        ));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('تعذّر حذف الحمل: $e')));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_deleting) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8),
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2.2),
+        ),
+      );
+    }
+    return PopupMenuButton<String>(
+      tooltip: 'إجراءات',
+      icon: const Icon(Icons.more_vert, color: AppTheme.faintMuted),
+      onSelected: (v) {
+        if (v == 'edit') _onEdit();
+        if (v == 'delete') _onDelete();
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem<String>(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined,
+                  size: 18, color: AppTheme.indigoPrimary),
+              SizedBox(width: 8),
+              Text('تعديل'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline,
+                  size: 18, color: AppTheme.danger),
+              SizedBox(width: 8),
+              Text('حذف',
+                  style: TextStyle(color: AppTheme.danger)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

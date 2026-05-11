@@ -38,6 +38,59 @@ class LoadsRepository {
         const <String, dynamic>{};
     return UserLoad.fromJson(raw);
   }
+
+  /// v93: `POST /api/mobile/loads` — creates a new load. Required server
+  /// fields: name + power. Optional: priority, device_id, is_enabled.
+  /// Returns the freshly-created `UserLoad`.
+  Future<UserLoad> create({
+    required String name,
+    required double powerW,
+    int priority = 1,
+    int? deviceId,
+    bool isEnabled = true,
+  }) async {
+    final body = <String, dynamic>{
+      'name': name,
+      'power_w': powerW,
+      'priority': priority,
+      'is_enabled': isEnabled,
+    };
+    if (deviceId != null) body['device_id'] = deviceId;
+    final response = await _api.post('/api/mobile/loads', body: body);
+    final raw = (response.data['load'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return UserLoad.fromJson(raw);
+  }
+
+  /// v93: `PATCH /api/mobile/loads/:id` — updates safe fields only.
+  /// Pass `null` for any field the caller doesn't want to touch.
+  Future<UserLoad> update(
+    int id, {
+    String? name,
+    double? powerW,
+    int? priority,
+    int? deviceId,
+    bool? isEnabled,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (powerW != null) body['power_w'] = powerW;
+    if (priority != null) body['priority'] = priority;
+    if (deviceId != null) body['device_id'] = deviceId;
+    if (isEnabled != null) body['is_enabled'] = isEnabled;
+    final response = await _api.patch('/api/mobile/loads/$id', body: body);
+    final raw = (response.data['load'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return UserLoad.fromJson(raw);
+  }
+
+  /// v93: `DELETE /api/mobile/loads/:id` — removes the load from the
+  /// user's saved catalog. Like every other load action, this only
+  /// updates the persisted preference — it does NOT power down any
+  /// physical device.
+  Future<void> delete(int id) async {
+    await _api.delete('/api/mobile/loads/$id');
+  }
 }
 
 final loadsRepositoryProvider = Provider<LoadsRepository>((ref) {
