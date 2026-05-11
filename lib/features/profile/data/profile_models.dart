@@ -68,13 +68,14 @@ class Profile {
 }
 
 /// Builder for `PATCH /api/mobile/profile`. Only fields that the user
-/// actually changed (and that v42 considers safe to edit without a backend
-/// catalog endpoint) are included in the JSON body. Anything not added
+/// actually changed are included in the JSON body. Anything not added
 /// here is **not sent**.
 ///
-/// Catalog-validated fields (country, country_code, timezone,
-/// phone_country_code) are intentionally **omitted** from this builder in
-/// v42 — they cannot be edited safely without the catalog endpoints.
+/// v44 adds catalog-validated setters (country code, timezone, phone
+/// country code). Each catalog setter sends the value the backend
+/// validates against `find_country` / `timezones_for_template()` /
+/// `phone_prefixes_for_template()` — the UI is responsible for picking
+/// values from the live catalog (`locationCatalogProvider`).
 class ProfilePatch {
   ProfilePatch();
 
@@ -111,6 +112,35 @@ class ProfilePatch {
     if (next != current && (next == 'ar' || next == 'en')) {
       _body['preferred_language'] = next;
     }
+  }
+
+  /// Sends `country_code` (ISO-2). Backend will resolve to the localised
+  /// `country` name automatically and may auto-suggest a matching dial /
+  /// timezone if those fields are empty. Pass `null` or empty to keep the
+  /// current value.
+  void setCountryCode(String? next, {required String current}) {
+    final cleaned = (next ?? '').trim().toUpperCase();
+    if (cleaned == current.trim().toUpperCase()) return;
+    if (cleaned.isEmpty) return; // never *clear* country via PATCH from UI
+    _body['country_code'] = cleaned;
+  }
+
+  /// Catalog-validated timezone (e.g. `Asia/Hebron`). Backend rejects
+  /// values outside `timezones_for_template()` with `invalid_timezone`.
+  void setTimezone(String? next, {required String current}) {
+    final cleaned = (next ?? '').trim();
+    if (cleaned == current.trim()) return;
+    if (cleaned.isEmpty) return;
+    _body['timezone'] = cleaned;
+  }
+
+  /// Phone country dial (e.g. `+970`). Backend rejects values outside
+  /// `phone_prefixes_for_template()` with `invalid_phone_country_code`.
+  void setPhoneCountryCode(String? next, {required String current}) {
+    final cleaned = (next ?? '').trim();
+    if (cleaned == current.trim()) return;
+    if (cleaned.isEmpty) return;
+    _body['phone_country_code'] = cleaned;
   }
 
   void _setIfChanged(

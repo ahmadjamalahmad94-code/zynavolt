@@ -139,4 +139,40 @@ void main() {
       expect(() => body['hacked'] = true, throwsUnsupportedError);
     });
   });
+
+  group('ProfilePatch catalog-validated setters (v44)', () {
+    test('setCountryCode normalises to upper-case and only emits on change',
+        () {
+      final patch = ProfilePatch()
+        ..setCountryCode('ps', current: 'PS') // unchanged
+        ..setCountryCode('jo', current: 'PS'); // changed
+      expect(patch.toJson(), {'country_code': 'JO'});
+    });
+
+    test('setCountryCode never clears via empty input', () {
+      final patch = ProfilePatch()..setCountryCode('', current: 'PS');
+      expect(patch.isEmpty, isTrue);
+    });
+
+    test('setTimezone only emits on change and does not clear via empty', () {
+      final patch = ProfilePatch()
+        ..setTimezone('Asia/Hebron', current: 'Asia/Hebron');
+      expect(patch.isEmpty, isTrue);
+
+      patch.setTimezone('Asia/Amman', current: 'Asia/Hebron');
+      expect(patch.toJson(), {'timezone': 'Asia/Amman'});
+
+      final empty = ProfilePatch()..setTimezone('', current: 'Asia/Hebron');
+      expect(empty.isEmpty, isTrue);
+    });
+
+    test('setPhoneCountryCode only emits on change', () {
+      final patch = ProfilePatch()
+        ..setPhoneCountryCode('+970', current: '+970');
+      expect(patch.isEmpty, isTrue);
+
+      patch.setPhoneCountryCode('+962', current: '+970');
+      expect(patch.toJson(), {'phone_country_code': '+962'});
+    });
+  });
 }

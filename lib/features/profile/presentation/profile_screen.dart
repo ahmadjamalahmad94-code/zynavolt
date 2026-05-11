@@ -6,16 +6,17 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../data/location_catalog_models.dart';
+import '../data/location_catalog_repository.dart';
 import '../data/profile_models.dart';
 import '../state/profile_controller.dart';
 
 /// Profile screen — read + safe edit.
 ///
-/// Editable in v42:  full_name · email · phone_number · city ·
-///                   preferred_language
-/// Read-only in v42: username · role · status · country · timezone ·
-///                   phone_country_code (catalog-bound — needs a future
-///                   catalog endpoint before becoming editable)
+/// Editable in v44:  full_name · email · phone_number · city ·
+///                   preferred_language · country · timezone ·
+///                   phone_country_code (catalog-validated)
+/// Read-only:        username · role · status — server-managed
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -68,6 +69,13 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   late final TextEditingController _city;
   late String _language;
 
+  // Catalog-bound selections. `null` means "user has not picked a value
+  // yet — fall back to whatever the catalog resolves from the Profile".
+  // Once the user touches a dropdown, this becomes the source of truth.
+  String? _countryCode;
+  String? _timezone;
+  String? _phoneDial;
+
   bool _saving = false;
   String? _error;
 
@@ -81,6 +89,12 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     _language = widget.initial.preferredLanguage.isEmpty
         ? 'ar'
         : widget.initial.preferredLanguage;
+    _timezone = widget.initial.timezone.isEmpty
+        ? null
+        : widget.initial.timezone;
+    _phoneDial = widget.initial.phoneCountryCode.isEmpty
+        ? null
+        : widget.initial.phoneCountryCode;
   }
 
   @override
@@ -97,6 +111,15 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
       _language = widget.initial.preferredLanguage.isEmpty
           ? 'ar'
           : widget.initial.preferredLanguage;
+      _timezone = widget.initial.timezone.isEmpty
+          ? null
+          : widget.initial.timezone;
+      _phoneDial = widget.initial.phoneCountryCode.isEmpty
+          ? null
+          : widget.initial.phoneCountryCode;
+      // Reset the user's country selection so the next render picks up the
+      // newly-saved profile value via the inline catalog lookup.
+      _countryCode = null;
     }
   }
 
@@ -117,7 +140,17 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
       ..setPhoneNumber(_phoneNumber.text, current: widget.initial.phoneNumber)
       ..setCity(_city.text, current: widget.initial.city)
       ..setPreferredLanguage(_language,
-          current: widget.initial.preferredLanguage);
+          current: widget.initial.preferredLanguage)
+      ..setTimezone(_timezone, current: widget.initial.timezone)
+      ..setPhoneCountryCode(_phoneDial,
+          current: widget.initial.phoneCountryCode);
+
+    // The country PATCH uses `country_code` so the backend can resolve the
+    // localised name. The current code is whatever the catalog matched on
+    // initial hydration; if nothing matched, _initialCountryCode is null
+    // and any selection counts as a change.
+    final initialCountryCode = _initialCountryCodeForCompare();
+    patch.setCountryCode(_countryCode, current: initialCountryCode);
 
     if (patch.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -143,6 +176,18 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Derive the country_code that would have been sent if the user had not
+  /// touched the dropdown — used by [ProfilePatch.setCountryCode] to decide
+  /// "did this change". On first build, _countryCode is the catalog match
+  /// of the initial country name; after the user picks a new option, this
+  /// helper still returns that original baseline.
+  String _initialCountryCodeForCompare() {
+    final catalog = ref.read(locationCatalogProvider).valueOrNull;
+    if (catalog == null) return _countryCode ?? '';
+    final match = catalog.findCountryByName(widget.initial.country);
+    return match?.code ?? '';
   }
 
   @override
@@ -195,14 +240,12 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                 ),
                 _LabeledField(
                   label: 'رقم الهاتف',
-                  helper: 'الأرقام فقط، بدون رمز الدولة.',
-                  child: TextFormField(
-                    controller: _phoneNumber,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      hintText: 'مثل: 599043337',
-                    ),
+                  helper: 'اختر رمز الدولة من القائمة الرسمية.',
+                  child: _PhoneRow(
+                    currentDial: _phoneDial,
+                    fallbackDial: widget.initial.phoneCountryCode,
+                    numberController: _phoneNumber,
+                    onDialChanged: (dial) => setState(() => _phoneDial = dial),
                   ),
                 ),
                 _LabeledField(
@@ -255,6 +298,14 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
             ),
           ),
           const SizedBox(height: 12),
+          _LocationContactCard(
+            initial: p,
+            countryCode: _countryCode,
+            timezone: _timezone,
+            onCountryChanged: (code) => setState(() => _countryCode = code),
+            onTimezoneChanged: (tz) => setState(() => _timezone = tz),
+          ),
+          const SizedBox(height: 12),
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,7 +313,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                 const _SectionHeader(title: 'معلومات للقراءة فقط'),
                 const SizedBox(height: 6),
                 const Text(
-                  'هذه الحقول مرتبطة بقوائم على الخادم وستصبح قابلة للتعديل في مرحلة لاحقة.',
+                  'هذه الحقول يديرها الخادم ولا يمكن تعديلها من التطبيق.',
                   style: TextStyle(
                     color: AppTheme.faintMuted,
                     fontSize: 11.5,
@@ -277,10 +328,6 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                   label: 'حالة الحساب',
                   value: p.isActive ? 'نشط' : 'موقوف',
                 ),
-                _ReadOnlyRow(label: 'الدولة', value: p.country),
-                _ReadOnlyRow(label: 'المنطقة الزمنية', value: p.timezone),
-                _ReadOnlyRow(
-                    label: 'رمز الدولة للهاتف', value: p.phoneCountryCode),
               ],
             ),
           ),
@@ -293,6 +340,317 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     if (p.roleLabel.isNotEmpty) return p.roleLabel;
     if (p.role.isNotEmpty) return p.role;
     return '—';
+  }
+}
+
+/// Card holding the catalog-validated location selectors (country +
+/// timezone). Phone prefix lives in the contact row inside the editable
+/// section so it sits next to the phone number.
+///
+/// Loads the catalog through `locationCatalogProvider`. While loading or
+/// on error the dropdowns degrade to read-only rows — the user is never
+/// offered fake options.
+class _LocationContactCard extends ConsumerWidget {
+  const _LocationContactCard({
+    required this.initial,
+    required this.countryCode,
+    required this.timezone,
+    required this.onCountryChanged,
+    required this.onTimezoneChanged,
+  });
+
+  final Profile initial;
+  final String? countryCode;
+  final String? timezone;
+  final ValueChanged<String?> onCountryChanged;
+  final ValueChanged<String?> onTimezoneChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final catalog = ref.watch(locationCatalogProvider);
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(title: 'الموقع والمنطقة الزمنية'),
+          const SizedBox(height: 6),
+          const Text(
+            'تستخدم هذه الحقول قوائم محدّدة من خادم Zynavolt.',
+            style: TextStyle(
+              color: AppTheme.faintMuted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              height: 1.55,
+            ),
+          ),
+          catalog.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: AppLoading(message: 'جارٍ تحميل القوائم...'),
+            ),
+            error: (err, _) => _CatalogFallback(profile: initial, error: err),
+            data: (data) {
+              // Resolve the displayed country code inline. Priority:
+              //   1. user's in-progress selection (`countryCode`)
+              //   2. catalog match against the saved country name
+              //   3. null (dropdown shows no selection + helper hint)
+              // No post-frame callback / setState-after-build needed.
+              final resolvedCountryCode = countryCode ??
+                  data.findCountryByName(initial.country)?.code;
+              return _LocationEditors(
+                catalog: data,
+                lang: initial.preferredLanguage,
+                resolvedCountryCode: resolvedCountryCode,
+                hasOriginalCountry: initial.country.isNotEmpty,
+                timezone: timezone,
+                onCountryChanged: onCountryChanged,
+                onTimezoneChanged: onTimezoneChanged,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LocationEditors extends StatelessWidget {
+  const _LocationEditors({
+    required this.catalog,
+    required this.lang,
+    required this.resolvedCountryCode,
+    required this.hasOriginalCountry,
+    required this.timezone,
+    required this.onCountryChanged,
+    required this.onTimezoneChanged,
+  });
+
+  final LocationCatalog catalog;
+  final String lang;
+  final String? resolvedCountryCode;
+  final bool hasOriginalCountry;
+  final String? timezone;
+  final ValueChanged<String?> onCountryChanged;
+  final ValueChanged<String?> onTimezoneChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final countries = catalog.countries;
+    final timezones = catalog.flatTimezones();
+    final tzInCatalog = timezone == null || catalog.hasTimezone(timezone);
+    final countryHelper = resolvedCountryCode == null && hasOriginalCountry
+        ? 'لم نعثر على دولتك الحالية في القائمة. اختر قيمة من القائمة لتثبيتها.'
+        : 'اختيار الدولة قد يضبط رمز الهاتف والمنطقة الزمنية تلقائياً.';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _LabeledField(
+          label: 'الدولة',
+          helper: countryHelper,
+          child: DropdownButtonFormField<String>(
+            // The dropdown only mounts inside the `catalog.when(data:)` branch,
+            // so `resolvedCountryCode` is already the right value at first
+            // mount — no value-vs-initialValue race.
+            key: ValueKey('country-${resolvedCountryCode ?? ''}'),
+            initialValue: resolvedCountryCode,
+            isExpanded: true,
+            items: [
+              for (final c in countries)
+                DropdownMenuItem(
+                  value: c.code,
+                  child: Text(
+                    '${c.label(lang)}  ·  ${c.code}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: onCountryChanged,
+            decoration: const InputDecoration(),
+          ),
+        ),
+        _LabeledField(
+          label: 'المنطقة الزمنية',
+          helper: tzInCatalog
+              ? null
+              : 'القيمة الحالية ليست في القائمة الرسمية؛ ستُستبدل عند اختيار قيمة جديدة.',
+          child: DropdownButtonFormField<String>(
+            key: ValueKey('tz-${(tzInCatalog ? timezone : null) ?? ''}'),
+            initialValue: tzInCatalog ? timezone : null,
+            isExpanded: true,
+            items: [
+              for (final t in timezones)
+                DropdownMenuItem(
+                  value: t.tz,
+                  child: Text(t.label(lang), overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: onTimezoneChanged,
+            decoration: const InputDecoration(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Compact phone row: a narrow prefix dropdown sourced from the catalog,
+/// plus the existing phone-number text field, on one LTR line so the
+/// composed value reads naturally as "+970 599043337" — matches the
+/// canonical web v35 phone display.
+class _PhoneRow extends ConsumerWidget {
+  const _PhoneRow({
+    required this.currentDial,
+    required this.fallbackDial,
+    required this.numberController,
+    required this.onDialChanged,
+  });
+
+  /// In-progress user selection. `null` means the user has not touched
+  /// the dropdown yet; we fall back to [fallbackDial] from the profile.
+  final String? currentDial;
+
+  /// The phone_country_code value from the saved profile.
+  final String fallbackDial;
+
+  final TextEditingController numberController;
+  final ValueChanged<String?> onDialChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final catalog = ref.watch(locationCatalogProvider);
+    final displayDial = currentDial ?? fallbackDial;
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 132,
+            child: catalog.when(
+              loading: () => _DialPlainBox(text: displayDial),
+              error: (_, _) => _DialPlainBox(text: displayDial),
+              data: (data) {
+                final inCatalog = data.hasPhonePrefix(displayDial);
+                return DropdownButtonFormField<String>(
+                  key: ValueKey('dial-${(inCatalog ? displayDial : null) ?? ''}'),
+                  initialValue: inCatalog ? displayDial : null,
+                  isExpanded: true,
+                  items: [
+                    for (final p in data.phonePrefixes)
+                      DropdownMenuItem(
+                        value: p.dial,
+                        child: Text(
+                          p.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: onDialChanged,
+                  decoration: const InputDecoration(),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextFormField(
+              controller: numberController,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                hintText: '599043337',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Calm read-only stand-in for the dial dropdown while the catalog is
+/// loading or has failed. Matches the dropdown's height + radius so the
+/// row never jumps when the catalog finishes loading.
+class _DialPlainBox extends StatelessWidget {
+  const _DialPlainBox({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: AppTheme.formControlHeight,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppTheme.softBg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusInput),
+        border: Border.all(color: AppTheme.line),
+      ),
+      child: Text(
+        text.isNotEmpty ? text : '—',
+        style: const TextStyle(
+          color: AppTheme.muted,
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogFallback extends StatelessWidget {
+  const _CatalogFallback({required this.profile, required this.error});
+  final Profile profile;
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = error is ApiException
+        ? (error as ApiException).message
+        : 'تعذّر تحميل قوائم الدولة والمنطقة الزمنية.';
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFFED7AA)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_outlined,
+                    size: 16, color: AppTheme.warning),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '$message تعرض الحقول للقراءة فقط حالياً.',
+                    style: const TextStyle(
+                      color: Color(0xFF92400E),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          _ReadOnlyRow(label: 'الدولة', value: profile.country),
+          _ReadOnlyRow(label: 'المنطقة الزمنية', value: profile.timezone),
+          _ReadOnlyRow(
+              label: 'رمز الدولة للهاتف', value: profile.phoneCountryCode),
+        ],
+      ),
+    );
   }
 }
 
