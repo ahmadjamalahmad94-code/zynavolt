@@ -20,6 +20,24 @@ class LoadsRepository {
     );
     return LoadsPage.fromJson(response.data);
   }
+
+  /// v86: `POST /api/mobile/loads/:id/toggle` with `{is_enabled: bool}`.
+  ///
+  /// The backend's response includes `control_type: 'persisted_preference'`
+  /// and `executed_hardware_command: false` — toggling a load only updates
+  /// the saved preference. It does NOT command a relay / inverter.
+  ///
+  /// Returns the freshly-updated UserLoad parsed from the response, so
+  /// the UI can update locally without waiting for a list re-fetch.
+  Future<UserLoad> toggle(int id, {required bool enabled}) async {
+    final response = await _api.post(
+      '/api/mobile/loads/$id/toggle',
+      body: {'is_enabled': enabled},
+    );
+    final raw = (response.data['load'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    return UserLoad.fromJson(raw);
+  }
 }
 
 final loadsRepositoryProvider = Provider<LoadsRepository>((ref) {

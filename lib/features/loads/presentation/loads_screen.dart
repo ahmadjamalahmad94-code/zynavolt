@@ -369,19 +369,40 @@ class _ScopeBanner extends StatelessWidget {
           color: AppTheme.indigoBright.withValues(alpha: 0.25),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline,
-              color: AppTheme.indigoPrimary, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
+          Row(
+            children: [
+              const Icon(Icons.info_outline,
+                  color: AppTheme.indigoPrimary, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: AppTheme.indigoPrimary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // v86: honest disclaimer about what the toggle actually does.
+          // The backend response says `executed_hardware_command: false`,
+          // so the user must understand this is a saved preference only.
+          const Padding(
+            padding: EdgeInsets.only(right: 24),
             child: Text(
-              text,
-              style: const TextStyle(
+              'تغيير المفتاح يحدّث حالة الحمل في إعداداتك فقط ولا يشغّل أي جهاز كهربائي.',
+              style: TextStyle(
                 color: AppTheme.indigoPrimary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                height: 1.5,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                height: 1.55,
               ),
             ),
           ),
@@ -391,12 +412,63 @@ class _ScopeBanner extends StatelessWidget {
   }
 }
 
-class _LoadTile extends StatelessWidget {
+/// v86: real toggle UI backed by `POST /api/mobile/loads/:id/toggle`.
+///
+/// The backend response includes `executed_hardware_command: false` —
+/// flipping the switch only updates the saved preference. We surface
+/// that honestly via the screen-level info banner so users never expect
+/// this to physically command a relay.
+class _LoadTile extends ConsumerStatefulWidget {
   const _LoadTile({required this.load});
   final UserLoad load;
 
   @override
+  ConsumerState<_LoadTile> createState() => _LoadTileState();
+}
+
+class _LoadTileState extends ConsumerState<_LoadTile> {
+  bool _toggling = false;
+
+  Future<void> _onToggle(bool newValue) async {
+    if (_toggling) return;
+    setState(() => _toggling = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(loadsRepositoryProvider)
+          .toggle(widget.load.id, enabled: newValue);
+      ref.invalidate(loadsListProvider);
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 2),
+            content: Text(newValue
+                ? 'تم تفعيل الحمل في إعداداتك.'
+                : 'تم إيقاف الحمل في إعداداتك.'),
+          ),
+        );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('تعذّر تحديث الحمل: $e')),
+        );
+    } finally {
+      if (mounted) setState(() => _toggling = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final load = widget.load;
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
@@ -434,8 +506,6 @@ class _LoadTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _EnabledBadge(enabled: load.isEnabled),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -461,39 +531,37 @@ class _LoadTile extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          // v86: real toggle. While the backend call is in flight we
+          // show a tiny inline spinner instead of the switch so the user
+          // gets immediate "we're doing it" feedback.
+          if (_toggling)
+            const SizedBox(
+              width: 36,
+              height: 24,
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              ),
+            )
+          else
+            Switch(
+              value: load.isEnabled,
+              activeThumbColor: AppTheme.indigoPrimary,
+              onChanged: _onToggle,
+            ),
         ],
       ),
     );
   }
 }
 
-class _EnabledBadge extends StatelessWidget {
-  const _EnabledBadge({required this.enabled});
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = enabled ? AppTheme.success : AppTheme.faintMuted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.30)),
-      ),
-      child: Text(
-        // v73: bumped fontSize 10.5 → 11 for readability.
-        enabled ? 'مفعّل' : 'موقوف',
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
-        ),
-      ),
-    );
-  }
-}
+// v86: `_EnabledBadge` removed — the per-row Switch communicates the
+// same enabled/disabled state more directly. Kept the import-clean
+// trail in case the badge is ever reintroduced.
 
 class _MetaChip extends StatelessWidget {
   const _MetaChip({required this.icon, required this.label});

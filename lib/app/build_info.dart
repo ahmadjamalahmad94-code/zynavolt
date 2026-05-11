@@ -12,5 +12,5 @@ class BuildInfo {
   const BuildInfo._();
 
   /// Short, human-readable build label. Format: `vNN-short-kebab-summary`.
-  static const String label = 'v85-home-wow';
+  static const String label = 'v86-load-controls';
 }
