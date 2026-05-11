@@ -12,5 +12,5 @@ class BuildInfo {
   const BuildInfo._();
 
   /// Short, human-readable build label. Format: `vNN-short-kebab-summary`.
-  static const String label = 'v81-build-marker';
+  static const String label = 'v82-typography-pass';
 }

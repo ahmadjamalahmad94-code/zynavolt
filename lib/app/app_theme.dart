@@ -136,10 +136,14 @@ class AppTheme {
         foregroundColor: ink,
         elevation: 0,
         centerTitle: true,
+        // v82: bumped to 19, tightened letterSpacing for richer feel
+        // across all screens. Arabic still renders cleanly; the spacing
+        // only really shows on Latin tokens (Zynavolt, units).
         titleTextStyle: TextStyle(
           color: ink,
-          fontSize: 18,
+          fontSize: 19,
           fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
         ),
       ),
       cardTheme: CardThemeData(
@@ -190,9 +194,12 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusInput),
           ),
+          // v82: softened from w800 → w700, added letterSpacing for a
+          // more refined CTA feel without sacrificing readability.
           textStyle: const TextStyle(
             fontSize: 15,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
           ),
         ),
       ),
@@ -205,8 +212,15 @@ class AppTheme {
       navigationBarTheme: const NavigationBarThemeData(
         backgroundColor: surface,
         indicatorColor: indigoSoft,
+        // v82: bumped 11 → 11.5 with letterSpacing for a touch more refinement
+        // in the tab labels. Selected state inherits indigo via the theme.
         labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ink),
+          TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: ink,
+            letterSpacing: 0.2,
+          ),
         ),
         iconTheme: WidgetStatePropertyAll(
           IconThemeData(color: muted, size: 22),
