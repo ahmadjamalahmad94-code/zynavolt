@@ -34,6 +34,11 @@ class AppCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: margin,
+      // v74: clip child contents to the rounded border so InkWell
+      // ripples and any nested Material splashes respect the card's
+      // shape — important on small screens where children can flush
+      // against the card edge.
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(radius),
