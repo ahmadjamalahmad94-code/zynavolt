@@ -9,6 +9,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../../../core/widgets/app_refresh_button.dart';
 import '../data/support_models.dart';
 import '../data/support_repository.dart';
 
@@ -31,9 +32,7 @@ class SupportScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('الدعم'),
         actions: [
-          IconButton(
-            tooltip: 'تحديث',
-            icon: const Icon(Icons.refresh),
+          AppRefreshButton(
             onPressed: () => ref.invalidate(supportCasesProvider),
           ),
         ],

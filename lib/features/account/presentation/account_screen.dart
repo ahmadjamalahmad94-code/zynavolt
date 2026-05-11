@@ -6,6 +6,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../../../core/widgets/app_refresh_button.dart';
 import '../data/account_labels.dart';
 import '../data/account_models.dart';
 import '../data/account_repository.dart';
@@ -29,9 +30,7 @@ class AccountScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('الحساب والاشتراك'),
         actions: [
-          IconButton(
-            tooltip: 'تحديث',
-            icon: const Icon(Icons.refresh),
+          AppRefreshButton(
             onPressed: () => ref.invalidate(accountSnapshotProvider),
           ),
         ],

@@ -7,6 +7,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../../../core/widgets/app_refresh_button.dart';
 import '../data/notification_models.dart';
 import '../state/notifications_controller.dart';
 
@@ -40,22 +41,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       appBar: AppBar(
         title: const Text('الإشعارات'),
         actions: [
-          Builder(
-            builder: (ctx) => IconButton(
-              tooltip: 'تحديث',
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                ref.read(notificationsControllerProvider.notifier).refresh();
-                ScaffoldMessenger.of(ctx)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    const SnackBar(
-                      duration: Duration(seconds: 2),
-                      content: Text('جارٍ التحديث...'),
-                    ),
-                  );
-              },
-            ),
+          AppRefreshButton(
+            onPressed: () =>
+                ref.read(notificationsControllerProvider.notifier).refresh(),
           ),
         ],
       ),

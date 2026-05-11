@@ -7,6 +7,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../../../core/widgets/app_refresh_button.dart';
 import '../../devices/state/selected_device_provider.dart';
 import '../data/load_models.dart';
 import '../data/loads_repository.dart';
@@ -50,22 +51,8 @@ class _LoadsScreenState extends ConsumerState<LoadsScreen> {
       appBar: AppBar(
         title: const Text('الأحمال'),
         actions: [
-          Builder(
-            builder: (ctx) => IconButton(
-              tooltip: 'تحديث',
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                ref.invalidate(loadsListProvider);
-                ScaffoldMessenger.of(ctx)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    const SnackBar(
-                      duration: Duration(seconds: 2),
-                      content: Text('جارٍ التحديث...'),
-                    ),
-                  );
-              },
-            ),
+          AppRefreshButton(
+            onPressed: () => ref.invalidate(loadsListProvider),
           ),
         ],
       ),

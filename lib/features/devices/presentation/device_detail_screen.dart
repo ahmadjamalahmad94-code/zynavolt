@@ -6,6 +6,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../../../core/widgets/app_refresh_button.dart';
 import '../data/device_detail_models.dart';
 import '../data/device_detail_repository.dart';
 import '../state/selected_device_provider.dart';
@@ -50,22 +51,8 @@ class DeviceDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('تفاصيل الجهاز'),
         actions: [
-          Builder(
-            builder: (ctx) => IconButton(
-              tooltip: 'تحديث',
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                ref.invalidate(deviceDetailProvider(deviceId));
-                ScaffoldMessenger.of(ctx)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    const SnackBar(
-                      duration: Duration(seconds: 2),
-                      content: Text('جارٍ التحديث...'),
-                    ),
-                  );
-              },
-            ),
+          AppRefreshButton(
+            onPressed: () => ref.invalidate(deviceDetailProvider(deviceId)),
           ),
         ],
       ),
