@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/state/api_providers.dart';
 import 'notification_models.dart';
+import 'notification_settings_models.dart';
 
 class NotificationsRepository {
   NotificationsRepository(this._api);
@@ -42,9 +43,37 @@ class NotificationsRepository {
     final response = await _api.post('/api/mobile/notifications/read-all');
     return ReadAllResult.fromJson(response.data);
   }
+
+  /// v87: `GET /api/mobile/notifications/settings` — returns the full
+  /// notification configuration. Our model only parses the safe-to-edit
+  /// subset (channel on/off + per-section enabled flags).
+  Future<NotificationSettingsSnapshot> fetchSettings() async {
+    final response =
+        await _api.get('/api/mobile/notifications/settings');
+    return NotificationSettingsSnapshot.fromJson(response.data);
+  }
+
+  /// v87: `PATCH /api/mobile/notifications/settings` with a `settings:`
+  /// map of allowed keys (per backend whitelist). Returns the refreshed
+  /// snapshot from the server.
+  Future<NotificationSettingsSnapshot> patchSettings(
+    Map<String, bool> booleanSettings,
+  ) async {
+    final response = await _api.patch(
+      '/api/mobile/notifications/settings',
+      body: {'settings': booleanSettings},
+    );
+    return NotificationSettingsSnapshot.fromJson(response.data);
+  }
 }
 
 final notificationsRepositoryProvider =
     Provider<NotificationsRepository>((ref) {
   return NotificationsRepository(ref.watch(apiClientProvider));
+});
+
+/// v87: snapshot of the user's notification settings.
+final notificationSettingsProvider =
+    FutureProvider<NotificationSettingsSnapshot>((ref) {
+  return ref.watch(notificationsRepositoryProvider).fetchSettings();
 });

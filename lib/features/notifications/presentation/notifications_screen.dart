@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
@@ -42,6 +44,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       appBar: AppBar(
         title: const Text('الإشعارات'),
         actions: [
+          // v87: settings shortcut — opens the notification-settings editor.
+          IconButton(
+            tooltip: 'إعدادات الإشعارات',
+            icon: const Icon(Icons.tune),
+            onPressed: () => context.push(AppRoutes.notificationSettings),
+          ),
           AppRefreshButton(
             onPressed: () =>
                 ref.read(notificationsControllerProvider.notifier).refresh(),

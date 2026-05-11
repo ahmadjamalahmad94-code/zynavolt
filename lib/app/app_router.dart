@@ -11,6 +11,7 @@ import '../features/loads/presentation/loads_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/home/presentation/home_shell.dart';
 import '../features/more/presentation/more_screen.dart';
+import '../features/notifications/presentation/notification_settings_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/app_settings_screen.dart';
@@ -31,6 +32,7 @@ class AppRoutes {
   static const String loads = '/loads';
   static const String account = '/account';
   static const String settings = '/settings';
+  static const String notificationSettings = '/notifications/settings';
 
   /// Build a typed path for the device-detail screen. Kept outside the
   /// bottom-nav shell so it has full-screen real estate and a normal back
@@ -107,6 +109,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settings,
         builder: (_, _) => const AppSettingsScreen(),
+      ),
+      // v87: notification settings editor (master + channels + per-section
+      // toggles). Opened from the Notifications screen AppBar.
+      GoRoute(
+        path: AppRoutes.notificationSettings,
+        builder: (_, _) => const NotificationSettingsScreen(),
       ),
       // v50: support case detail (read-only thread). Kept outside the
       // bottom-nav shell so a back arrow returns to the support list.
