@@ -17,7 +17,7 @@ class SupportScreen extends StatelessWidget {
           icon: Icons.support_agent_outlined,
           title: 'الدعم قيد التحضير',
           subtitle:
-              'سيتم تحميل البيانات من واجهات SolarDeye API لاحقاً عبر /api/mobile/support.',
+              'سيتم تحميل البيانات من واجهات Zynavolt API لاحقاً عبر /api/mobile/support.',
         ),
       ),
     );

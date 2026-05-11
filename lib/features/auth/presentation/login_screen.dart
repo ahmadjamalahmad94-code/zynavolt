@@ -105,7 +105,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'تسجيل الدخول إلى SolarDeye',
+                    'تسجيل الدخول إلى Zynavolt',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: AppTheme.ink,

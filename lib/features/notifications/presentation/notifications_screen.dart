@@ -17,7 +17,7 @@ class NotificationsScreen extends StatelessWidget {
           icon: Icons.notifications_none_outlined,
           title: 'الإشعارات قيد التحضير',
           subtitle:
-              'سيتم تحميل البيانات من واجهات SolarDeye API لاحقاً. ملاحظة: إعدادات الإشعارات حالياً عامة على مستوى الحساب، وليست لكل جهاز.',
+              'سيتم تحميل البيانات من واجهات Zynavolt API لاحقاً. ملاحظة: إعدادات الإشعارات حالياً عامة على مستوى الحساب، وليست لكل جهاز.',
         ),
       ),
     );

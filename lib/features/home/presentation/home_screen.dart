@@ -50,7 +50,7 @@ class HomeScreen extends ConsumerWidget {
                     _ActiveDeviceLine(device: activeDevice),
                     const SizedBox(height: 6),
                     const Text(
-                      'سيتم تحميل البيانات من واجهات SolarDeye API.',
+                      'سيتم تحميل البيانات من واجهات Zynavolt API.',
                       style: TextStyle(
                         color: AppTheme.faintMuted,
                         fontSize: 12,

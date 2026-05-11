@@ -1,8 +1,14 @@
-# SolarDeye Mobile (Flutter)
+# Zynavolt Mobile (Flutter)
 
-Android-first Arabic-RTL Flutter client for the SolarDeye solar monitoring
-platform. The app is a thin presentation layer; **the Flask backend is the
-single source of truth**. The mobile app:
+> Branding note: the user-facing product is **Zynavolt**. Zynavolt mobile
+> currently connects to the existing **SolarDeye backend API** during the
+> transition; technical references to the backend repo, namespace, env
+> variables and storage keys still use the `solardeye` / `SOLARDEYE_*`
+> identifiers on purpose.
+
+Android-first Arabic-RTL Flutter client for **Zynavolt**, the solar
+monitoring platform. The app is a thin presentation layer; **the Flask
+backend is the single source of truth**. The mobile app:
 
 - Talks only to `/api/mobile/*` (Bearer-authenticated JSON).
 - Never connects to the database.
@@ -223,7 +229,7 @@ Deliberately not added in v37: chart libraries, Firebase / FCM, offline DB
 
 Empty tabs render `AppEmptyState` with a calm, honest line such as:
 
-> سيتم تحميل البيانات من واجهات SolarDeye API.
+> سيتم تحميل البيانات من واجهات Zynavolt API.
 
 No fake metrics, no mocked solar numbers, no decorative dashboards.
 
