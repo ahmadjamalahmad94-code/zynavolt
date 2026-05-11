@@ -12,5 +12,5 @@ class BuildInfo {
   const BuildInfo._();
 
   /// Short, human-readable build label. Format: `vNN-short-kebab-summary`.
-  static const String label = 'v83-visual-identity';
+  static const String label = 'v84-bottom-nav';
 }

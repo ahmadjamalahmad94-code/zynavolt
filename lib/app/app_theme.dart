@@ -221,24 +221,37 @@ class AppTheme {
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
-      navigationBarTheme: const NavigationBarThemeData(
+      navigationBarTheme: NavigationBarThemeData(
         backgroundColor: surface,
-        indicatorColor: indigoSoft,
-        // v82: bumped 11 → 11.5 with letterSpacing for a touch more refinement
-        // in the tab labels. Selected state inherits indigo via the theme.
-        labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(
+        // v84: stronger indicator pill — full-saturation indigo accent
+        // instead of the pale wash that was easy to miss on a real device.
+        indicatorColor: indigoBright,
+        labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
             fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-            color: ink,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+            color: selected ? indigoPrimary : ink,
             letterSpacing: 0.2,
-          ),
-        ),
-        iconTheme: WidgetStatePropertyAll(
-          IconThemeData(color: muted, size: 22),
-        ),
-        height: 64,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected ? Colors.white : muted,
+            size: 22,
+          );
+        }),
+        // v84: a touch taller — gives the indicator pill more breathing
+        // room and the icons more weight on a real device.
+        height: 68,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        // v84: stronger separation between body and bottom nav. Bumps
+        // the tonal contrast on screens where the gradient backdrop sits
+        // right above the nav.
+        surfaceTintColor: surface,
+        shadowColor: indigoPrimary.withValues(alpha: 0.18),
+        elevation: 6,
       ),
       dividerTheme: const DividerThemeData(color: line, thickness: 1, space: 1),
       textTheme: base.textTheme
