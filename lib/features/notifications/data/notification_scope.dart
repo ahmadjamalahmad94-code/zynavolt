@@ -143,12 +143,17 @@ const Set<String> _energyKeywords = {
 const Set<String> _appKeywords = {
   // English / slug
   'support', 'support_case', 'support_ticket',
+  'case', 'ticket', 'comment', 'reply', 'message',
   'account', 'auth', 'login', 'sync',
   'device', 'system', 'subscription', 'plan',
   'onboarding', 'profile', 'billing',
   // Arabic
   'الدعم', 'الحساب', 'اشتراك', 'الباقة', 'الملف',
   'تسجيل الدخول', 'مزامنة',
+  // v94b: explicit Arabic synonyms for admin replies on support cases.
+  // Energy keywords win in the classifier, so adding these can't pull
+  // a battery/load/weather notification into the App tab by accident.
+  'تذكرة', 'رسالة الدعم', 'تعليق', 'رد',
 };
 
 const Set<String> _batteryKeywords = {

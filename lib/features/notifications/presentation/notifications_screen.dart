@@ -44,6 +44,59 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   /// when [_scope] is [NotificationScope.energy].
   EnergyCategory _energyCategory = EnergyCategory.all;
 
+  /// v94b: tracks whether the user has explicitly picked a tab during
+  /// this screen session. Once `true`, [_maybeAutoSwitchScope] is a
+  /// no-op so we never override a deliberate choice — this also
+  /// prevents tab-switch loops after pull-to-refresh.
+  bool _userPickedScope = false;
+
+  /// v94b: belt-and-suspenders alongside [_userPickedScope]. Set to
+  /// `true` once the smart auto-switch fires, so subsequent rebuilds
+  /// (filter taps, mark-read updates) can't trigger a second auto-jump.
+  bool _autoSwitched = false;
+
+  void _onScopePicked(NotificationScope s) {
+    setState(() {
+      _scope = s;
+      _userPickedScope = true;
+    });
+  }
+
+  /// v94b: if the current scope is empty but the other scope has items,
+  /// jump to the populated tab — but only on the **first** data load
+  /// of this screen session, before the user has touched a tab.
+  void _maybeAutoSwitchScope(NotificationsFeedState state) {
+    if (_userPickedScope || _autoSwitched) return;
+    var appCount = 0;
+    var energyCount = 0;
+    for (final n in state.items) {
+      if (classifyNotification(n) == NotificationScope.energy) {
+        energyCount++;
+      } else {
+        appCount++;
+      }
+    }
+    NotificationScope? target;
+    if (_scope == NotificationScope.app &&
+        appCount == 0 &&
+        energyCount > 0) {
+      target = NotificationScope.energy;
+    } else if (_scope == NotificationScope.energy &&
+        energyCount == 0 &&
+        appCount > 0) {
+      target = NotificationScope.app;
+    }
+    if (target == null) return;
+    // Defer the setState — we're inside the build phase here.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _scope = target!;
+        _autoSwitched = true;
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final feed = ref.watch(notificationsControllerProvider);
@@ -82,16 +135,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   .read(notificationsControllerProvider.notifier)
                   .refresh(),
             ),
-            data: (state) => _FeedBody(
-              state: state,
-              scope: _scope,
-              unreadOnly: _unreadOnly,
-              energyCategory: _energyCategory,
-              onScopeChanged: (s) => setState(() => _scope = s),
-              onFilterChanged: (v) => setState(() => _unreadOnly = v),
-              onEnergyCategoryChanged: (c) =>
-                  setState(() => _energyCategory = c),
-            ),
+            data: (state) {
+              // v94b: smart default — auto-jump to the populated scope
+              // on first load. No-op once the user has picked a tab.
+              _maybeAutoSwitchScope(state);
+              return _FeedBody(
+                state: state,
+                scope: _scope,
+                unreadOnly: _unreadOnly,
+                energyCategory: _energyCategory,
+                onScopeChanged: _onScopePicked,
+                onFilterChanged: (v) => setState(() => _unreadOnly = v),
+                onEnergyCategoryChanged: (c) =>
+                    setState(() => _energyCategory = c),
+              );
+            },
           ),
         ),
       ),
@@ -1007,7 +1065,7 @@ class _EmptyStateCard extends StatelessWidget {
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
+                  horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 color: AppTheme.indigoSoft,
                 borderRadius: BorderRadius.circular(AppTheme.radiusCard),
@@ -1019,23 +1077,28 @@ class _EmptyStateCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
+                    // v94b: drop the inline quotes (clearer Arabic),
+                    // and prefer the unread count when there's at least
+                    // one unread item in the other scope.
                     otherScopeUnread > 0
-                        ? 'يوجد $otherScopeUnread إشعار غير مقروء في تبويب "$otherTitle".'
-                        : 'يوجد $otherScopeTotal إشعار في تبويب "$otherTitle".',
+                        ? 'يوجد $otherScopeUnread إشعار في $otherTitle.'
+                        : 'يوجد $otherScopeTotal إشعار في $otherTitle.',
                     style: const TextStyle(
                       color: AppTheme.indigoPrimary,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
                       height: 1.55,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: TextButton.icon(
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: AppTheme.formControlHeight,
+                    // v94b: promoted from TextButton → FilledButton so
+                    // the CTA reads as a real action, not an afterthought.
+                    child: FilledButton.icon(
                       onPressed: onJumpToOther,
-                      icon: const Icon(Icons.swap_horiz, size: 16),
-                      label: Text('فتح "$otherTitle"'),
+                      icon: const Icon(Icons.arrow_forward, size: 18),
+                      label: Text('عرض $otherTitle'),
                     ),
                   ),
                 ],
