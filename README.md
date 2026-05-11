@@ -68,6 +68,49 @@ flutter build apk --release \
 ship HTTPS-only). This is documented as a follow-up; v37 leaves it as-is so
 the emulator works out of the box.
 
+### Connecting to a real SolarDeye backend
+
+The backend must be running and reachable from the device's network:
+
+1. **Start the Flask backend** on the development machine — the mobile app
+   does not bundle one.
+2. **Pick the right base URL** for the target device:
+
+   | Device target | URL pattern | Example |
+   |---|---|---|
+   | Android **emulator** (AVD) | `http://10.0.2.2:<port>` | `http://10.0.2.2:5000` |
+   | Physical Android device | `http://<host-LAN-IP>:<port>` | `http://192.168.1.50:5000` |
+   | Staging / production | HTTPS public URL | `https://api.solardeye.example.com` |
+
+   `10.0.2.2` is a special address inside the Android emulator that always
+   routes to the host machine's `localhost`. It will not work on a real phone.
+3. **Launch with that URL:**
+
+   ```sh
+   flutter run --dart-define=SOLARDEYE_API_BASE_URL=http://10.0.2.2:5000
+   ```
+4. **Quick sanity check inside the app:** sign in, then open the More tab and
+   tap "تحقّق من الاتصال". The button calls `GET /api/mobile/health` with no
+   Bearer token and shows the real success or failure message verbatim — it
+   does not fake success.
+
+### If something goes wrong
+
+The app surfaces backend errors honestly. The most common ones during dev:
+
+| Symptom in app | Likely cause | Fix |
+|---|---|---|
+| "تعذّر الاتصال بالخادم. تحقق من اتصال الإنترنت." | Wrong base URL, Flask not running, firewall blocking the port, or wrong network. Equivalent to a TCP "connection refused" / "network unreachable". | Confirm Flask is listening on `0.0.0.0:5000` (not just `127.0.0.1:5000`); confirm device & host are on the same Wi-Fi; on a physical device use the host's LAN IP, not `10.0.2.2`. |
+| "اسم المستخدم أو كلمة المرور غير صحيحة." (`code: invalid_credentials`) | Wrong username or password. | Try valid credentials. The backend never tells you which one is wrong — by design. |
+| "تسجيل الدخول مطلوب." / `auth_required` 401 returned after splash | The stored access token expired *and* the refresh token is also invalid (revoked, expired, or never persisted). | The app silently drops you to the login screen — sign in again. No banner is shown for this case; that is intentional. |
+| The session restores but every screen shows red errors | Tokens are valid but the backend is missing the v2 `/api/mobile/*` routes you expect. | Confirm the backend exposes the new `/api/mobile/*` namespace (not just the legacy `/api/v1/*`). The mobile app calls `/api/mobile/*` only. |
+| "انتهت مهلة الاتصال بالخادم." | Backend is slow or unreachable on the configured port. | Increase `AppConfig.connectTimeoutMs` / `receiveTimeoutMs` for slow networks or fix the network path. |
+| 401 immediately on `تحقّق من الاتصال` | Should not happen — `/api/mobile/health` is unauthenticated and the call uses `skipAuth()`. If you see this, the route on the backend is gated by something it should not be. | Inspect the backend `protect_routes` allowlist for `/api/mobile/`. |
+
+The "تشخيص المطوّر" card on the More tab shows the auth phase, the raw
+stored selected-device id, the resolved effective device id, and the last
+restore error — useful while wiring up against a real backend.
+
 ## Authentication flow
 
 `AppSessionController` (`lib/core/state/app_session.dart`) drives the router.

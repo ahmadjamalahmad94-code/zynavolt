@@ -56,8 +56,12 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(appSessionProvider).user;
+    final session = ref.watch(appSessionProvider);
+    final user = session.user;
     final activeDevice = ref.watch(effectiveDeviceProvider);
+    final storedDeviceId =
+        ref.watch(selectedDeviceProvider).valueOrNull;
+    final effectiveDeviceId = ref.watch(effectiveDeviceIdProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.softBg,
@@ -166,6 +170,46 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'تشخيص المطوّر',
+                    style: TextStyle(
+                      color: AppTheme.ink,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'حقول قراءة فقط مفيدة أثناء تجريب الاتصال بالخادم.',
+                    style: TextStyle(
+                      color: AppTheme.faintMuted,
+                      fontSize: 12,
+                      height: 1.55,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _Row(label: 'حالة الجلسة', value: _phaseLabel(session.phase)),
+                  _Row(
+                    label: 'الجهاز المخزَّن',
+                    value: storedDeviceId != null ? '#$storedDeviceId' : '—',
+                  ),
+                  _Row(
+                    label: 'الجهاز الفعّال',
+                    value:
+                        effectiveDeviceId != null ? '#$effectiveDeviceId' : '—',
+                  ),
+                  _Row(
+                    label: 'آخر خطأ تهيئة',
+                    value: session.lastError?.message ?? '—',
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: () => ref.read(appSessionProvider.notifier).signOut(),
@@ -179,6 +223,17 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
         ),
       ),
     );
+  }
+}
+
+String _phaseLabel(AppSessionPhase phase) {
+  switch (phase) {
+    case AppSessionPhase.unknown:
+      return 'قيد الاستعادة';
+    case AppSessionPhase.unauthenticated:
+      return 'غير مصادَق';
+    case AppSessionPhase.authenticated:
+      return 'مصادَق';
   }
 }
 
