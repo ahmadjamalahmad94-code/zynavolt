@@ -14,6 +14,7 @@ class AppCard extends StatelessWidget {
     this.radius = AppTheme.radiusCard,
     this.borderColor = AppTheme.line,
     this.background = AppTheme.surface,
+    this.elevated = false,
   });
 
   final Widget child;
@@ -23,6 +24,12 @@ class AppCard extends StatelessWidget {
   final Color borderColor;
   final Color background;
 
+  /// v58: when true, the card adopts the [AppTheme.softShadow] elevation
+  /// for hero / featured surfaces. Default `false` preserves the flat
+  /// look of every existing screen so older callers don't accidentally
+  /// pick up a new visual treatment.
+  final bool elevated;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -31,6 +38,7 @@ class AppCard extends StatelessWidget {
         color: background,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: borderColor, width: 1),
+        boxShadow: elevated ? AppTheme.softShadow : null,
       ),
       child: Padding(padding: padding, child: child),
     );

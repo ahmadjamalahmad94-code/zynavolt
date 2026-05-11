@@ -36,6 +36,71 @@ class AppTheme {
   /// Standard form control height — 42 dp mirrors the 42 px web rule.
   static const double formControlHeight = 42;
 
+  // ── v58 design-system tokens ─────────────────────────────────────────
+  //
+  // Additive only. Every existing token above is unchanged so screens
+  // already in production keep working. The tokens below let new and
+  // refreshed screens (v58→v80) share one consistent visual language
+  // instead of each screen re-inventing spacing / shadow / gradient
+  // constants inline.
+
+  // Spacing scale — 4 dp grid. Use these instead of magic numbers in
+  // SizedBox / EdgeInsets where possible.
+  static const double space2 = 2;
+  static const double space4 = 4;
+  static const double space6 = 6;
+  static const double space8 = 8;
+  static const double space10 = 10;
+  static const double space12 = 12;
+  static const double space14 = 14;
+  static const double space16 = 16;
+  static const double space20 = 20;
+  static const double space24 = 24;
+  static const double space32 = 32;
+
+  // Soft shadows for elevated cards / hero surfaces. Indigo-tinted so
+  // they harmonise with the brand instead of looking like a generic grey
+  // drop-shadow.
+  static List<BoxShadow> softShadow = [
+    BoxShadow(
+      color: indigoPrimary.withValues(alpha: 0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static List<BoxShadow> liftedShadow = [
+    BoxShadow(
+      color: indigoPrimary.withValues(alpha: 0.10),
+      blurRadius: 22,
+      offset: const Offset(0, 8),
+    ),
+  ];
+
+  // Brand gradients. The full-saturation `brandGradient` is for hero /
+  // accent surfaces; the pale variant matches Home/Splash backdrop.
+  static const LinearGradient brandGradient = LinearGradient(
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+    colors: [indigoPrimary, indigoBright],
+  );
+
+  static const LinearGradient pageBackdropGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color(0xFFE0E7FF),
+      Color(0xFFF1F5FF),
+      Color(0xFFF8FAFC),
+    ],
+    stops: [0.0, 0.35, 0.85],
+  );
+
+  // Glass surface — semi-transparent white over the page backdrop, with
+  // a subtle border. For cards that sit on top of the gradient backdrop.
+  static Color get glassSurface => Colors.white.withValues(alpha: 0.96);
+  static Color get glassBorder => line;
+
   static ThemeData light() {
     const colorScheme = ColorScheme.light(
       primary: indigoPrimary,
