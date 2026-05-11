@@ -104,12 +104,17 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // v69: explicit section header. The header sits *above* the
+            // identity card so the user sees a clear "الحساب" group cue
+            // before the inner card's own "الحساب" title repeats it.
+            const _GroupHeader(label: 'الحساب'),
+            const SizedBox(height: 8),
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'الحساب',
+                    'هويتك',
                     style: TextStyle(
                       color: AppTheme.ink,
                       fontSize: 14,
@@ -160,7 +165,10 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               subtitle: 'الباقة، الدور، حدود الأجهزة، والقدرات.',
               onTap: () => context.push(AppRoutes.account),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
+            // v69: التطبيق section — settings tile + about card.
+            const _GroupHeader(label: 'التطبيق'),
+            const SizedBox(height: 8),
             // v55: app settings & info (read-only).
             _NavTile(
               icon: Icons.settings_outlined,
@@ -168,7 +176,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               subtitle: 'إصدار التطبيق، الواجهة الخلفية، اللغة، وفحص الاتصال.',
               onTap: () => context.push(AppRoutes.settings),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             const AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,7 +196,10 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            // v69: التشخيص section — health check + collapsible dev info.
+            const _GroupHeader(label: 'التشخيص'),
+            const SizedBox(height: 8),
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,6 +351,29 @@ class _ResultBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// v69: small uppercase-style section header used to group the More
+/// tab into "الحساب / التطبيق / التشخيص" without crowding the layout.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4, left: 4, top: 2, bottom: 0),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppTheme.faintMuted,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
       ),
     );
   }
