@@ -88,6 +88,11 @@ class _DetailBody extends StatelessWidget {
     final children = <Widget>[
       _SummaryCard(summary: s),
       const SizedBox(height: 12),
+      // v66: explicit read-only notice — there's no composer / reply
+      // button on this screen and the user deserves to know why before
+      // they hunt for one.
+      const _ReadOnlyNotice(),
+      const SizedBox(height: 12),
       const _SectionHeader(label: 'المحادثة'),
       const SizedBox(height: 8),
     ];
@@ -322,6 +327,42 @@ class _MetaRow extends StatelessWidget {
                 color: AppTheme.ink,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadOnlyNotice extends StatelessWidget {
+  const _ReadOnlyNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.indigoSoft,
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        border: Border.all(
+          color: AppTheme.indigoBright.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        children: const [
+          Icon(Icons.lock_outline,
+              color: AppTheme.indigoPrimary, size: 16),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'هذه المحادثة للقراءة فقط حالياً.',
+              style: TextStyle(
+                color: AppTheme.indigoPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                height: 1.5,
               ),
             ),
           ),
