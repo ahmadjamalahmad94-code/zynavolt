@@ -8,6 +8,7 @@ import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
+import '../../../core/widgets/read_only_notice.dart';
 import '../data/support_models.dart';
 import '../data/support_repository.dart';
 
@@ -97,8 +98,10 @@ class _DetailBody extends StatelessWidget {
       const SizedBox(height: 12),
       // v66: explicit read-only notice — there's no composer / reply
       // button on this screen and the user deserves to know why before
-      // they hunt for one.
-      const _ReadOnlyNotice(),
+      // they hunt for one. v76: now uses the shared ReadOnlyNotice.
+      const ReadOnlyNotice(
+        message: 'هذه المحادثة للقراءة فقط حالياً.',
+      ),
       const SizedBox(height: 12),
       const _SectionHeader(label: 'المحادثة'),
       const SizedBox(height: 8),
@@ -334,42 +337,6 @@ class _MetaRow extends StatelessWidget {
                 color: AppTheme.ink,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReadOnlyNotice extends StatelessWidget {
-  const _ReadOnlyNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(
-          color: AppTheme.indigoBright.withValues(alpha: 0.25),
-        ),
-      ),
-      child: Row(
-        children: const [
-          Icon(Icons.lock_outline,
-              color: AppTheme.indigoPrimary, size: 16),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'هذه المحادثة للقراءة فقط حالياً.',
-              style: TextStyle(
-                color: AppTheme.indigoPrimary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                height: 1.5,
               ),
             ),
           ),

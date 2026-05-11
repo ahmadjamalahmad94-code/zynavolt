@@ -7,6 +7,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
+import '../../../core/widgets/read_only_notice.dart';
 import '../data/account_labels.dart';
 import '../data/account_models.dart';
 import '../data/account_repository.dart';
@@ -82,6 +83,13 @@ class _AccountBody extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: [
+        // v76: explicit "view only" banner — the account screen has no
+        // edit / cancel / change-plan actions and users deserve to know
+        // that upfront, before they scroll looking for one.
+        const ReadOnlyNotice(
+          message: 'بيانات الحساب والاشتراك معروضة هنا للعرض فقط حالياً.',
+        ),
+        const SizedBox(height: 12),
         _IdentityCard(account: account),
         const SizedBox(height: 12),
         _SubscriptionCard(subscription: account.subscription),
