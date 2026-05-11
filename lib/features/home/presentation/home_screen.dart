@@ -153,6 +153,11 @@ class _HomeHero extends StatelessWidget {
     final deviceName = device == null
         ? null
         : (device!.name.isNotEmpty ? device!.name : '#${device!.id}');
+    // v85: surface today's production directly in the hero so the hero
+    // becomes more than a name + greeting. Value is server-computed
+    // (cards.daily_production_kwh) — no client-side derivation.
+    final daily = snapshot?.cards.dailyProductionKwh ?? 0;
+    final dailyText = daily > 0 ? '${_fmtKwh(daily)} kWh اليوم' : null;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -207,6 +212,11 @@ class _HomeHero extends StatelessWidget {
                 icon: Icons.solar_power_outlined,
                 text: deviceName ?? 'لم يتم اختيار جهاز',
               ),
+              if (dailyText != null)
+                _HeroPill(
+                  icon: Icons.wb_sunny_outlined,
+                  text: dailyText,
+                ),
               if (lastReading != null)
                 _HeroPill(
                   icon: Icons.schedule,
@@ -1754,4 +1764,13 @@ String? _formatHm(String? iso) {
   final tIdx = iso.indexOf('T');
   if (tIdx < 0 || tIdx + 6 > iso.length) return iso;
   return iso.substring(tIdx + 1, tIdx + 6);
+}
+
+/// v85: render kWh values compactly for the hero pill. <100 keeps one
+/// decimal so small days still feel precise; ≥100 drops the decimal.
+String _fmtKwh(double v) {
+  if (v == 0) return '0';
+  if (v >= 100) return v.toStringAsFixed(0);
+  if (v >= 10) return v.toStringAsFixed(1);
+  return v.toStringAsFixed(2);
 }
