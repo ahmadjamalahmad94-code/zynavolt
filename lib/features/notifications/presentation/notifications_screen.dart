@@ -12,6 +12,7 @@ import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
 import '../data/notification_labels.dart';
 import '../data/notification_models.dart';
+import '../data/notification_scope.dart';
 import '../state/notifications_controller.dart';
 
 /// Real read-only feed backed by `GET /api/mobile/notifications`.
@@ -34,6 +35,10 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _unreadOnly = false;
+
+  /// v91: which top-level tab is selected. Defaults to App so the feed
+  /// opens on the section that's most likely to need attention day-to-day.
+  NotificationScope _scope = NotificationScope.app;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +80,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             ),
             data: (state) => _FeedBody(
               state: state,
+              scope: _scope,
               unreadOnly: _unreadOnly,
+              onScopeChanged: (s) => setState(() => _scope = s),
               onFilterChanged: (v) => setState(() => _unreadOnly = v),
             ),
           ),
@@ -119,63 +126,93 @@ class _ErrorScroll extends StatelessWidget {
 class _FeedBody extends ConsumerWidget {
   const _FeedBody({
     required this.state,
+    required this.scope,
     required this.unreadOnly,
+    required this.onScopeChanged,
     required this.onFilterChanged,
   });
   final NotificationsFeedState state;
+  final NotificationScope scope;
   final bool unreadOnly;
+  final ValueChanged<NotificationScope> onScopeChanged;
   final ValueChanged<bool> onFilterChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // v91: partition the flat backend feed into the two scopes first, so
+    // tabs / counters / list all stay consistent with a single source of
+    // classification.
+    final appItems = <AppNotification>[];
+    final energyItems = <AppNotification>[];
+    for (final n in state.items) {
+      if (classifyNotification(n) == NotificationScope.energy) {
+        energyItems.add(n);
+      } else {
+        appItems.add(n);
+      }
+    }
+
+    final scopedItems =
+        scope == NotificationScope.energy ? energyItems : appItems;
+    final unreadInScope = scopedItems.where((n) => !n.isRead).length;
     final visible = unreadOnly
-        ? state.items.where((n) => !n.isRead).toList(growable: false)
-        : state.items;
+        ? scopedItems.where((n) => !n.isRead).toList(growable: false)
+        : scopedItems;
     final hasItems = visible.isNotEmpty;
+    // v91: hide the global "load more" while in unread-only filter (same
+    // as before) AND while in the energy tab — since the loaded page
+    // mixes both scopes, "load more" only makes sense as a global fetch.
     final showLoadMore = !unreadOnly && state.hasMore;
+
+    final headerIndexes = 4; // tabs + header + intro + filter
 
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount:
-          3 + (hasItems ? visible.length : 1) + (showLoadMore ? 1 : 0),
+          headerIndexes + (hasItems ? visible.length : 1) + (showLoadMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         if (index == 0) {
+          return _ScopeTabs(
+            scope: scope,
+            appUnread: appItems.where((n) => !n.isRead).length,
+            energyUnread: energyItems.where((n) => !n.isRead).length,
+            onChanged: onScopeChanged,
+          );
+        }
+        if (index == 1) {
           return _HeaderCard(
-            unreadCount: state.unreadCount,
+            unreadCount: unreadInScope,
             isMarkingAll: state.isMarkingAll,
             onMarkAll: state.unreadCount == 0 || state.isMarkingAll
                 ? null
                 : () => _runMarkAll(context, ref),
           );
         }
-        if (index == 1) {
+        if (index == 2) {
+          return _ScopeIntro(scope: scope);
+        }
+        if (index == 3) {
           return _FilterRow(
             unreadOnly: unreadOnly,
-            unreadCount: state.unreadCount,
+            unreadCount: unreadInScope,
             onChanged: onFilterChanged,
           );
         }
-        if (index == 2) {
-          return const _ScopeNotice(
-            text: 'إعدادات الإشعارات حالياً عامة وليست لكل جهاز.',
-          );
-        }
-        final listIndex = index - 3;
+        final listIndex = index - headerIndexes;
         if (!hasItems) {
           return AppCard(
             padding: const EdgeInsets.symmetric(vertical: 28),
             child: AppEmptyState(
               icon: unreadOnly
                   ? Icons.mark_email_read_outlined
-                  : Icons.notifications_none_outlined,
-              title: unreadOnly
-                  ? 'لا توجد إشعارات غير مقروءة'
-                  : 'لا توجد إشعارات بعد',
-              subtitle: unreadOnly
-                  ? 'كل إشعاراتك الحالية مقروءة.'
-                  : 'سيظهر كل إشعار جديد من النظام أو من فريق الدعم هنا.',
+                  : (scope == NotificationScope.energy
+                      ? Icons.bolt_outlined
+                      : Icons.notifications_none_outlined),
+              title: _emptyTitle(scope: scope, unreadOnly: unreadOnly),
+              subtitle:
+                  _emptySubtitle(scope: scope, unreadOnly: unreadOnly),
             ),
           );
         }
@@ -188,8 +225,6 @@ class _FeedBody extends ConsumerWidget {
                 : () => _runMarkOne(context, ref, n.id),
           );
         }
-        // Trailing "load more" button — hidden in unread-only mode since
-        // server-side pagination doesn't filter by read state.
         return _LoadMoreButton(
           isLoading: state.isLoadingMore,
           onPressed: state.isLoadingMore
@@ -200,6 +235,22 @@ class _FeedBody extends ConsumerWidget {
         );
       },
     );
+  }
+
+  String _emptyTitle({required NotificationScope scope, required bool unreadOnly}) {
+    if (unreadOnly) return 'لا توجد إشعارات غير مقروءة';
+    if (scope == NotificationScope.energy) {
+      return 'لا توجد تنبيهات طاقة أو أحمال حالياً.';
+    }
+    return 'لا توجد إشعارات بعد';
+  }
+
+  String _emptySubtitle({required NotificationScope scope, required bool unreadOnly}) {
+    if (unreadOnly) return 'كل إشعاراتك الحالية مقروءة.';
+    if (scope == NotificationScope.energy) {
+      return 'عند توفر تنبيهات البطارية أو الأحمال ستظهر هنا.';
+    }
+    return 'سيظهر كل إشعار جديد من النظام أو من فريق الدعم هنا.';
   }
 
   Future<void> _runMarkOne(
@@ -403,31 +454,176 @@ class _Pill extends StatelessWidget {
   }
 }
 
-class _ScopeNotice extends StatelessWidget {
-  const _ScopeNotice({required this.text});
-  final String text;
+/// v91: segmented control for the two notification scopes. The unread
+/// dot only renders when there's at least one unread in that bucket.
+class _ScopeTabs extends StatelessWidget {
+  const _ScopeTabs({
+    required this.scope,
+    required this.appUnread,
+    required this.energyUnread,
+    required this.onChanged,
+  });
+
+  final NotificationScope scope;
+  final int appUnread;
+  final int energyUnread;
+  final ValueChanged<NotificationScope> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.line),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ScopeTab(
+              icon: Icons.notifications_outlined,
+              label: notificationScopeTitle(NotificationScope.app),
+              selected: scope == NotificationScope.app,
+              unreadCount: appUnread,
+              onTap: () => onChanged(NotificationScope.app),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _ScopeTab(
+              icon: Icons.bolt_outlined,
+              label: notificationScopeTitle(NotificationScope.energy),
+              selected: scope == NotificationScope.energy,
+              unreadCount: energyUnread,
+              onTap: () => onChanged(NotificationScope.energy),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScopeTab extends StatelessWidget {
+  const _ScopeTab({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.unreadCount,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = selected ? AppTheme.indigoPrimary : Colors.transparent;
+    final fg = selected ? Colors.white : AppTheme.muted;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: fg),
+              const SizedBox(width: 6),
+              Flexible(
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              if (unreadCount > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? Colors.white
+                        : AppTheme.indigoSoft,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$unreadCount',
+                    style: TextStyle(
+                      color: selected
+                          ? AppTheme.indigoPrimary
+                          : AppTheme.indigoPrimary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// v91: one-liner scope intro under the header card. Uses the
+/// scope-specific copy from [notificationScopeIntro].
+class _ScopeIntro extends StatelessWidget {
+  const _ScopeIntro({required this.scope});
+  final NotificationScope scope;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnergy = scope == NotificationScope.energy;
+    final accent =
+        isEnergy ? AppTheme.emerald : AppTheme.indigoPrimary;
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFC7D2FE)),
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline,
-              size: 16, color: AppTheme.indigoPrimary),
+          Icon(
+            isEnergy ? Icons.bolt_outlined : Icons.info_outline,
+            color: accent,
+            size: 16,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              text,
-              style: const TextStyle(
-                color: AppTheme.softInk,
-                fontSize: 12,
+              notificationScopeIntro(scope),
+              style: TextStyle(
+                color: accent,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.55,
               ),
