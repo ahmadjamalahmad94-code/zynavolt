@@ -8,6 +8,7 @@ import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
+import '../data/notification_labels.dart';
 import '../data/notification_models.dart';
 import '../state/notifications_controller.dart';
 
@@ -436,11 +437,13 @@ class _NotificationTile extends StatelessWidget {
     final title = notification.title.isNotEmpty ? notification.title : '—';
     final message = notification.message;
     final time = _humanizeTimestamp(notification.createdAt);
-    final tag = notification.eventType.isNotEmpty
-        ? notification.eventType
-        : (notification.sourceType.isNotEmpty
-            ? notification.sourceType
-            : '');
+    // v65: translate the raw event_type / source_type slug into a
+    // user-facing Arabic chip label. Unknown slugs fall back to the raw
+    // value so the chip never goes blank.
+    final tag = NotificationLabels.chipLabel(
+      eventType: notification.eventType,
+      sourceType: notification.sourceType,
+    );
 
     return Material(
       color: Colors.transparent,
