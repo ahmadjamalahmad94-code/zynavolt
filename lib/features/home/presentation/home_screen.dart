@@ -95,7 +95,9 @@ class _HomeBody extends ConsumerWidget {
       child: ListView(
         // v46: no AppBar above, SafeArea already accounts for the status
         // bar — just a small 12 dp breathing margin before the hero.
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        // v62: bump bottom padding so the last card has room to breathe
+        // above the home-indicator gesture area on tall phones.
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 36),
         children: [
           _HomeHero(
             user: session.user,
@@ -338,7 +340,10 @@ class _NoDeviceState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v62: elevate the state cards so they have the same presence as the
+    // hero + flow board above. Uses the v58 design-system softShadow.
     return const AppCard(
+      elevated: true,
       padding: EdgeInsets.symmetric(vertical: 28),
       child: AppEmptyState(
         icon: Icons.solar_power_outlined,
@@ -355,6 +360,7 @@ class _LoadingBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const AppCard(
+      elevated: true,
       padding: EdgeInsets.symmetric(vertical: 36),
       child: AppLoading(message: 'جارٍ تحميل بيانات الجهاز...'),
     );
@@ -369,6 +375,7 @@ class _ErrorBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      elevated: true,
       padding: const EdgeInsets.symmetric(vertical: 26),
       child: AppErrorState(error: error, onRetry: onRetry),
     );
