@@ -12,5 +12,5 @@ class BuildInfo {
   const BuildInfo._();
 
   /// Short, human-readable build label. Format: `vNN-short-kebab-summary`.
-  static const String label = 'v93-loads-crud-controls';
+  static const String label = 'v94-notifications-feed-fix';
 }

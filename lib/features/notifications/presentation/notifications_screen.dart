@@ -181,7 +181,19 @@ class _FeedBody extends ConsumerWidget {
         ? categoryFiltered.where((n) => !n.isRead).toList(growable: false)
         : categoryFiltered;
     final hasItems = visible.isNotEmpty;
-    final showLoadMore = !unreadOnly && state.hasMore;
+    // v94: gate "تحميل المزيد" on actually having items in the current
+    // tab. Previously the button rendered the empty-state widget twice
+    // when `!hasItems && state.hasMore` — that's the "duplicate
+    // placeholder cards" the user saw on real devices.
+    final showLoadMore = hasItems && !unreadOnly && state.hasMore;
+    // v94: when this tab is empty, surface an honest hint pointing to
+    // the OTHER tab if it has items there. The empty card itself shows
+    // exactly once (also fixed in itemBuilder below).
+    final otherScope = scope == NotificationScope.app
+        ? NotificationScope.energy
+        : NotificationScope.app;
+    final otherScopeItems =
+        otherScope == NotificationScope.energy ? energyItems : appItems;
 
     // v92: build leading widgets eagerly so the layout can differ per
     // scope. App tab stays simple; Energy tab gets the hero card, the
@@ -206,10 +218,13 @@ class _FeedBody extends ConsumerWidget {
       if (scope == NotificationScope.energy)
         const _MobileAlertsReadinessCard(),
       if (scope == NotificationScope.energy)
+        const _FilterSectionLabel(label: 'تصفية الفئة'),
+      if (scope == NotificationScope.energy)
         _EnergyCategoryFilters(
           selected: energyCategory,
           onChanged: onEnergyCategoryChanged,
         ),
+      const _FilterSectionLabel(label: 'حالة القراءة'),
       _FilterRow(
         unreadOnly: unreadOnly,
         unreadCount: unreadInScope,
@@ -228,26 +243,25 @@ class _FeedBody extends ConsumerWidget {
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         if (index < headerCount) return leading[index];
-        final listIndex = index - headerCount;
+        // v94: only one extra index ever exists post-header — either
+        // the single empty-state card, or the items + optional
+        // load-more. The previous logic mistakenly returned the empty
+        // card for every post-header index when `!hasItems && hasMore`.
         if (!hasItems) {
-          return AppCard(
-            padding: const EdgeInsets.symmetric(vertical: 28),
-            child: AppEmptyState(
-              icon: unreadOnly
-                  ? Icons.mark_email_read_outlined
-                  : (scope == NotificationScope.energy
-                      ? Icons.bolt_outlined
-                      : Icons.notifications_none_outlined),
-              title: _emptyTitle(scope: scope, unreadOnly: unreadOnly),
-              subtitle:
-                  _emptySubtitle(scope: scope, unreadOnly: unreadOnly),
-            ),
+          return _EmptyStateCard(
+            scope: scope,
+            unreadOnly: unreadOnly,
+            otherScopeUnread:
+                otherScopeItems.where((n) => !n.isRead).length,
+            otherScopeTotal: otherScopeItems.length,
+            onJumpToOther: otherScopeItems.isNotEmpty
+                ? () => onScopeChanged(otherScope)
+                : null,
           );
         }
+        final listIndex = index - headerCount;
         if (listIndex < visible.length) {
           final n = visible[listIndex];
-          // v92: in the Energy tab, give each card a small left-edge
-          // accent so the reader can scan energy-related items quickly.
           return _NotificationTile(
             notification: n,
             energyAccent: scope == NotificationScope.energy,
@@ -268,21 +282,8 @@ class _FeedBody extends ConsumerWidget {
     );
   }
 
-  String _emptyTitle({required NotificationScope scope, required bool unreadOnly}) {
-    if (unreadOnly) return 'لا توجد إشعارات غير مقروءة';
-    if (scope == NotificationScope.energy) {
-      return 'لا توجد تنبيهات طاقة أو أحمال حالياً.';
-    }
-    return 'لا توجد إشعارات بعد';
-  }
-
-  String _emptySubtitle({required NotificationScope scope, required bool unreadOnly}) {
-    if (unreadOnly) return 'كل إشعاراتك الحالية مقروءة.';
-    if (scope == NotificationScope.energy) {
-      return 'عند توفر تنبيهات البطارية أو الأحمال ستظهر هنا.';
-    }
-    return 'سيظهر كل إشعار جديد من النظام أو من فريق الدعم هنا.';
-  }
+  // v94: empty-state copy moved into the `_EmptyStateCard` widget — that
+  // widget knows both scopes' counts so it can suggest jumping tabs.
 
   Future<void> _runMarkOne(
     BuildContext context,
@@ -396,6 +397,31 @@ class _HeaderCard extends StatelessWidget {
               label: const Text('اقرأ الكل'),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// v94: tiny uppercase-style label that sits above each filter row so
+/// the user knows which filter scope each pill cluster belongs to —
+/// removes the "two `الكل` chips next to each other with no context"
+/// confusion the previous layout had.
+class _FilterSectionLabel extends StatelessWidget {
+  const _FilterSectionLabel({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 4, top: 4),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppTheme.faintMuted,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
       ),
     );
   }
@@ -551,6 +577,10 @@ class _ScopeTab extends StatelessWidget {
   final int unreadCount;
   final VoidCallback onTap;
 
+  /// v94: vertical layout (icon row on top, label below) so the full
+  /// label is always readable. The unread chip sits next to the icon
+  /// instead of competing with the label for horizontal space — that
+  /// was the root cause of "متابعة الطاقة والأحم..." clipping.
   @override
   Widget build(BuildContext context) {
     final bg = selected ? AppTheme.indigoPrimary : Colors.transparent;
@@ -565,55 +595,59 @@ class _ScopeTab extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: fg),
-              const SizedBox(width: 6),
-              Flexible(
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 18, color: fg),
+                  if (unreadCount > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? Colors.white
+                            : AppTheme.indigoSoft,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          color: AppTheme.indigoPrimary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 4),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  height: 1.25,
+                ),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  softWrap: true,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-              if (unreadCount > 0) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? Colors.white
-                        : AppTheme.indigoSoft,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '$unreadCount',
-                    style: TextStyle(
-                      color: selected
-                          ? AppTheme.indigoPrimary
-                          : AppTheme.indigoPrimary,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -907,6 +941,106 @@ class _EnergyCategoryFilters extends StatelessWidget {
               onTap: () => onChanged(c),
             ),
             const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// v94: single, honest empty state. Renders **once** per empty tab and
+/// — when the other tab actually has items — surfaces a jump button so
+/// the user isn't stuck staring at "no notifications" while their feed
+/// sits in the other scope.
+class _EmptyStateCard extends StatelessWidget {
+  const _EmptyStateCard({
+    required this.scope,
+    required this.unreadOnly,
+    required this.otherScopeUnread,
+    required this.otherScopeTotal,
+    required this.onJumpToOther,
+  });
+
+  final NotificationScope scope;
+  final bool unreadOnly;
+  final int otherScopeUnread;
+  final int otherScopeTotal;
+  final VoidCallback? onJumpToOther;
+
+  String get _title {
+    if (unreadOnly) return 'لا توجد إشعارات غير مقروءة';
+    if (scope == NotificationScope.energy) {
+      return 'لا توجد تنبيهات طاقة أو أحمال حالياً.';
+    }
+    return 'لا توجد إشعارات تطبيق حالياً.';
+  }
+
+  String get _subtitle {
+    if (unreadOnly) return 'كل إشعاراتك الحالية في هذا التبويب مقروءة.';
+    if (scope == NotificationScope.energy) {
+      return 'عند توفر تنبيهات البطارية أو الأحمال ستظهر هنا.';
+    }
+    return 'سيظهر كل إشعار جديد من النظام أو من فريق الدعم هنا.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final otherTitle = scope == NotificationScope.app
+        ? notificationScopeTitle(NotificationScope.energy)
+        : notificationScopeTitle(NotificationScope.app);
+    final hasOther = onJumpToOther != null && otherScopeTotal > 0;
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppEmptyState(
+            icon: unreadOnly
+                ? Icons.mark_email_read_outlined
+                : (scope == NotificationScope.energy
+                    ? Icons.bolt_outlined
+                    : Icons.notifications_none_outlined),
+            title: _title,
+            subtitle: _subtitle,
+          ),
+          if (hasOther) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.indigoSoft,
+                borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+                border: Border.all(
+                  color: AppTheme.indigoBright.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    otherScopeUnread > 0
+                        ? 'يوجد $otherScopeUnread إشعار غير مقروء في تبويب "$otherTitle".'
+                        : 'يوجد $otherScopeTotal إشعار في تبويب "$otherTitle".',
+                    style: const TextStyle(
+                      color: AppTheme.indigoPrimary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      height: 1.55,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: TextButton.icon(
+                      onPressed: onJumpToOther,
+                      icon: const Icon(Icons.swap_horiz, size: 16),
+                      label: Text('فتح "$otherTitle"'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ],
       ),

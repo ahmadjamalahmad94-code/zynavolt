@@ -68,8 +68,10 @@ enum EnergyCategory { all, battery, load, sunWeather, reports, other }
 
 String energyCategoryLabel(EnergyCategory c) {
   switch (c) {
+    // v94: rename `الكل` → `كل الفئات` so it doesn't sit ambiguously
+    // next to the read-state filter's own `الكل` pill.
     case EnergyCategory.all:
-      return 'الكل';
+      return 'كل الفئات';
     case EnergyCategory.battery:
       return 'البطارية';
     case EnergyCategory.load:
