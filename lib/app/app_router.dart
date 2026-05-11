@@ -17,6 +17,7 @@ import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/app_settings_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
 import '../features/support/presentation/support_case_detail_screen.dart';
+import '../features/support/presentation/support_create_case_screen.dart';
 import '../features/support/presentation/support_screen.dart';
 
 class AppRoutes {
@@ -33,6 +34,7 @@ class AppRoutes {
   static const String account = '/account';
   static const String settings = '/settings';
   static const String notificationSettings = '/notifications/settings';
+  static const String supportCreate = '/support/new';
 
   /// Build a typed path for the device-detail screen. Kept outside the
   /// bottom-nav shell so it has full-screen real estate and a normal back
@@ -125,6 +127,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
           return SupportCaseDetailScreen(kind: kind, id: id);
         },
+      ),
+      // v88: new support case (subject + body + priority + kind). Lives
+      // outside the shell so the form has full-screen real estate.
+      GoRoute(
+        path: AppRoutes.supportCreate,
+        builder: (_, _) => const SupportCreateCaseScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),

@@ -9,16 +9,16 @@ import '../../../core/widgets/app_error_state.dart';
 import '../../../core/utils/timestamp.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
-import '../../../core/widgets/read_only_notice.dart';
 import '../data/support_labels.dart';
 import '../data/support_models.dart';
 import '../data/support_repository.dart';
 
-/// Read-only support case thread (v50).
+/// Support case thread (v88).
 ///
 /// Fetches `GET /api/v1/support/cases/:kind/:id` and renders the case
-/// summary + the conversation messages in chronological order. No reply
-/// composer — v50 is read-only.
+/// summary + the conversation messages. v88 adds a reply composer that
+/// posts to `/cases/:kind/:id/reply` — disabled for closed/resolved
+/// cases (the backend would reject those with `support_case_closed`).
 class SupportCaseDetailScreen extends ConsumerWidget {
   const SupportCaseDetailScreen({
     super.key,
@@ -80,7 +80,7 @@ class SupportCaseDetailScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            data: (d) => _DetailBody(detail: d),
+            data: (d) => _DetailBody(kind: kind, id: id, detail: d),
           ),
         ),
       ),
@@ -89,21 +89,26 @@ class SupportCaseDetailScreen extends ConsumerWidget {
 }
 
 class _DetailBody extends StatelessWidget {
-  const _DetailBody({required this.detail});
+  const _DetailBody({
+    required this.kind,
+    required this.id,
+    required this.detail,
+  });
+
+  final String kind;
+  final int id;
   final SupportCaseDetail detail;
 
   @override
   Widget build(BuildContext context) {
     final s = detail.summary;
+    final isClosed = s.status.toLowerCase() == 'closed' ||
+        s.status.toLowerCase() == 'resolved' ||
+        s.status.toLowerCase() == 'cancelled' ||
+        s.status.toLowerCase() == 'canceled';
+
     final children = <Widget>[
       _SummaryCard(summary: s),
-      const SizedBox(height: 12),
-      // v66: explicit read-only notice — there's no composer / reply
-      // button on this screen and the user deserves to know why before
-      // they hunt for one. v76: now uses the shared ReadOnlyNotice.
-      const ReadOnlyNotice(
-        message: 'هذه المحادثة للقراءة فقط حالياً.',
-      ),
       const SizedBox(height: 12),
       const _SectionHeader(label: 'المحادثة'),
       const SizedBox(height: 8),
@@ -120,10 +125,157 @@ class _DetailBody extends StatelessWidget {
       }
     }
     children.add(const SizedBox(height: 16));
+    // v88: reply composer. Disabled for closed/resolved cases so the user
+    // doesn't waste a tap on a request the backend will reject (409).
+    children.add(_ReplyComposer(
+      kind: kind,
+      id: id,
+      isClosed: isClosed,
+    ));
+    children.add(const SizedBox(height: 24));
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: children,
+    );
+  }
+}
+
+class _ReplyComposer extends ConsumerStatefulWidget {
+  const _ReplyComposer({
+    required this.kind,
+    required this.id,
+    required this.isClosed,
+  });
+
+  final String kind;
+  final int id;
+  final bool isClosed;
+
+  @override
+  ConsumerState<_ReplyComposer> createState() => _ReplyComposerState();
+}
+
+class _ReplyComposerState extends ConsumerState<_ReplyComposer> {
+  final _controller = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final body = _controller.text.trim();
+    if (body.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(supportRepositoryProvider).reply(
+            kind: widget.kind,
+            id: widget.id,
+            body: body,
+          );
+      ref.invalidate(
+        supportCaseDetailProvider((kind: widget.kind, id: widget.id)),
+      );
+      if (!mounted) return;
+      _controller.clear();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          duration: Duration(seconds: 2),
+          content: Text('تم إرسال الرد.'),
+        ));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('تعذّر إرسال الرد: $e')),
+        );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isClosed) {
+      return AppCard(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        background: AppTheme.softBg,
+        child: Row(
+          children: const [
+            Icon(Icons.lock_outline,
+                color: AppTheme.faintMuted, size: 16),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'هذا الطلب مغلق ولا يمكن إضافة ردود جديدة.',
+                style: TextStyle(
+                  color: AppTheme.faintMuted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return AppCard(
+      elevated: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'إضافة رد',
+            style: TextStyle(
+              color: AppTheme.ink,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _controller,
+            minLines: 3,
+            maxLines: 6,
+            textInputAction: TextInputAction.newline,
+            decoration: const InputDecoration(
+              hintText: 'اكتب رسالتك هنا...',
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: AppTheme.formControlHeight + 4,
+            child: FilledButton.icon(
+              onPressed: _sending ? null : _send,
+              icon: _sending
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.send, size: 18),
+              label: const Text('إرسال'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

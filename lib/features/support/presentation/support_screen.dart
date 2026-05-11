@@ -38,6 +38,15 @@ class SupportScreen extends ConsumerWidget {
           ),
         ],
       ),
+      // v88: FAB opens the create-case form. Backend supports posting a
+      // new message/ticket via `POST /api/v1/support/cases`.
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(AppRoutes.supportCreate),
+        backgroundColor: AppTheme.indigoPrimary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('طلب جديد'),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async => ref.invalidate(supportCasesProvider),

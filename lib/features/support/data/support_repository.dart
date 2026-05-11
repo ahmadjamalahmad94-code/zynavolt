@@ -23,6 +23,42 @@ class SupportRepository {
     final response = await _api.get('/api/v1/support/cases/$kind/$id');
     return SupportCaseDetail.fromJson(response.data);
   }
+
+  /// v88: `POST /api/v1/support/cases/:kind/:id/reply` — add a user-side
+  /// reply to an existing case. Backend rejects closed/resolved cases
+  /// for non-admin users with `support_case_closed` (409).
+  Future<SupportCaseDetail> reply({
+    required String kind,
+    required int id,
+    required String body,
+  }) async {
+    final response = await _api.post(
+      '/api/v1/support/cases/$kind/$id/reply',
+      body: {'body': body},
+    );
+    return SupportCaseDetail.fromJson(response.data);
+  }
+
+  /// v88: `POST /api/v1/support/cases` — open a new support case.
+  /// `kind` is `'message'` (default) or `'ticket'`. Subject + body are
+  /// required (backend rejects empty values with `missing_support_fields`).
+  Future<SupportCaseDetail> createCase({
+    required String subject,
+    required String body,
+    String kind = 'message',
+    String priority = 'normal',
+  }) async {
+    final response = await _api.post(
+      '/api/v1/support/cases',
+      body: {
+        'type': kind,
+        'subject': subject,
+        'body': body,
+        'priority': priority,
+      },
+    );
+    return SupportCaseDetail.fromJson(response.data);
+  }
 }
 
 final supportRepositoryProvider = Provider<SupportRepository>((ref) {
