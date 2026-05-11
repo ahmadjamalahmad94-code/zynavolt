@@ -9,7 +9,11 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/state/app_session.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../bootstrap/data/bootstrap_repository.dart';
+import '../../dashboard/data/dashboard_repository.dart';
+import '../../devices/data/devices_repository.dart';
 import '../../devices/state/selected_device_provider.dart';
+import '../../notifications/state/notifications_controller.dart';
+import '../../profile/state/profile_controller.dart';
 
 /// "More" tab — profile summary, app info, active-device hint, sign-out, and
 /// a one-tap connection check. v38 adds the active-device row and the
@@ -23,7 +27,35 @@ class MoreScreen extends ConsumerStatefulWidget {
 
 class _MoreScreenState extends ConsumerState<MoreScreen> {
   bool _checking = false;
+  bool _signingOut = false;
+  bool _diagnosticsExpanded = false;
   _HealthResult? _result;
+
+  Future<void> _signOutAndReturnToLogin() async {
+    if (_signingOut) return;
+    setState(() => _signingOut = true);
+    try {
+      await ref.read(appSessionProvider.notifier).signOut();
+      // Drop every cached user-scoped provider so a re-login (especially
+      // as a different user) cannot serve the previous user's data while
+      // waiting for fresh fetches. selectedDeviceProvider is included even
+      // though storage was already cleared by signOut() — this resets the
+      // in-memory AsyncNotifier value too.
+      ref
+        ..invalidate(bootstrapProvider)
+        ..invalidate(dashboardProvider)
+        ..invalidate(devicesListProvider)
+        ..invalidate(selectedDeviceProvider)
+        ..invalidate(notificationsControllerProvider)
+        ..invalidate(profileControllerProvider);
+      if (!mounted) return;
+      // Explicit navigation clears the go_router back-stack so Android back
+      // after logout exits the app instead of replaying redirected routes.
+      context.go(AppRoutes.login);
+    } finally {
+      if (mounted) setState(() => _signingOut = false);
+    }
+  }
 
   Future<void> _runHealthCheck() async {
     if (_checking) return;
@@ -180,52 +212,46 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'تشخيص المطوّر',
-                    style: TextStyle(
-                      color: AppTheme.ink,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'حقول قراءة فقط مفيدة أثناء تجريب الاتصال بالخادم.',
-                    style: TextStyle(
-                      color: AppTheme.faintMuted,
-                      fontSize: 12,
-                      height: 1.55,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _Row(label: 'حالة الجلسة', value: _phaseLabel(session.phase)),
-                  _Row(
-                    label: 'الجهاز المخزَّن',
-                    value: storedDeviceId != null ? '#$storedDeviceId' : '—',
-                  ),
-                  _Row(
-                    label: 'الجهاز الفعّال',
-                    value:
-                        effectiveDeviceId != null ? '#$effectiveDeviceId' : '—',
-                  ),
-                  _Row(
-                    label: 'آخر خطأ تهيئة',
-                    value: session.lastError?.message ?? '—',
-                  ),
-                ],
-              ),
+            _CollapsibleCard(
+              title: 'تشخيص المطوّر',
+              subtitle: 'حقول قراءة فقط مفيدة أثناء تجريب الاتصال بالخادم.',
+              expanded: _diagnosticsExpanded,
+              onToggle: () => setState(
+                  () => _diagnosticsExpanded = !_diagnosticsExpanded),
+              children: [
+                _Row(label: 'حالة الجلسة', value: _phaseLabel(session.phase)),
+                _Row(
+                  label: 'الجهاز المخزَّن',
+                  value: storedDeviceId != null ? '#$storedDeviceId' : '—',
+                ),
+                _Row(
+                  label: 'الجهاز الفعّال',
+                  value: effectiveDeviceId != null
+                      ? '#$effectiveDeviceId'
+                      : '—',
+                ),
+                _Row(
+                  label: 'آخر خطأ تهيئة',
+                  value: session.lastError?.message ?? '—',
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: () => ref.read(appSessionProvider.notifier).signOut(),
+              onPressed: _signingOut ? null : _signOutAndReturnToLogin,
               style: FilledButton.styleFrom(
                 backgroundColor: AppTheme.danger,
               ),
-              icon: const Icon(Icons.logout),
+              icon: _signingOut
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.logout),
               label: const Text('تسجيل الخروج'),
             ),
           ],
@@ -329,6 +355,109 @@ class _Row extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Calm collapsible card. Header is always visible (and tappable); the
+/// body cross-fades and animates height when expanded. Keeps optional /
+/// dev-info content out of the way without removing it.
+class _CollapsibleCard extends StatelessWidget {
+  const _CollapsibleCard({
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+    required this.children,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+      child: InkWell(
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        child: AppCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: AppTheme.ink,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (subtitle != null && !expanded) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle!,
+                            style: const TextStyle(
+                              color: AppTheme.faintMuted,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    expanded
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                    color: AppTheme.faintMuted,
+                    size: 22,
+                  ),
+                ],
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeInOut,
+                child: expanded
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (subtitle != null) ...[
+                              Text(
+                                subtitle!,
+                                style: const TextStyle(
+                                  color: AppTheme.faintMuted,
+                                  fontSize: 12,
+                                  height: 1.55,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                            ...children,
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
