@@ -28,10 +28,10 @@ class ProfileScreen extends ConsumerWidget {
       backgroundColor: AppTheme.softBg,
       appBar: AppBar(
         title: const Text('الملف الشخصي'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
+        // v68: drop the manual `Icons.arrow_back` leading and let Flutter
+        // auto-imply the standard BackButton. The default handles RTL
+        // direction correctly (arrow flips with the active text
+        // direction), whereas the hard-coded icon does not.
       ),
       body: SafeArea(
         child: profile.when(
