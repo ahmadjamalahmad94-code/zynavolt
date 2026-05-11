@@ -136,6 +136,10 @@ class _SubscriptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final plan = subscription.plan;
     return AppCard(
+      // v67: subscription is the most actionable info on this screen,
+      // so it gets the elevated treatment to stand out among the calmer
+      // identity / devices / capabilities cards.
+      elevated: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
