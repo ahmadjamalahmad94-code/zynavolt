@@ -7,58 +7,234 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../../devices/state/selected_device_provider.dart';
 import '../data/load_models.dart';
 import '../data/loads_repository.dart';
 
-/// Read-only Loads list (v48).
+/// Read-only Loads list (v48 + v53 polish).
 ///
-/// Renders GET /api/mobile/loads as calm soft cards. v48 is the foundation
-/// only: every load is read-only here. We surface the enabled/disabled
-/// state as a badge — there is no toggle action, no POST, no scheduler
-/// trigger. The backend `control_type` field is `persisted_preference`
-/// (per backend), which we deliberately do not expose in the UI to avoid
-/// implying a control surface that doesn't exist yet.
-class LoadsScreen extends ConsumerWidget {
+/// v53 adds:
+///   - Local search by load name (client-side filter; no API call).
+///   - Two scope chips: "كل الأحمال" and "الجهاز النشط". The second uses
+///     the backend's `?device_id=` parameter via [loadsScopeFilterProvider].
+///   - Better badges, retry, and refresh feedback.
+///
+/// v53 stays strictly read-only — no toggle, no POST, no scheduler, no
+/// hardware. `control_type` and `execution_note` from the backend are
+/// parsed-ignored to avoid implying a control surface that doesn't exist.
+class LoadsScreen extends ConsumerStatefulWidget {
   const LoadsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LoadsScreen> createState() => _LoadsScreenState();
+}
+
+class _LoadsScreenState extends ConsumerState<LoadsScreen> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final page = ref.watch(loadsListProvider);
+    final filter = ref.watch(loadsScopeFilterProvider);
+    final activeId = ref.watch(effectiveDeviceIdProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.softBg,
       appBar: AppBar(
         title: const Text('الأحمال'),
         actions: [
-          IconButton(
-            tooltip: 'تحديث',
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(loadsListProvider),
+          Builder(
+            builder: (ctx) => IconButton(
+              tooltip: 'تحديث',
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
+                ref.invalidate(loadsListProvider);
+                ScaffoldMessenger.of(ctx)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    const SnackBar(
+                      duration: Duration(seconds: 2),
+                      content: Text('جارٍ التحديث...'),
+                    ),
+                  );
+              },
+            ),
           ),
         ],
       ),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(loadsListProvider),
-          child: page.when(
-            loading: () =>
-                const AppLoading(message: 'جارٍ تحميل الأحمال...'),
-            error: (err, _) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              children: [
-                AppErrorState(
-                  error: err is ApiException
-                      ? err
-                      : ApiException(
-                          message: 'تعذّر تحميل الأحمال.',
-                          kind: ApiErrorKind.unknown,
-                        ),
-                  onRetry: () => ref.invalidate(loadsListProvider),
-                ),
-              ],
+        child: Column(
+          children: [
+            _Toolbar(
+              query: _query,
+              controller: _searchCtrl,
+              onQueryChanged: (v) => setState(() => _query = v),
+              filter: filter,
+              activeDeviceAvailable: activeId != null,
+              onFilterChanged: (f) =>
+                  ref.read(loadsScopeFilterProvider.notifier).state = f,
             ),
-            data: (data) => _LoadsBody(data: data),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => ref.invalidate(loadsListProvider),
+                child: page.when(
+                  loading: () =>
+                      const AppLoading(message: 'جارٍ تحميل الأحمال...'),
+                  error: (err, _) => ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      AppErrorState(
+                        error: err is ApiException
+                            ? err
+                            : ApiException(
+                                message: 'تعذّر تحميل الأحمال.',
+                                kind: ApiErrorKind.unknown,
+                              ),
+                        onRetry: () => ref.invalidate(loadsListProvider),
+                      ),
+                    ],
+                  ),
+                  data: (data) => _LoadsBody(
+                    data: data,
+                    query: _query,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Toolbar extends StatelessWidget {
+  const _Toolbar({
+    required this.query,
+    required this.controller,
+    required this.onQueryChanged,
+    required this.filter,
+    required this.activeDeviceAvailable,
+    required this.onFilterChanged,
+  });
+
+  final String query;
+  final TextEditingController controller;
+  final ValueChanged<String> onQueryChanged;
+  final LoadsScopeFilter filter;
+  final bool activeDeviceAvailable;
+  final ValueChanged<LoadsScopeFilter> onFilterChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: controller,
+            onChanged: onQueryChanged,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'ابحث باسم الحمل...',
+              prefixIcon: const Icon(Icons.search, size: 18),
+              suffixIcon: query.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close, size: 16),
+                      onPressed: () {
+                        controller.clear();
+                        onQueryChanged('');
+                      },
+                    ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _FilterChip(
+                label: 'كل الأحمال',
+                selected: filter == LoadsScopeFilter.all,
+                onTap: () => onFilterChanged(LoadsScopeFilter.all),
+              ),
+              const SizedBox(width: 8),
+              _FilterChip(
+                label: 'الجهاز النشط',
+                selected: filter == LoadsScopeFilter.activeDevice,
+                onTap: activeDeviceAvailable
+                    ? () => onFilterChanged(LoadsScopeFilter.activeDevice)
+                    : null,
+                disabled: !activeDeviceAvailable,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.disabled = false,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg;
+    final Color fg;
+    final Color border;
+    if (disabled) {
+      bg = AppTheme.softBg;
+      fg = AppTheme.faintMuted;
+      border = AppTheme.line;
+    } else if (selected) {
+      bg = AppTheme.indigoPrimary;
+      fg = Colors.white;
+      border = AppTheme.indigoPrimary;
+    } else {
+      bg = AppTheme.surface;
+      fg = AppTheme.indigoPrimary;
+      border = AppTheme.indigoBright.withValues(alpha: 0.30);
+    }
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: border),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),
@@ -67,11 +243,19 @@ class LoadsScreen extends ConsumerWidget {
 }
 
 class _LoadsBody extends StatelessWidget {
-  const _LoadsBody({required this.data});
+  const _LoadsBody({required this.data, required this.query});
   final LoadsPage data;
+  final String query;
 
   @override
   Widget build(BuildContext context) {
+    final normalized = query.trim().toLowerCase();
+    final filtered = normalized.isEmpty
+        ? data.items
+        : data.items
+            .where((l) => l.name.toLowerCase().contains(normalized))
+            .toList();
+
     if (data.items.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -89,10 +273,26 @@ class _LoadsBody extends StatelessWidget {
       );
     }
 
+    if (filtered.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          _ScopeBanner(scope: data.scope, deviceName: data.deviceName),
+          const SizedBox(height: 12),
+          const AppEmptyState(
+            icon: Icons.search_off,
+            title: 'لا توجد نتائج مطابقة',
+            subtitle: 'حاول تغيير كلمة البحث أو إزالة الفلتر.',
+          ),
+        ],
+      );
+    }
+
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
-      itemCount: data.items.length + 1,
+      itemCount: filtered.length + 1,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, index) {
         if (index == 0) {
@@ -101,7 +301,7 @@ class _LoadsBody extends StatelessWidget {
             deviceName: data.deviceName,
           );
         }
-        final load = data.items[index - 1];
+        final load = filtered[index - 1];
         return _LoadTile(load: load);
       },
     );
