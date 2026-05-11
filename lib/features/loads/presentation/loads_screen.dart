@@ -276,10 +276,15 @@ class _LoadsBody extends StatelessWidget {
       );
     }
 
+    // v64: show a small "X من Y حمل" count when search filters the
+    // list — gives the user honest feedback that the filter is on.
+    final hasSearch = normalized.isNotEmpty && filtered.length != data.items.length;
+    final leadingExtras = hasSearch ? 2 : 1;
+
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
-      itemCount: filtered.length + 1,
+      itemCount: filtered.length + leadingExtras,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, index) {
         if (index == 0) {
@@ -288,9 +293,43 @@ class _LoadsBody extends StatelessWidget {
             deviceName: data.deviceName,
           );
         }
-        final load = filtered[index - 1];
+        if (hasSearch && index == 1) {
+          return _SearchSummary(
+            shown: filtered.length,
+            total: data.items.length,
+          );
+        }
+        final load = filtered[index - leadingExtras];
         return _LoadTile(load: load);
       },
+    );
+  }
+}
+
+class _SearchSummary extends StatelessWidget {
+  const _SearchSummary({required this.shown, required this.total});
+  final int shown;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt_outlined,
+              color: AppTheme.faintMuted, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            'عرض $shown من أصل $total حمل',
+            style: const TextStyle(
+              color: AppTheme.faintMuted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
