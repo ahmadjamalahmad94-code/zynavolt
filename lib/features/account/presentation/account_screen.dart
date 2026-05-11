@@ -6,6 +6,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../data/account_labels.dart';
 import '../data/account_models.dart';
 import '../data/account_repository.dart';
 
@@ -113,9 +114,13 @@ class _IdentityCard extends StatelessWidget {
           ),
           _KvRow(
             label: 'الدور',
+            // v57: prefer server-translated label; if absent, map the role
+            // code to its Arabic label rather than showing the raw slug.
             value: account.role.label.isNotEmpty
                 ? account.role.label
-                : (account.role.code.isNotEmpty ? account.role.code : '—'),
+                : (account.role.code.isNotEmpty
+                    ? AccountLabels.roleLabel(account.role.code)
+                    : '—'),
           ),
           _KvRow(label: 'المعرّف', value: '#${account.userId}'),
         ],
@@ -188,7 +193,8 @@ class _SubscriptionCard extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      f,
+                      // v57: convert raw `can_*` slugs into Arabic labels.
+                      AccountLabels.planFeatureLabel(f),
                       style: const TextStyle(
                         color: AppTheme.indigoPrimary,
                         fontSize: 11,
@@ -299,7 +305,8 @@ class _CapabilitiesCard extends StatelessWidget {
                       border: Border.all(color: AppTheme.line),
                     ),
                     child: Text(
-                      s,
+                      // v57: convert raw section slugs into Arabic labels.
+                      AccountLabels.apiSectionLabel(s),
                       style: const TextStyle(
                         color: AppTheme.muted,
                         fontSize: 11,

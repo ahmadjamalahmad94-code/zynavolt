@@ -24,6 +24,24 @@ class DeviceDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // v57: hard-guard for an invalid path parameter. If the router ever
+    // produces id == 0 (parse failure, empty path segment, etc.), render an
+    // honest error instead of firing a doomed `/devices/0` fetch.
+    if (deviceId <= 0) {
+      return Scaffold(
+        backgroundColor: AppTheme.softBg,
+        appBar: AppBar(title: const Text('تفاصيل الجهاز')),
+        body: SafeArea(
+          child: AppErrorState(
+            error: ApiException(
+              message: 'معرّف الجهاز غير صالح.',
+              kind: ApiErrorKind.notFound,
+            ),
+          ),
+        ),
+      );
+    }
+
     final detail = ref.watch(deviceDetailProvider(deviceId));
     final activeId = ref.watch(effectiveDeviceIdProvider);
 
@@ -54,8 +72,18 @@ class DeviceDetailScreen extends ConsumerWidget {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async => ref.invalidate(deviceDetailProvider(deviceId)),
+          // v57: wrap every detail-state branch in a ListView so
+          // RefreshIndicator always has a scrollable child to drive (and so
+          // pull-to-refresh works even while loading / on error). This also
+          // makes the body always visible — no more silent blank state.
           child: detail.when(
-            loading: () => const AppLoading(message: 'جارٍ تحميل تفاصيل الجهاز...'),
+            loading: () => ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              children: const [
+                AppLoading(message: 'جارٍ تحميل تفاصيل الجهاز...'),
+              ],
+            ),
             error: (err, _) => ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
@@ -72,13 +100,33 @@ class DeviceDetailScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            data: (snapshot) => _DetailBody(
-              snapshot: snapshot,
-              isActive: activeId == snapshot.device.id,
-              onSetActive: () => ref
-                  .read(selectedDeviceProvider.notifier)
-                  .select(snapshot.device.id),
-            ),
+            data: (snapshot) {
+              // v57: if the server returned an empty/zero device payload,
+              // surface that as a calm empty state — never as a blank body.
+              if (snapshot.device.id == 0) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    AppErrorState(
+                      error: ApiException(
+                        message: 'تعذّر العثور على بيانات هذا الجهاز.',
+                        kind: ApiErrorKind.notFound,
+                      ),
+                      onRetry: () =>
+                          ref.invalidate(deviceDetailProvider(deviceId)),
+                    ),
+                  ],
+                );
+              }
+              return _DetailBody(
+                snapshot: snapshot,
+                isActive: activeId == snapshot.device.id,
+                onSetActive: () => ref
+                    .read(selectedDeviceProvider.notifier)
+                    .select(snapshot.device.id),
+              );
+            },
           ),
         ),
       ),
@@ -303,15 +351,23 @@ class _LatestCard extends StatelessWidget {
     for (var i = 0; i < tiles.length; i += 2) {
       final left = tiles[i];
       final right = i + 1 < tiles.length ? tiles[i + 1] : null;
+      // v57: wrap each tile-row in IntrinsicHeight so
+      // `CrossAxisAlignment.stretch` can resolve a bounded cross-axis
+      // height. Without this, the surrounding ListView passes unbounded
+      // vertical constraints down to the Row and RenderFlex bails out
+      // mid-layout — in release that surfaces as a blank screen body
+      // under the AppBar (root cause of the v57 manual-QA report).
       rows.add(Padding(
         padding: EdgeInsets.only(top: rows.isEmpty ? 0 : 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: left),
-            const SizedBox(width: 8),
-            Expanded(child: right ?? const SizedBox.shrink()),
-          ],
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: left),
+              const SizedBox(width: 8),
+              Expanded(child: right ?? const SizedBox.shrink()),
+            ],
+          ),
         ),
       ));
     }
