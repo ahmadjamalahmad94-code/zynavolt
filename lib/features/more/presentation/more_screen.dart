@@ -143,6 +143,15 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               subtitle: 'عرض وتعديل بياناتك الأساسية.',
               onTap: () => context.push(AppRoutes.profile),
             ),
+            const SizedBox(height: 10),
+            // v48: read-only loads list. No bottom-nav slot is free (5 tabs
+            // are already populated) so loads enters via More as a tile.
+            _NavTile(
+              icon: Icons.bolt_outlined,
+              label: 'الأحمال',
+              subtitle: 'عرض الأحمال المسجَّلة على حسابك.',
+              onTap: () => context.push(AppRoutes.loads),
+            ),
             const SizedBox(height: 12),
             const AppCard(
               child: Column(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
@@ -67,8 +69,9 @@ class DevicesScreen extends ConsumerWidget {
                   return _DeviceTile(
                     device: d,
                     isSelected: isSelected,
-                    onTap: () =>
-                        ref.read(selectedDeviceProvider.notifier).select(d.id),
+                    // v47: tap opens the read-only Device Details screen.
+                    // The set-active action now lives there.
+                    onTap: () => context.push(AppRoutes.deviceDetail(d.id)),
                   );
                 },
               );

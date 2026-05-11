@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../core/state/app_session.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/devices/presentation/device_detail_screen.dart';
 import '../features/devices/presentation/devices_screen.dart';
+import '../features/loads/presentation/loads_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/home/presentation/home_shell.dart';
 import '../features/more/presentation/more_screen.dart';
@@ -23,6 +25,12 @@ class AppRoutes {
   static const String support = '/support';
   static const String more = '/more';
   static const String profile = '/profile';
+  static const String loads = '/loads';
+
+  /// Build a typed path for the device-detail screen. Kept outside the
+  /// bottom-nav shell so it has full-screen real estate and a normal back
+  /// button — same pattern as [profile].
+  static String deviceDetail(int id) => '/devices/$id';
 }
 
 /// GoRouter wired to [appSessionProvider]. Redirects are session-driven:
@@ -64,6 +72,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.profile,
         builder: (_, _) => const ProfileScreen(),
+      ),
+      // v47: device details — full-screen detail with normal back button,
+      // outside the shell. Path parameter is the integer device id.
+      GoRoute(
+        path: '/devices/:id',
+        builder: (_, state) {
+          final raw = state.pathParameters['id'] ?? '';
+          final id = int.tryParse(raw) ?? 0;
+          return DeviceDetailScreen(deviceId: id);
+        },
+      ),
+      // v48: loads — opened from the More tab as a focused list.
+      GoRoute(
+        path: AppRoutes.loads,
+        builder: (_, _) => const LoadsScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
