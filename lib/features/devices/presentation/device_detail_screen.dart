@@ -171,6 +171,9 @@ class _StatusCard extends StatelessWidget {
     final connected = device.connectionStatus.toLowerCase() == 'ok';
     final lastSeen = _formatTimestamp(device.lastConnectedAt);
     return AppCard(
+      // v63: status card is the screen's hero — soft shadow gives it
+      // presence over the calmer info/settings cards below.
+      elevated: true,
       borderColor: isActive ? AppTheme.indigoBright : AppTheme.line,
       background: isActive ? AppTheme.indigoSoft : AppTheme.surface,
       child: Column(
@@ -251,20 +254,32 @@ class _StatusCard extends StatelessWidget {
           ),
           if (lastSeen != null) ...[
             const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.access_time_outlined,
-                    color: AppTheme.faintMuted, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  'آخر اتصال: $lastSeen',
-                  style: const TextStyle(
-                    color: AppTheme.faintMuted,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
+            // v63: small chip with icon container so "آخر اتصال" reads
+            // as a deliberate metadata cell, not stray footer text.
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.softBg,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: AppTheme.line),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.access_time_outlined,
+                      color: AppTheme.faintMuted, size: 13),
+                  const SizedBox(width: 6),
+                  Text(
+                    'آخر اتصال: $lastSeen',
+                    style: const TextStyle(
+                      color: AppTheme.muted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ],
