@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/state/app_session.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/utils/timestamp.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
-import '../../../core/widgets/read_only_notice.dart';
 import '../data/account_labels.dart';
 import '../data/account_models.dart';
 import '../data/account_repository.dart';
@@ -84,22 +86,219 @@ class _AccountBody extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: [
-        // v76: explicit "view only" banner — the account screen has no
-        // edit / cancel / change-plan actions and users deserve to know
-        // that upfront, before they scroll looking for one.
-        const ReadOnlyNotice(
-          message: 'بيانات الحساب والاشتراك معروضة هنا للعرض فقط حالياً.',
-        ),
-        const SizedBox(height: 12),
         _IdentityCard(account: account),
         const SizedBox(height: 12),
         _SubscriptionCard(subscription: account.subscription),
         const SizedBox(height: 12),
         _DevicesCard(devices: account.devices),
+        // v89: real account actions (change password + logout-all), gated
+        // on server-declared capabilities. The previous v76 read-only
+        // banner is gone because the screen now offers real actions.
+        if (account.capabilities.passwordChange ||
+            account.capabilities.logoutAllRefreshTokens) ...[
+          const SizedBox(height: 12),
+          _SecurityActionsCard(capabilities: account.capabilities),
+        ],
         const SizedBox(height: 12),
         _CapabilitiesCard(capabilities: account.capabilities),
         const SizedBox(height: 24),
       ],
+    );
+  }
+}
+
+class _SecurityActionsCard extends ConsumerStatefulWidget {
+  const _SecurityActionsCard({required this.capabilities});
+  final AccountCapabilities capabilities;
+
+  @override
+  ConsumerState<_SecurityActionsCard> createState() =>
+      _SecurityActionsCardState();
+}
+
+class _SecurityActionsCardState
+    extends ConsumerState<_SecurityActionsCard> {
+  bool _loggingOutAll = false;
+
+  Future<void> _confirmLogoutAll() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تسجيل الخروج من كل الأجهزة'),
+        content: const Text(
+          'سيتم إنهاء جلسة كل الأجهزة المسجَّلة بحسابك. '
+          'هل تريد المتابعة؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('تأكيد'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _loggingOutAll = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final revoked =
+          await ref.read(accountRepositoryProvider).logoutAll();
+      // After revoking refresh tokens, sign out locally so the next
+      // 401 doesn't surprise the user — the access token will expire
+      // on its own; signing out clears it deterministically.
+      await ref.read(appSessionProvider.notifier).signOut();
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          duration: const Duration(seconds: 3),
+          content: Text(
+            'تم تسجيل الخروج. عدد الجلسات الموقوفة: $revoked.',
+          ),
+        ));
+      // Router redirect picks up the unauthenticated phase and sends
+      // the user back to /login; the explicit navigation here clears
+      // the stack so back-button doesn't return to /account.
+      if (mounted) context.go(AppRoutes.login);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('تعذّر تسجيل الخروج: $e')),
+        );
+    } finally {
+      if (mounted) setState(() => _loggingOutAll = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final caps = widget.capabilities;
+    return AppCard(
+      elevated: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle(label: 'أمان الحساب'),
+          const SizedBox(height: 8),
+          if (caps.passwordChange)
+            _ActionTile(
+              icon: Icons.lock_outline,
+              label: 'تغيير كلمة المرور',
+              subtitle: 'حدّث كلمة مرور حسابك.',
+              onTap: () => context.push(AppRoutes.changePassword),
+            ),
+          if (caps.passwordChange && caps.logoutAllRefreshTokens)
+            const Divider(color: AppTheme.line, height: 12, thickness: 1),
+          if (caps.logoutAllRefreshTokens)
+            _ActionTile(
+              icon: Icons.logout,
+              label: 'تسجيل الخروج من كل الأجهزة',
+              subtitle: 'إنهاء كل الجلسات المسجَّلة بحسابك.',
+              tone: AppTheme.danger,
+              busy: _loggingOutAll,
+              onTap: _loggingOutAll ? null : _confirmLogoutAll,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+    this.tone = AppTheme.indigoPrimary,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback? onTap;
+  final Color tone;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: tone, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: tone == AppTheme.danger
+                            ? AppTheme.danger
+                            : AppTheme.ink,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppTheme.faintMuted,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : Icon(Icons.chevron_left,
+                      color: AppTheme.faintMuted,
+                      size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

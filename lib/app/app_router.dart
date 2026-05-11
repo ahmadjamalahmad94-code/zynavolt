@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/state/app_session.dart';
 import '../features/account/presentation/account_screen.dart';
+import '../features/account/presentation/change_password_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/devices/presentation/device_detail_screen.dart';
 import '../features/devices/presentation/devices_screen.dart';
@@ -35,6 +36,7 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String notificationSettings = '/notifications/settings';
   static const String supportCreate = '/support/new';
+  static const String changePassword = '/account/change-password';
 
   /// Build a typed path for the device-detail screen. Kept outside the
   /// bottom-nav shell so it has full-screen real estate and a normal back
@@ -106,6 +108,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.account,
         builder: (_, _) => const AccountScreen(),
+      ),
+      // v89: change-password screen.
+      GoRoute(
+        path: AppRoutes.changePassword,
+        builder: (_, _) => const ChangePasswordScreen(),
       ),
       // v55: app settings/info — read-only, opened from More.
       GoRoute(
