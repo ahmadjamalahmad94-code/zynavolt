@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -578,6 +580,11 @@ class _EnergyFlowCardState extends State<_EnergyFlowCard>
   Widget build(BuildContext context) {
     final cards = widget.snapshot.cards;
     final flags = _FlowActivity.fromCards(cards);
+    // v49: per-connector motion modes — see `_FlowMotion.fromCards` for
+    // the exact direction rules (towardHub for solar, awayFromHub for
+    // home, pulse for battery/grid because no direction field exists in
+    // the backend payload).
+    final motion = _FlowMotion.fromCards(cards);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
@@ -609,6 +616,7 @@ class _EnergyFlowCardState extends State<_EnergyFlowCard>
           _FlowDiagram(
             cards: cards,
             flags: flags,
+            motion: motion,
             animation: _controller,
           ),
         ],
@@ -640,6 +648,93 @@ class _FlowActivity {
   final bool grid;
 
   List<bool> get asList => [solar, grid, battery, home]; // matches painter
+}
+
+// ─── Connector motion ────────────────────────────────────────────────────
+//
+// v49: the connector animation no longer paints a one-way scroll on every
+// active line. Energy direction is only animated when we can derive it
+// safely from the backend payload. For everything else the connector
+// "pulses in place" so the screen never implies a wrong direction.
+//
+//   none        — line is inactive (no power on this connector); thin
+//                 muted static line; no motion.
+//   pulse       — line is active but direction is uncertain; line breathes
+//                 (opacity oscillates with the animation phase) so the
+//                 user sees activity without an apparent travel direction.
+//   towardHub   — dashes scroll from the node toward the central hub
+//                 (e.g. solar production feeding the inverter).
+//   awayFromHub — dashes scroll from the hub toward the node (e.g. home
+//                 load being served by the inverter).
+//
+// Direction rules (verified against backend payload, not assumed):
+//   solar   →  towardHub  when solar_power_w > 0
+//              (solar production canonically feeds the inverter)
+//   home    →  awayFromHub when home_load_w > 0
+//              (the home consumes from the inverter, never feeds it)
+//   battery →  direction is derived from the *sign* of battery_power_w.
+//              Sign convention verified in the backend Deye client at
+//              `app/services/deye_client.py` lines 311-319, where the
+//              normalised output is documented inline:
+//                battery_power > 0  →  charging   (hub → battery)
+//                battery_power < 0  →  discharging (battery → hub)
+//                battery_power == 0 →  idle / standby (explicit 0)
+//              `_mobile_reading_cards` in the backend passes this through
+//              unchanged via `_reading_number()`, so the mobile receives
+//              the same convention.
+//                charging   → awayFromHub
+//                discharging → towardHub
+//                exactly 0 + SoC present → pulse (battery present, idle)
+//                exactly 0 + no SoC      → none
+//   grid    →  pulse when there is any activity — the mobile API exposes
+//              grid_power_w but not a direction field, so import vs.
+//              export is not safe to imply.
+enum _FlowMotionMode { none, pulse, towardHub, awayFromHub }
+
+class _FlowMotion {
+  const _FlowMotion({
+    required this.solar,
+    required this.grid,
+    required this.battery,
+    required this.home,
+  });
+
+  factory _FlowMotion.fromCards(DashboardCards c) {
+    // v49b: battery direction derived from the verified sign of
+    // battery_power_w — see the enum block above for the source link.
+    final batteryPower = c.batteryPowerW;
+    final _FlowMotionMode batteryMode;
+    if (batteryPower > 0) {
+      batteryMode = _FlowMotionMode.awayFromHub; // charging: hub → battery
+    } else if (batteryPower < 0) {
+      batteryMode = _FlowMotionMode.towardHub; // discharging: battery → hub
+    } else if (c.batterySocPercent > 0) {
+      batteryMode = _FlowMotionMode.pulse; // present but idle
+    } else {
+      batteryMode = _FlowMotionMode.none;
+    }
+
+    return _FlowMotion(
+      solar: c.solarPowerW > 0
+          ? _FlowMotionMode.towardHub
+          : _FlowMotionMode.none,
+      home: c.homeLoadW > 0
+          ? _FlowMotionMode.awayFromHub
+          : _FlowMotionMode.none,
+      battery: batteryMode,
+      grid: c.gridPowerW.abs() > 0
+          ? _FlowMotionMode.pulse
+          : _FlowMotionMode.none,
+    );
+  }
+
+  final _FlowMotionMode solar;
+  final _FlowMotionMode grid;
+  final _FlowMotionMode battery;
+  final _FlowMotionMode home;
+
+  /// Order: [solar, grid, battery, home] — matches `_BoardSpec.connectors`.
+  List<_FlowMotionMode> get asList => [solar, grid, battery, home];
 }
 
 // ─── Fixed-grid board spec ───────────────────────────────────────────────
@@ -785,11 +880,13 @@ class _FlowDiagram extends StatelessWidget {
   const _FlowDiagram({
     required this.cards,
     required this.flags,
+    required this.motion,
     required this.animation,
   });
 
   final DashboardCards cards;
   final _FlowActivity flags;
+  final _FlowMotion motion;
   final Animation<double> animation;
 
   @override
@@ -826,7 +923,7 @@ class _FlowDiagram extends StatelessWidget {
                   builder: (_, _) => CustomPaint(
                     painter: _AnimatedFlowPainter(
                       phase: animation.value,
-                      activeFlags: flags.asList,
+                      modes: motion.asList,
                     ),
                   ),
                 ),
@@ -904,21 +1001,28 @@ class _FlowDiagram extends StatelessWidget {
 /// Connector painter. Reads paths and anchor points directly from
 /// `_BoardSpec` using the canvas size — same math the cards use, so
 /// alignment is guaranteed.
+///
+/// v49: paints each connector according to its [_FlowMotionMode]:
+///   * none        → thin muted static line
+///   * pulse       → solid line, opacity breathes (no apparent direction)
+///   * towardHub   → dashes scroll from node toward hub
+///   * awayFromHub → dashes scroll from hub toward node
 class _AnimatedFlowPainter extends CustomPainter {
   _AnimatedFlowPainter({
     required this.phase,
-    required this.activeFlags,
+    required this.modes,
   });
 
-  /// 0.0 .. 1.0 — drives the dash phase shift.
+  /// 0.0 .. 1.0 — drives both dash scrolling and pulse breathing.
   final double phase;
 
   /// Order: [solar, grid, battery, home] — matches `_BoardSpec.connectors`.
-  final List<bool> activeFlags;
+  final List<_FlowMotionMode> modes;
 
   static const double _dashLen = 4.5;
   static const double _gapLen = 7.5;
   static const double _strokeWActive = 2.4;
+  static const double _strokeWPulse = 2.2;
   static const double _strokeWInactive = 1.2;
   static const double _anchorR = 3.0;
 
@@ -929,14 +1033,15 @@ class _AnimatedFlowPainter extends CustomPainter {
 
     // Lines first, anchor dots on top so the join reads as a clean weld.
     for (var i = 0; i < paths.length; i++) {
-      _drawPath(canvas, paths[i], activeFlags[i]);
+      _drawPath(canvas, paths[i], modes[i]);
     }
     for (var i = 0; i < anchors.length; i++) {
-      _drawAnchor(canvas, anchors[i], activeFlags[i]);
+      _drawAnchor(canvas, anchors[i], modes[i]);
     }
   }
 
-  void _drawAnchor(Canvas canvas, Offset point, bool active) {
+  void _drawAnchor(Canvas canvas, Offset point, _FlowMotionMode mode) {
+    final active = mode != _FlowMotionMode.none;
     final color = active ? AppTheme.indigoBright : AppTheme.line;
     canvas.drawCircle(point, _anchorR, Paint()..color = color);
     canvas.drawCircle(
@@ -949,18 +1054,57 @@ class _AnimatedFlowPainter extends CustomPainter {
     );
   }
 
-  void _drawPath(Canvas canvas, Path path, bool active) {
-    if (!active) {
-      final paint = Paint()
-        ..color = AppTheme.line
-        ..strokeWidth = _strokeWInactive
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-      canvas.drawPath(path, paint);
-      return;
+  void _drawPath(Canvas canvas, Path path, _FlowMotionMode mode) {
+    switch (mode) {
+      case _FlowMotionMode.none:
+        _drawStatic(canvas, path);
+        return;
+      case _FlowMotionMode.pulse:
+        _drawPulse(canvas, path);
+        return;
+      case _FlowMotionMode.towardHub:
+        _drawDashes(canvas, path, reverse: false);
+        return;
+      case _FlowMotionMode.awayFromHub:
+        _drawDashes(canvas, path, reverse: true);
+        return;
     }
+  }
 
+  /// Inactive connector — thin muted static line.
+  void _drawStatic(Canvas canvas, Path path) {
+    final paint = Paint()
+      ..color = AppTheme.line
+      ..strokeWidth = _strokeWInactive
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, paint);
+  }
+
+  /// Pulse — line is active but direction is uncertain. Solid line whose
+  /// opacity breathes with a sine wave on `phase`. No dashes, so the eye
+  /// never sees a travel direction.
+  void _drawPulse(Canvas canvas, Path path) {
+    // Sine wave maps phase 0..1 → opacity 0.45..1.0. Always-visible base
+    // (0.45) so the connector still reads as "connected" at trough.
+    final wave = (math.sin(phase * 2 * math.pi) + 1) / 2; // 0..1
+    final opacity = 0.45 + 0.55 * wave;
+    final paint = Paint()
+      ..color = AppTheme.indigoBright.withValues(alpha: opacity)
+      ..strokeWidth = _strokeWPulse
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, paint);
+  }
+
+  /// Directional dash scroll. All `_BoardSpec` paths are drawn as
+  /// `node anchor → hub corner`, so:
+  ///   reverse: false → dashes travel along the natural direction
+  ///                    (node → hub) = towardHub.
+  ///   reverse: true  → dashes travel against it (hub → node) = awayFromHub.
+  void _drawDashes(Canvas canvas, Path path, {required bool reverse}) {
     final paint = Paint()
       ..color = AppTheme.indigoBright
       ..strokeWidth = _strokeWActive
@@ -969,7 +1113,16 @@ class _AnimatedFlowPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
 
     const cycle = _dashLen + _gapLen;
-    final shift = (phase * cycle) % cycle;
+    final rawShift = (phase * cycle) % cycle;
+    // The path-iteration loop below moves dash positions from negative
+    // distance up to `length`. As `rawShift` grows over time, `-rawShift`
+    // shrinks (becomes more negative) and dashes appear to slide from
+    // `length` toward `0` — i.e. from path end (hub) toward path start
+    // (node). That visual direction is `awayFromHub`. To get the
+    // opposite — dashes moving from node toward hub — we run the same
+    // loop with the shift inverted, by replacing it with `cycle - shift`.
+    final shift = reverse ? rawShift : (cycle - rawShift) % cycle;
+
     for (final metric in path.computeMetrics()) {
       final length = metric.length;
       var distance = -shift;
@@ -986,9 +1139,9 @@ class _AnimatedFlowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _AnimatedFlowPainter old) =>
-      old.phase != phase || !_listEq(old.activeFlags, activeFlags);
+      old.phase != phase || !_listEq(old.modes, modes);
 
-  bool _listEq(List<bool> a, List<bool> b) {
+  bool _listEq(List<_FlowMotionMode> a, List<_FlowMotionMode> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
