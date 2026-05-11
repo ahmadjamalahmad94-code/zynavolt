@@ -128,7 +128,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                         ? user!.fullName
                         : (user?.username ?? '—'),
                   ),
-                  _Row(label: 'البريد', value: user?.email ?? '—'),
+                  _Row(label: 'البريد الإلكتروني', value: user?.email ?? '—'),
                   _Row(label: 'الدور', value: user?.role ?? '—'),
                   _Row(
                     label: 'الجهاز النشط',
@@ -191,7 +191,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                   ),
                   SizedBox(height: 10),
                   _Row(label: 'إصدار التطبيق', value: AppConfig.appVersion),
-                  _Row(label: 'منصة', value: AppConfig.appPlatform),
+                  _Row(label: 'المنصة', value: AppConfig.appPlatform),
                   _Row(label: 'الواجهة الخلفية', value: AppConfig.apiBaseUrl),
                 ],
               ),

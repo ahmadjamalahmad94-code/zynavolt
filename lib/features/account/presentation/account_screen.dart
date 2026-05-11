@@ -116,7 +116,7 @@ class _IdentityCard extends StatelessWidget {
             value: account.username.isNotEmpty ? account.username : '—',
           ),
           _KvRow(
-            label: 'البريد',
+            label: 'البريد الإلكتروني',
             value: account.email.isNotEmpty ? account.email : '—',
           ),
           _KvRow(
