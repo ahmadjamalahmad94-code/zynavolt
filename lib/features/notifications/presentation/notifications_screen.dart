@@ -40,6 +40,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   /// opens on the section that's most likely to need attention day-to-day.
   NotificationScope _scope = NotificationScope.app;
 
+  /// v92: local category filter inside the Energy tab. Only meaningful
+  /// when [_scope] is [NotificationScope.energy].
+  EnergyCategory _energyCategory = EnergyCategory.all;
+
   @override
   Widget build(BuildContext context) {
     final feed = ref.watch(notificationsControllerProvider);
@@ -82,8 +86,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               state: state,
               scope: _scope,
               unreadOnly: _unreadOnly,
+              energyCategory: _energyCategory,
               onScopeChanged: (s) => setState(() => _scope = s),
               onFilterChanged: (v) => setState(() => _unreadOnly = v),
+              onEnergyCategoryChanged: (c) =>
+                  setState(() => _energyCategory = c),
             ),
           ),
         ),
@@ -128,20 +135,22 @@ class _FeedBody extends ConsumerWidget {
     required this.state,
     required this.scope,
     required this.unreadOnly,
+    required this.energyCategory,
     required this.onScopeChanged,
     required this.onFilterChanged,
+    required this.onEnergyCategoryChanged,
   });
   final NotificationsFeedState state;
   final NotificationScope scope;
   final bool unreadOnly;
+  final EnergyCategory energyCategory;
   final ValueChanged<NotificationScope> onScopeChanged;
   final ValueChanged<bool> onFilterChanged;
+  final ValueChanged<EnergyCategory> onEnergyCategoryChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // v91: partition the flat backend feed into the two scopes first, so
-    // tabs / counters / list all stay consistent with a single source of
-    // classification.
+    // v91: partition the flat backend feed into the two scopes first.
     final appItems = <AppNotification>[];
     final energyItems = <AppNotification>[];
     for (final n in state.items) {
@@ -154,53 +163,72 @@ class _FeedBody extends ConsumerWidget {
 
     final scopedItems =
         scope == NotificationScope.energy ? energyItems : appItems;
-    final unreadInScope = scopedItems.where((n) => !n.isRead).length;
+
+    // v92: local Energy category filter applies only inside the Energy tab.
+    final List<AppNotification> categoryFiltered;
+    if (scope == NotificationScope.energy &&
+        energyCategory != EnergyCategory.all) {
+      categoryFiltered = scopedItems
+          .where((n) => classifyEnergyCategory(n) == energyCategory)
+          .toList(growable: false);
+    } else {
+      categoryFiltered = scopedItems;
+    }
+
+    final unreadInScope =
+        categoryFiltered.where((n) => !n.isRead).length;
     final visible = unreadOnly
-        ? scopedItems.where((n) => !n.isRead).toList(growable: false)
-        : scopedItems;
+        ? categoryFiltered.where((n) => !n.isRead).toList(growable: false)
+        : categoryFiltered;
     final hasItems = visible.isNotEmpty;
-    // v91: hide the global "load more" while in unread-only filter (same
-    // as before) AND while in the energy tab — since the loaded page
-    // mixes both scopes, "load more" only makes sense as a global fetch.
     final showLoadMore = !unreadOnly && state.hasMore;
 
-    final headerIndexes = 4; // tabs + header + intro + filter
+    // v92: build leading widgets eagerly so the layout can differ per
+    // scope. App tab stays simple; Energy tab gets the hero card, the
+    // mobile-alerts readiness note, and the category filter strip.
+    final leading = <Widget>[
+      _ScopeTabs(
+        scope: scope,
+        appUnread: appItems.where((n) => !n.isRead).length,
+        energyUnread: energyItems.where((n) => !n.isRead).length,
+        onChanged: onScopeChanged,
+      ),
+      _HeaderCard(
+        unreadCount: unreadInScope,
+        isMarkingAll: state.isMarkingAll,
+        onMarkAll: state.unreadCount == 0 || state.isMarkingAll
+            ? null
+            : () => _runMarkAll(context, ref),
+      ),
+      if (scope == NotificationScope.energy)
+        _EnergyHeroCard(latestEnergyItem: energyItems.firstOrNull),
+      _ScopeIntro(scope: scope),
+      if (scope == NotificationScope.energy)
+        const _MobileAlertsReadinessCard(),
+      if (scope == NotificationScope.energy)
+        _EnergyCategoryFilters(
+          selected: energyCategory,
+          onChanged: onEnergyCategoryChanged,
+        ),
+      _FilterRow(
+        unreadOnly: unreadOnly,
+        unreadCount: unreadInScope,
+        onChanged: onFilterChanged,
+      ),
+    ];
+
+    final headerCount = leading.length;
 
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
-      itemCount:
-          headerIndexes + (hasItems ? visible.length : 1) + (showLoadMore ? 1 : 0),
+      itemCount: headerCount +
+          (hasItems ? visible.length : 1) +
+          (showLoadMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
-        if (index == 0) {
-          return _ScopeTabs(
-            scope: scope,
-            appUnread: appItems.where((n) => !n.isRead).length,
-            energyUnread: energyItems.where((n) => !n.isRead).length,
-            onChanged: onScopeChanged,
-          );
-        }
-        if (index == 1) {
-          return _HeaderCard(
-            unreadCount: unreadInScope,
-            isMarkingAll: state.isMarkingAll,
-            onMarkAll: state.unreadCount == 0 || state.isMarkingAll
-                ? null
-                : () => _runMarkAll(context, ref),
-          );
-        }
-        if (index == 2) {
-          return _ScopeIntro(scope: scope);
-        }
-        if (index == 3) {
-          return _FilterRow(
-            unreadOnly: unreadOnly,
-            unreadCount: unreadInScope,
-            onChanged: onFilterChanged,
-          );
-        }
-        final listIndex = index - headerIndexes;
+        if (index < headerCount) return leading[index];
+        final listIndex = index - headerCount;
         if (!hasItems) {
           return AppCard(
             padding: const EdgeInsets.symmetric(vertical: 28),
@@ -218,8 +246,11 @@ class _FeedBody extends ConsumerWidget {
         }
         if (listIndex < visible.length) {
           final n = visible[listIndex];
+          // v92: in the Energy tab, give each card a small left-edge
+          // accent so the reader can scan energy-related items quickly.
           return _NotificationTile(
             notification: n,
+            energyAccent: scope == NotificationScope.energy,
             onTap: n.isRead
                 ? null
                 : () => _runMarkOne(context, ref, n.id),
@@ -635,11 +666,268 @@ class _ScopeIntro extends StatelessWidget {
   }
 }
 
+/// v92: hero card for the Energy tab. Shows category chips and (if any
+/// energy notifications are loaded) a tiny "آخر تنبيه" preview of the
+/// most recent one. No fake data — purely a summary of the already-
+/// fetched feed.
+class _EnergyHeroCard extends StatelessWidget {
+  const _EnergyHeroCard({required this.latestEnergyItem});
+  final AppNotification? latestEnergyItem;
+
+  @override
+  Widget build(BuildContext context) {
+    final latestTitle = latestEnergyItem?.title.trim();
+    return AppCard(
+      elevated: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppTheme.emerald.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.bolt_outlined,
+                  color: AppTheme.emerald,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'متابعة الطاقة والأحمال',
+                      style: TextStyle(
+                        color: AppTheme.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'هنا تظهر تنبيهات البطارية، الأحمال، الشمس، والفائض.',
+                      style: TextStyle(
+                        color: AppTheme.faintMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: const [
+              _CategoryPill(
+                icon: Icons.battery_charging_full_outlined,
+                label: 'البطارية',
+                tone: AppTheme.emerald,
+              ),
+              _CategoryPill(
+                icon: Icons.bolt_outlined,
+                label: 'الأحمال',
+                tone: AppTheme.indigoPrimary,
+              ),
+              _CategoryPill(
+                icon: Icons.wb_sunny_outlined,
+                label: 'الشمس',
+                tone: AppTheme.warning,
+              ),
+              _CategoryPill(
+                icon: Icons.cloud_outlined,
+                label: 'الطقس',
+                tone: AppTheme.cyan,
+              ),
+              _CategoryPill(
+                icon: Icons.summarize_outlined,
+                label: 'التقرير اليومي',
+                tone: AppTheme.violet,
+              ),
+            ],
+          ),
+          if (latestTitle != null && latestTitle.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.softBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.line),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.history,
+                      size: 14, color: AppTheme.faintMuted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'آخر تنبيه: $latestTitle',
+                      style: const TextStyle(
+                        color: AppTheme.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        height: 1.5,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryPill extends StatelessWidget {
+  const _CategoryPill({
+    required this.icon,
+    required this.label,
+    required this.tone,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tone.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: tone),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: tone,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// v92: honest "push notifications coming later" note. Prevents the user
+/// from assuming they'll receive these alerts on the lock screen.
+class _MobileAlertsReadinessCard extends StatelessWidget {
+  const _MobileAlertsReadinessCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.amber.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        border: Border.all(color: AppTheme.amber.withValues(alpha: 0.30)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Icon(Icons.notifications_paused_outlined,
+              color: AppTheme.amber, size: 16),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'إشعارات الجوال المباشرة ستُفعّل في مرحلة لاحقة. '
+              'حالياً تظهر التنبيهات داخل التطبيق.',
+              style: TextStyle(
+                color: AppTheme.amber,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                height: 1.55,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// v92: local category-filter strip inside the Energy tab. Filters the
+/// already-fetched list client-side via [classifyEnergyCategory] — no
+/// extra backend round-trips.
+class _EnergyCategoryFilters extends StatelessWidget {
+  const _EnergyCategoryFilters({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final EnergyCategory selected;
+  final ValueChanged<EnergyCategory> onChanged;
+
+  static const _categories = [
+    EnergyCategory.all,
+    EnergyCategory.battery,
+    EnergyCategory.load,
+    EnergyCategory.sunWeather,
+    EnergyCategory.reports,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final c in _categories) ...[
+            _Pill(
+              label: energyCategoryLabel(c),
+              selected: c == selected,
+              onTap: () => onChanged(c),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _NotificationTile extends StatelessWidget {
-  const _NotificationTile({required this.notification, this.onTap});
+  const _NotificationTile({
+    required this.notification,
+    this.onTap,
+    this.energyAccent = false,
+  });
 
   final AppNotification notification;
   final VoidCallback? onTap;
+
+  /// v92: render an emerald left-edge stripe for Energy-tab tiles so the
+  /// reader can scan energy notifications at a glance. Unread items take
+  /// precedence (violet) when both flags would apply.
+  final bool energyAccent;
 
   @override
   Widget build(BuildContext context) {
@@ -655,6 +943,15 @@ class _NotificationTile extends StatelessWidget {
       sourceType: notification.sourceType,
     );
 
+    final Color accentColor;
+    if (unread) {
+      accentColor = AppTheme.violet;
+    } else if (energyAccent) {
+      accentColor = AppTheme.emerald;
+    } else {
+      accentColor = Colors.transparent;
+    }
+
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(AppTheme.radiusCard),
@@ -666,10 +963,11 @@ class _NotificationTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // v54: left accent bar — strong visual cue for unread state.
+              // v92: emerald variant when rendered in the Energy tab.
               Container(
                 width: 4,
                 decoration: BoxDecoration(
-                  color: unread ? AppTheme.violet : Colors.transparent,
+                  color: accentColor,
                   borderRadius: const BorderRadius.horizontal(
                     right: Radius.circular(AppTheme.radiusCard),
                   ),
