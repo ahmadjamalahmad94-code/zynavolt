@@ -1,0 +1,41 @@
+name: solardeye_mobile
+description: "SolarDeye mobile client - Arabic RTL Flutter app driven by /api/mobile/* backend."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # HTTP client. Chosen over `http` because we need: request/response
+  # interceptors (Bearer attach + 401 refresh), per-request timeouts,
+  # multipart support later, and structured DioException objects to map
+  # cleanly onto our ApiException model. The plain `http` package would
+  # need a hand-rolled wrapper for all of that.
+  dio: ^5.7.0
+
+  # Secure storage for access + refresh tokens (Android Keystore).
+  flutter_secure_storage: ^9.2.2
+
+  # Declarative routing so notification deep-links can map onto screens
+  # later without rewriting the navigator.
+  go_router: ^14.6.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

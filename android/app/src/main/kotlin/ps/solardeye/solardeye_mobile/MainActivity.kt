@@ -1,0 +1,5 @@
+package ps.solardeye.solardeye_mobile
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()
