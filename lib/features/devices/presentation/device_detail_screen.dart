@@ -32,10 +32,22 @@ class DeviceDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('تفاصيل الجهاز'),
         actions: [
-          IconButton(
-            tooltip: 'تحديث',
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(deviceDetailProvider(deviceId)),
+          Builder(
+            builder: (ctx) => IconButton(
+              tooltip: 'تحديث',
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
+                ref.invalidate(deviceDetailProvider(deviceId));
+                ScaffoldMessenger.of(ctx)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    const SnackBar(
+                      duration: Duration(seconds: 2),
+                      content: Text('جارٍ التحديث...'),
+                    ),
+                  );
+              },
+            ),
           ),
         ],
       ),
@@ -89,10 +101,11 @@ class _DetailBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = snapshot.device;
     final l = snapshot.latest;
+    // v52: section order matches the polished IA — status first (most
+    // glanceable), then latest reading, safe settings (if any), device
+    // info (with history merged in), then the only action.
     final children = <Widget>[
-      _HeaderCard(device: d, isActive: isActive),
-      const SizedBox(height: 12),
-      _ProviderCard(device: d),
+      _StatusCard(device: d, isActive: isActive),
       const SizedBox(height: 12),
       _LatestCard(latest: l),
       if (d.safeSettings.isNotEmpty) ...[
@@ -100,7 +113,7 @@ class _DetailBody extends StatelessWidget {
         _SettingsCard(settings: d.safeSettings),
       ],
       const SizedBox(height: 12),
-      _MetaCard(device: d),
+      _InfoCard(device: d),
       const SizedBox(height: 16),
       _ActionRow(isActive: isActive, onSetActive: onSetActive),
       const SizedBox(height: 24),
@@ -113,20 +126,23 @@ class _DetailBody extends StatelessWidget {
   }
 }
 
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.device, required this.isActive});
+class _StatusCard extends StatelessWidget {
+  const _StatusCard({required this.device, required this.isActive});
   final DeviceDetail device;
   final bool isActive;
 
   @override
   Widget build(BuildContext context) {
     final connected = device.connectionStatus.toLowerCase() == 'ok';
+    final lastSeen = _formatTimestamp(device.lastConnectedAt);
     return AppCard(
       borderColor: isActive ? AppTheme.indigoBright : AppTheme.line,
       background: isActive ? AppTheme.indigoSoft : AppTheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const _SectionTitle(label: 'الحالة'),
+          const SizedBox(height: 10),
           Row(
             children: [
               Container(
@@ -198,44 +214,24 @@ class _HeaderCard extends StatelessWidget {
                 ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProviderCard extends StatelessWidget {
-  const _ProviderCard({required this.device});
-  final DeviceDetail device;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionTitle(label: 'معلومات الجهاز'),
-          const SizedBox(height: 8),
-          _KvRow(
-            label: 'النوع',
-            value: device.deviceType.isNotEmpty
-                ? device.deviceType.toUpperCase()
-                : '—',
-          ),
-          _KvRow(
-            label: 'المزوّد',
-            value: device.apiProvider.isNotEmpty
-                ? device.apiProvider.toUpperCase()
-                : '—',
-          ),
-          _KvRow(
-            label: 'المنطقة الزمنية',
-            value: device.timezone.isNotEmpty ? device.timezone : '—',
-          ),
-          _KvRow(
-            label: 'المعرّف',
-            value: '#${device.id}',
-          ),
+          if (lastSeen != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.access_time_outlined,
+                    color: AppTheme.faintMuted, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  'آخر اتصال: $lastSeen',
+                  style: const TextStyle(
+                    color: AppTheme.faintMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -268,39 +264,85 @@ class _LatestCard extends StatelessWidget {
       );
     }
 
+    // v52: 2-column tile grid for the five readings. Each tile carries an
+    // icon, an Arabic label, and the value with its unit, so the readings
+    // are glanceable instead of buried in flat key-value rows.
+    final tiles = <_StatTile>[
+      _StatTile(
+        icon: Icons.wb_sunny_outlined,
+        tone: AppTheme.warning,
+        label: 'الإنتاج الشمسي',
+        value: '${_fmt(latest.solarPowerW)} W',
+      ),
+      _StatTile(
+        icon: Icons.home_outlined,
+        tone: AppTheme.indigoPrimary,
+        label: 'استهلاك المنزل',
+        value: '${_fmt(latest.homeLoadW)} W',
+      ),
+      _StatTile(
+        icon: Icons.battery_charging_full_outlined,
+        tone: AppTheme.success,
+        label: 'شحن البطارية',
+        value: '${_fmt(latest.batterySocPercent)}%',
+      ),
+      _StatTile(
+        icon: Icons.battery_std_outlined,
+        tone: AppTheme.success,
+        label: 'طاقة البطارية',
+        value: '${_fmt(latest.batteryPowerW)} W',
+      ),
+      _StatTile(
+        icon: Icons.bolt_outlined,
+        tone: AppTheme.violet,
+        label: 'تبادل الشبكة',
+        value: '${_fmt(latest.gridPowerW)} W',
+      ),
+    ];
+    final rows = <Widget>[];
+    for (var i = 0; i < tiles.length; i += 2) {
+      final left = tiles[i];
+      final right = i + 1 < tiles.length ? tiles[i + 1] : null;
+      rows.add(Padding(
+        padding: EdgeInsets.only(top: rows.isEmpty ? 0 : 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: left),
+            const SizedBox(width: 8),
+            Expanded(child: right ?? const SizedBox.shrink()),
+          ],
+        ),
+      ));
+    }
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _SectionTitle(label: 'آخر قراءة'),
-          const SizedBox(height: 8),
-          _KvRow(
-            label: 'الإنتاج الشمسي',
-            value: '${_fmt(latest.solarPowerW)} W',
-          ),
-          _KvRow(
-            label: 'استهلاك المنزل',
-            value: '${_fmt(latest.homeLoadW)} W',
-          ),
-          _KvRow(
-            label: 'شحن البطارية',
-            value: '${_fmt(latest.batterySocPercent)}%',
-          ),
-          _KvRow(
-            label: 'طاقة البطارية',
-            value: '${_fmt(latest.batteryPowerW)} W',
-          ),
-          _KvRow(
-            label: 'تبادل الشبكة',
-            value: '${_fmt(latest.gridPowerW)} W',
-          ),
-          if (latest.createdAt != null && latest.createdAt!.isNotEmpty)
-            _KvRow(
-              label: 'وقت آخر تحديث',
-              value: _formatTimestamp(latest.createdAt) ?? '—',
+          const SizedBox(height: 10),
+          ...rows,
+          if (latest.createdAt != null && latest.createdAt!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.access_time_outlined,
+                    color: AppTheme.faintMuted, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  'تحديث: ${_formatTimestamp(latest.createdAt) ?? ''}',
+                  style: const TextStyle(
+                    color: AppTheme.faintMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
+          ],
           if (latest.statusText.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               latest.statusText,
               style: const TextStyle(
@@ -310,6 +352,78 @@ class _LatestCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.icon,
+    required this.tone,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final Color tone;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.softBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: tone, size: 14),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppTheme.muted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppTheme.ink,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -326,7 +440,7 @@ class _SettingsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(label: 'إعدادات آمنة'),
+          const _SectionTitle(label: 'الإعدادات الآمنة'),
           const SizedBox(height: 8),
           for (final entry in settings.entries)
             _KvRow(
@@ -361,8 +475,11 @@ class _SettingsCard extends StatelessWidget {
   }
 }
 
-class _MetaCard extends StatelessWidget {
-  const _MetaCard({required this.device});
+/// v52: combined device info — type/provider/timezone/id + the history
+/// rows (created/updated/last_connected). Replaces the prior split
+/// _ProviderCard + _MetaCard so the user sees one cohesive "info" block.
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.device});
   final DeviceDetail device;
 
   @override
@@ -371,8 +488,26 @@ class _MetaCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(label: 'السجل'),
+          const _SectionTitle(label: 'معلومات الجهاز'),
           const SizedBox(height: 8),
+          _KvRow(
+            label: 'النوع',
+            value: device.deviceType.isNotEmpty
+                ? device.deviceType.toUpperCase()
+                : '—',
+          ),
+          _KvRow(
+            label: 'المزوّد',
+            value: device.apiProvider.isNotEmpty
+                ? device.apiProvider.toUpperCase()
+                : '—',
+          ),
+          _KvRow(
+            label: 'المنطقة الزمنية',
+            value: device.timezone.isNotEmpty ? device.timezone : '—',
+          ),
+          _KvRow(label: 'المعرّف', value: '#${device.id}'),
+          const Divider(color: AppTheme.line, height: 18, thickness: 1),
           _KvRow(
             label: 'آخر اتصال',
             value: _formatTimestamp(device.lastConnectedAt) ?? '—',
