@@ -15,17 +15,29 @@ class SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: const Icon(
-                Icons.wb_sunny_outlined,
-                color: Colors.white,
-                size: 44,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Image.asset(
+                'assets/branding/zynavolt_logo.png',
+                width: 96,
+                height: 96,
+                fit: BoxFit.cover,
+                // Calm fallback when the asset is missing — keeps the
+                // splash visually correct during dev / before the asset
+                // ships, and never breaks layout on a damaged install.
+                errorBuilder: (_, _, _) => Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: const Icon(
+                    Icons.wb_sunny_outlined,
+                    color: Colors.white,
+                    size: 44,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 22),
