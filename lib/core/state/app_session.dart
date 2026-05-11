@@ -142,6 +142,21 @@ class AppSessionController extends StateNotifier<AppSessionState> {
   void onSessionExpired() {
     state = const AppSessionState.unauthenticated();
   }
+
+  /// Re-fetch `/auth/me` and replace the cached [AuthUser] without changing
+  /// the auth phase. Used after a profile PATCH so the welcome card / More
+  /// tab pick up the new name + email immediately. Failures are silent —
+  /// the existing user stays in place; the next normal API call will
+  /// surface any real auth problem.
+  Future<void> refreshMe() async {
+    if (state.phase != AppSessionPhase.authenticated) return;
+    try {
+      final user = await _auth.fetchMe();
+      state = AppSessionState.authenticated(user);
+    } on ApiException {
+      // Keep the old user object; do not flip the phase.
+    }
+  }
 }
 
 /// Convenience wrapper so widgets can `ref.watch(appSessionProvider)` and

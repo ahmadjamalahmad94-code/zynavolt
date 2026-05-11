@@ -9,6 +9,7 @@ import '../features/home/presentation/home_screen.dart';
 import '../features/home/presentation/home_shell.dart';
 import '../features/more/presentation/more_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
+import '../features/profile/presentation/profile_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
 import '../features/support/presentation/support_screen.dart';
 
@@ -21,6 +22,7 @@ class AppRoutes {
   static const String notifications = '/notifications';
   static const String support = '/support';
   static const String more = '/more';
+  static const String profile = '/profile';
 }
 
 /// GoRouter wired to [appSessionProvider]. Redirects are session-driven:
@@ -56,6 +58,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.login,
         builder: (_, _) => const LoginScreen(),
+      ),
+      // Profile is a focused detail screen — kept outside the bottom-nav
+      // shell so it has full screen real estate during edit.
+      GoRoute(
+        path: AppRoutes.profile,
+        builder: (_, _) => const ProfileScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
