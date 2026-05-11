@@ -41,3 +41,27 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/
+  # v95: real Arabic font integration. Each weight ships as its own .ttf
+  # so Flutter resolves `fontWeight: FontWeight.wXXX` straight to the
+  # matching cut without interpolating from a variable font.
+  fonts:
+    - family: Alexandria
+      fonts:
+        - asset: assets/fonts/Alexandria-Thin.ttf
+          weight: 100
+        - asset: assets/fonts/Alexandria-ExtraLight.ttf
+          weight: 200
+        - asset: assets/fonts/Alexandria-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Alexandria-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Alexandria-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Alexandria-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Alexandria-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Alexandria-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Alexandria-Black.ttf
+          weight: 900

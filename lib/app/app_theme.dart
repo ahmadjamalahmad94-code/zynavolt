@@ -130,16 +130,13 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: softBg,
-      // v46: Arabic typography slot. Cairo / Tajawal is the intended brand
-      // family but no font asset is bundled yet — falling back to Roboto
-      // keeps the UI rendering on every device today.
-      //
-      // To wire it up later, drop the .ttf files under
-      //   assets/branding/fonts/Cairo/
-      // then declare a `fonts:` section in pubspec.yaml pointing at them,
-      // and change this line to `fontFamily: 'Cairo'`. No code elsewhere
-      // depends on this — all text styles inherit through the theme.
-      fontFamily: 'Roboto',
+      // v95: Arabic typography wired. All nine Alexandria weight .ttf
+      // files live under `assets/fonts/` (Thin … Black) and are declared
+      // in `pubspec.yaml` under `flutter.fonts`. Every Text widget in the
+      // app now renders in Alexandria — no per-widget change needed.
+      // Flutter resolves any `FontWeight.wXXX` request straight to the
+      // matching cut.
+      fontFamily: 'Alexandria',
     );
 
     return base.copyWith(

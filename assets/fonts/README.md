@@ -1,77 +1,45 @@
-# Arabic fonts for Zynavolt Mobile (v60)
+# Arabic fonts for Zynavolt Mobile (v60 → v95)
 
-This folder is the canonical drop location for an Arabic font family.
-**No font files are bundled in the repo today.** The app falls back to
-the platform `Roboto` until a real font asset ships, so builds and
-tests keep working in the meantime.
+**v95 status: Alexandria is wired and active.** All nine Alexandria
+weight `.ttf` files ship in this folder, are declared in `pubspec.yaml`,
+and the theme's `fontFamily` is set to `'Alexandria'`. Every screen
+inherits this through `ThemeData`, so all Arabic copy renders in
+Alexandria — no widget changes needed.
 
-## Why we don't bundle a font in git
+## Current wiring (v95)
 
-The widely-used Arabic families (Cairo, Tajawal, …) are released under
-their own licenses, and copying TTFs from the system or downloading them
-into a repo is the wrong place for it. This file documents the wiring
-recipe so a maintainer with a properly-licensed source can drop the
-files and ship a new build in one PR.
+- **Files**: each weight ships as its own `.ttf` under `assets/fonts/`:
+  `Alexandria-Thin` (100) · `ExtraLight` (200) · `Light` (300) ·
+  `Regular` (400) · `Medium` (500) · `SemiBold` (600) · `Bold` (700) ·
+  `ExtraBold` (800) · `Black` (900). Flutter resolves any
+  `fontWeight: FontWeight.wXXX` request straight to the matching cut.
+- **pubspec.yaml** declares all nine weights under one `Alexandria`
+  family — see the `flutter.fonts` block for the exact entries.
+- **Theme**: `lib/app/app_theme.dart` sets `fontFamily: 'Alexandria'` on
+  the base `ThemeData(useMaterial3: true, …)`. All inherited text styles
+  (AppBar titles, buttons, inputs, cards, body copy) pick this up
+  automatically — no screen-level override anywhere in `lib/`.
 
-## Drop location
+## Family rationale
 
-For each weight you want to bundle:
+**Alexandria** — modern Arabic / Latin display family. Renders cleanly
+at every weight, has the visual sophistication the brand targets, and
+pairs neatly with the existing indigo/violet palette.
+
+If a future maintainer wants to swap families, drop the new TTFs, update
+the `family:` and `asset:` lines in `pubspec.yaml`, and change the
+`fontFamily` string in `app_theme.dart`. Nothing else is wired by name.
+
+## Verify on device
 
 ```
-assets/fonts/Cairo/Cairo-Regular.ttf
-assets/fonts/Cairo/Cairo-Bold.ttf
-assets/fonts/Cairo/Cairo-Black.ttf
+flutter clean
+flutter pub get
+flutter run --dart-define=SOLARDEYE_API_BASE_URL=https://solardeye.onrender.com
 ```
 
-(Substitute `Tajawal` if you choose Tajawal instead — the wiring below
-only needs the family name changed.)
-
-## Wiring steps
-
-1. **Drop the .ttf files** under `assets/fonts/<Family>/` exactly as
-   listed above.
-2. **Declare them in `pubspec.yaml`** under the existing `flutter:`
-   block. The `assets:` line for `assets/branding/` already exists —
-   add a new sibling section:
-
-   ```yaml
-   flutter:
-     uses-material-design: true
-     assets:
-       - assets/branding/
-     fonts:
-       - family: Cairo
-         fonts:
-           - asset: assets/fonts/Cairo/Cairo-Regular.ttf
-           - asset: assets/fonts/Cairo/Cairo-Bold.ttf
-             weight: 700
-           - asset: assets/fonts/Cairo/Cairo-Black.ttf
-             weight: 900
-   ```
-
-3. **Flip the theme** in [`lib/app/app_theme.dart`](../../lib/app/app_theme.dart)
-   from `fontFamily: 'Roboto'` to `fontFamily: 'Cairo'`. The whole app
-   inherits through the theme — no widget changes needed.
-4. **Verify on device** (Arabic numerals + body copy + chips) with:
-
-   ```
-   flutter clean
-   flutter pub get
-   flutter run --dart-define=SOLARDEYE_API_BASE_URL=https://solardeye.onrender.com
-   ```
-
-## Spec
-
-| Field | Recommendation |
-| --- | --- |
-| Format | TTF (or OTF — change the file extension consistently in `pubspec.yaml`) |
-| Weights | Regular (400), Bold (700), Black (900) is enough for the current UI |
-| Hinting | Whatever the official release ships — no manual editing |
-| Subset | Full Arabic — the UI mixes Arabic + Western digits / unit symbols |
-
-## What v60 does *not* do
-
-* Does not download a font.
-* Does not check in font binaries.
-* Does not change `fontFamily` away from `Roboto` yet.
-* Does not break existing builds — the README is documentation only.
+Sanity check on real Android: Arabic body text should look noticeably
+different from the previous Roboto fallback — Alexandria has wider
+counters, a more open `ا`, and a sharper kashida. Western digits in
+load values / energy units stay legible — Alexandria has matching Latin
+glyphs and does not fall back mid-line.
