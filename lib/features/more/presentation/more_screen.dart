@@ -152,6 +152,14 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               subtitle: 'عرض الأحمال المسجَّلة على حسابك.',
               onTap: () => context.push(AppRoutes.loads),
             ),
+            const SizedBox(height: 10),
+            // v51: account + subscription overview (read-only).
+            _NavTile(
+              icon: Icons.workspace_premium_outlined,
+              label: 'الحساب والاشتراك',
+              subtitle: 'الباقة، الدور، حدود الأجهزة، والقدرات.',
+              onTap: () => context.push(AppRoutes.account),
+            ),
             const SizedBox(height: 12),
             const AppCard(
               child: Column(

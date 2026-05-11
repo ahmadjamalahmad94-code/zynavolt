@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/state/app_session.dart';
+import '../features/account/presentation/account_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/devices/presentation/device_detail_screen.dart';
 import '../features/devices/presentation/devices_screen.dart';
@@ -27,6 +28,7 @@ class AppRoutes {
   static const String more = '/more';
   static const String profile = '/profile';
   static const String loads = '/loads';
+  static const String account = '/account';
 
   /// Build a typed path for the device-detail screen. Kept outside the
   /// bottom-nav shell so it has full-screen real estate and a normal back
@@ -93,6 +95,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.loads,
         builder: (_, _) => const LoadsScreen(),
+      ),
+      // v51: account + subscription overview — read-only, opened from More.
+      GoRoute(
+        path: AppRoutes.account,
+        builder: (_, _) => const AccountScreen(),
       ),
       // v50: support case detail (read-only thread). Kept outside the
       // bottom-nav shell so a back arrow returns to the support list.
