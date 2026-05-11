@@ -482,10 +482,11 @@ class _EnabledBadge extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.30)),
       ),
       child: Text(
+        // v73: bumped fontSize 10.5 → 11 for readability.
         enabled ? 'مفعّل' : 'موقوف',
         style: TextStyle(
           color: color,
-          fontSize: 10.5,
+          fontSize: 11,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.3,
         ),

@@ -239,10 +239,11 @@ class _StatusChip extends StatelessWidget {
         border: Border.all(color: tone.withValues(alpha: 0.30)),
       ),
       child: Text(
+        // v73: bumped fontSize 10.5 → 11 for readability.
         label,
         style: TextStyle(
           color: tone,
-          fontSize: 10.5,
+          fontSize: 11,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.3,
         ),

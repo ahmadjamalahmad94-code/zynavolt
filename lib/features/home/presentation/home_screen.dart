@@ -1637,10 +1637,11 @@ class _FooterMetaChip extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
+                  // v73: bumped fontSize 10.5 → 11 for readability.
                   'وقت الاستجابة: $generated',
                   style: const TextStyle(
                     color: AppTheme.faintMuted,
-                    fontSize: 10.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     fontFeatures: [FontFeature.tabularFigures()],
                   ),
