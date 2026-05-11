@@ -10,6 +10,7 @@ import '../../../core/utils/timestamp.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
 import '../../../core/widgets/read_only_notice.dart';
+import '../data/support_labels.dart';
 import '../data/support_models.dart';
 import '../data/support_repository.dart';
 
@@ -159,16 +160,19 @@ class _SummaryCard extends StatelessWidget {
                 label: summary.type == 'ticket' ? 'تذكرة' : 'رسالة',
               ),
               if (summary.status.isNotEmpty)
-                _Chip(icon: Icons.flag_outlined, label: summary.status),
+                _Chip(
+                  icon: Icons.flag_outlined,
+                  label: SupportLabels.statusLabel(summary.status),
+                ),
               if (summary.category != null && summary.category!.isNotEmpty)
                 _Chip(
                   icon: Icons.category_outlined,
-                  label: summary.category!,
+                  label: SupportLabels.categoryLabel(summary.category!),
                 ),
               if (summary.priority != null && summary.priority!.isNotEmpty)
                 _Chip(
                   icon: Icons.priority_high_outlined,
-                  label: summary.priority!,
+                  label: SupportLabels.priorityLabel(summary.priority!),
                 ),
               if (summary.relatedDeviceId != null)
                 _Chip(

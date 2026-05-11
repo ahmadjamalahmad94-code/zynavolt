@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_config.dart';
 import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
+import '../../../app/build_info.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/state/app_session.dart';
 import '../../../core/widgets/app_card.dart';
@@ -191,6 +192,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                   ),
                   SizedBox(height: 10),
                   _Row(label: 'إصدار التطبيق', value: AppConfig.appVersion),
+                  _Row(label: 'نسخة الواجهة', value: BuildInfo.label),
                   _Row(label: 'المنصة', value: AppConfig.appPlatform),
                   _Row(label: 'الواجهة الخلفية', value: AppConfig.apiBaseUrl),
                 ],

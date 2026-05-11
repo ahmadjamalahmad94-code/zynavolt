@@ -10,6 +10,7 @@ import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
+import '../data/support_labels.dart';
 import '../data/support_models.dart';
 import '../data/support_repository.dart';
 
@@ -174,13 +175,15 @@ class _SupportCaseTile extends StatelessWidget {
                             caseSummary.category!.isNotEmpty)
                           _MetaChip(
                             icon: Icons.category_outlined,
-                            label: caseSummary.category!,
+                            label: SupportLabels.categoryLabel(
+                                caseSummary.category!),
                           ),
                         if (caseSummary.priority != null &&
                             caseSummary.priority!.isNotEmpty)
                           _MetaChip(
                             icon: Icons.priority_high_outlined,
-                            label: caseSummary.priority!,
+                            label: SupportLabels.priorityLabel(
+                                caseSummary.priority!),
                           ),
                       ],
                     ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_config.dart';
 import '../../../app/app_theme.dart';
+import '../../../app/build_info.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../bootstrap/data/bootstrap_repository.dart';
 import '../../devices/state/selected_device_provider.dart';
@@ -163,6 +164,7 @@ class _AppInfoCard extends StatelessWidget {
           _SectionTitle(label: 'حول التطبيق'),
           SizedBox(height: 8),
           _KvRow(label: 'إصدار التطبيق', value: AppConfig.appVersion),
+          _KvRow(label: 'نسخة الواجهة', value: BuildInfo.label),
           _KvRow(label: 'المنصة', value: AppConfig.appPlatform),
           _KvRow(label: 'لغة الواجهة الافتراضية', value: AppConfig.defaultLocale),
           _KvRow(label: 'الواجهة الخلفية', value: AppConfig.apiBaseUrl),
