@@ -160,6 +160,14 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               subtitle: 'الباقة، الدور، حدود الأجهزة، والقدرات.',
               onTap: () => context.push(AppRoutes.account),
             ),
+            const SizedBox(height: 10),
+            // v55: app settings & info (read-only).
+            _NavTile(
+              icon: Icons.settings_outlined,
+              label: 'إعدادات التطبيق',
+              subtitle: 'إصدار التطبيق، الواجهة الخلفية، اللغة، وفحص الاتصال.',
+              onTap: () => context.push(AppRoutes.settings),
+            ),
             const SizedBox(height: 12),
             const AppCard(
               child: Column(

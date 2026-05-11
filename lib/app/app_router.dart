@@ -13,6 +13,7 @@ import '../features/home/presentation/home_shell.dart';
 import '../features/more/presentation/more_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/settings/presentation/app_settings_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
 import '../features/support/presentation/support_case_detail_screen.dart';
 import '../features/support/presentation/support_screen.dart';
@@ -29,6 +30,7 @@ class AppRoutes {
   static const String profile = '/profile';
   static const String loads = '/loads';
   static const String account = '/account';
+  static const String settings = '/settings';
 
   /// Build a typed path for the device-detail screen. Kept outside the
   /// bottom-nav shell so it has full-screen real estate and a normal back
@@ -100,6 +102,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.account,
         builder: (_, _) => const AccountScreen(),
+      ),
+      // v55: app settings/info — read-only, opened from More.
+      GoRoute(
+        path: AppRoutes.settings,
+        builder: (_, _) => const AppSettingsScreen(),
       ),
       // v50: support case detail (read-only thread). Kept outside the
       // bottom-nav shell so a back arrow returns to the support list.
