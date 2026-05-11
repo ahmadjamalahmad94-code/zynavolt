@@ -13,16 +13,52 @@ import '../state/notifications_controller.dart';
 /// Real read-only feed backed by `GET /api/mobile/notifications`.
 /// Mark-read writes go through the backend; UI never marks locally
 /// without a server-confirmed response.
-class NotificationsScreen extends ConsumerWidget {
+///
+/// v54 polish:
+///   * AppBar refresh button with snackbar feedback.
+///   * Local "الكل / غير المقروء" filter pills (client-side only).
+///   * Calmer humanized timestamps (today → `HH:mm`, yesterday →
+///     `أمس HH:mm`, older → `YYYY-MM-DD HH:mm`).
+///   * Stronger unread visual: a left accent bar in addition to the dot.
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  bool _unreadOnly = false;
+
+  @override
+  Widget build(BuildContext context) {
     final feed = ref.watch(notificationsControllerProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.softBg,
-      appBar: AppBar(title: const Text('الإشعارات')),
+      appBar: AppBar(
+        title: const Text('الإشعارات'),
+        actions: [
+          Builder(
+            builder: (ctx) => IconButton(
+              tooltip: 'تحديث',
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
+                ref.read(notificationsControllerProvider.notifier).refresh();
+                ScaffoldMessenger.of(ctx)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    const SnackBar(
+                      duration: Duration(seconds: 2),
+                      content: Text('جارٍ التحديث...'),
+                    ),
+                  );
+              },
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () =>
@@ -36,10 +72,15 @@ class NotificationsScreen extends ConsumerWidget {
                       message: 'تعذّر تحميل الإشعارات.',
                       kind: ApiErrorKind.unknown,
                     ),
-              onRetry: () =>
-                  ref.read(notificationsControllerProvider.notifier).refresh(),
+              onRetry: () => ref
+                  .read(notificationsControllerProvider.notifier)
+                  .refresh(),
             ),
-            data: (state) => _FeedBody(state: state),
+            data: (state) => _FeedBody(
+              state: state,
+              unreadOnly: _unreadOnly,
+              onFilterChanged: (v) => setState(() => _unreadOnly = v),
+            ),
           ),
         ),
       ),
@@ -79,17 +120,28 @@ class _ErrorScroll extends StatelessWidget {
 }
 
 class _FeedBody extends ConsumerWidget {
-  const _FeedBody({required this.state});
+  const _FeedBody({
+    required this.state,
+    required this.unreadOnly,
+    required this.onFilterChanged,
+  });
   final NotificationsFeedState state;
+  final bool unreadOnly;
+  final ValueChanged<bool> onFilterChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasItems = state.items.isNotEmpty;
+    final visible = unreadOnly
+        ? state.items.where((n) => !n.isRead).toList(growable: false)
+        : state.items;
+    final hasItems = visible.isNotEmpty;
+    final showLoadMore = !unreadOnly && state.hasMore;
 
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
-      itemCount: 2 + (hasItems ? state.items.length : 1) + (state.hasMore ? 1 : 0),
+      itemCount:
+          3 + (hasItems ? visible.length : 1) + (showLoadMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         if (index == 0) {
@@ -102,24 +154,36 @@ class _FeedBody extends ConsumerWidget {
           );
         }
         if (index == 1) {
+          return _FilterRow(
+            unreadOnly: unreadOnly,
+            unreadCount: state.unreadCount,
+            onChanged: onFilterChanged,
+          );
+        }
+        if (index == 2) {
           return const _ScopeNotice(
             text: 'إعدادات الإشعارات حالياً عامة وليست لكل جهاز.',
           );
         }
-        final listIndex = index - 2;
+        final listIndex = index - 3;
         if (!hasItems) {
-          return const AppCard(
-            padding: EdgeInsets.symmetric(vertical: 28),
+          return AppCard(
+            padding: const EdgeInsets.symmetric(vertical: 28),
             child: AppEmptyState(
-              icon: Icons.notifications_none_outlined,
-              title: 'لا توجد إشعارات بعد',
-              subtitle:
-                  'سيظهر كل إشعار جديد من النظام أو من فريق الدعم هنا.',
+              icon: unreadOnly
+                  ? Icons.mark_email_read_outlined
+                  : Icons.notifications_none_outlined,
+              title: unreadOnly
+                  ? 'لا توجد إشعارات غير مقروءة'
+                  : 'لا توجد إشعارات بعد',
+              subtitle: unreadOnly
+                  ? 'كل إشعاراتك الحالية مقروءة.'
+                  : 'سيظهر كل إشعار جديد من النظام أو من فريق الدعم هنا.',
             ),
           );
         }
-        if (listIndex < state.items.length) {
-          final n = state.items[listIndex];
+        if (listIndex < visible.length) {
+          final n = visible[listIndex];
           return _NotificationTile(
             notification: n,
             onTap: n.isRead
@@ -127,13 +191,15 @@ class _FeedBody extends ConsumerWidget {
                 : () => _runMarkOne(context, ref, n.id),
           );
         }
-        // Trailing "load more" button.
+        // Trailing "load more" button — hidden in unread-only mode since
+        // server-side pagination doesn't filter by read state.
         return _LoadMoreButton(
           isLoading: state.isLoadingMore,
           onPressed: state.isLoadingMore
               ? null
-              : () =>
-                  ref.read(notificationsControllerProvider.notifier).loadMore(),
+              : () => ref
+                  .read(notificationsControllerProvider.notifier)
+                  .loadMore(),
         );
       },
     );
@@ -256,6 +322,84 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({
+    required this.unreadOnly,
+    required this.unreadCount,
+    required this.onChanged,
+  });
+
+  final bool unreadOnly;
+  final int unreadCount;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _Pill(
+          label: 'الكل',
+          selected: !unreadOnly,
+          onTap: () => onChanged(false),
+        ),
+        const SizedBox(width: 8),
+        _Pill(
+          label: unreadCount > 0
+              ? 'غير المقروء ($unreadCount)'
+              : 'غير المقروء',
+          selected: unreadOnly,
+          onTap: () => onChanged(true),
+        ),
+      ],
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = selected ? AppTheme.indigoPrimary : AppTheme.surface;
+    final fg = selected ? Colors.white : AppTheme.indigoPrimary;
+    final border = selected
+        ? AppTheme.indigoPrimary
+        : AppTheme.indigoBright.withValues(alpha: 0.30);
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: border),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ScopeNotice extends StatelessWidget {
   const _ScopeNotice({required this.text});
   final String text;
@@ -303,7 +447,7 @@ class _NotificationTile extends StatelessWidget {
     final unread = !notification.isRead;
     final title = notification.title.isNotEmpty ? notification.title : '—';
     final message = notification.message;
-    final time = _formatIsoUtc(notification.createdAt);
+    final time = _humanizeTimestamp(notification.createdAt);
     final tag = notification.eventType.isNotEmpty
         ? notification.eventType
         : (notification.sourceType.isNotEmpty
@@ -316,77 +460,100 @@ class _NotificationTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        child: AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          background: unread ? const Color(0xFFF5F3FF) : AppTheme.surface,
-          borderColor: unread ? const Color(0xFFDDD6FE) : AppTheme.line,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (unread)
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(top: 6, left: 6),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.violet,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                        color: AppTheme.ink,
-                        fontSize: 13.5,
-                        fontWeight: unread ? FontWeight.w900 : FontWeight.w700,
-                        height: 1.45,
-                      ),
-                    ),
-                  ),
-                  if (tag.isNotEmpty) _Chip(text: tag),
-                ],
-              ),
-              if (message.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  message,
-                  style: const TextStyle(
-                    color: AppTheme.softInk,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    height: 1.55,
+              // v54: left accent bar — strong visual cue for unread state.
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: unread ? AppTheme.violet : Colors.transparent,
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(AppTheme.radiusCard),
                   ),
                 ),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.schedule,
-                      size: 12, color: AppTheme.faintMuted),
-                  const SizedBox(width: 4),
-                  Text(
-                    time,
-                    style: const TextStyle(
-                      color: AppTheme.faintMuted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (!unread)
-                    const Text(
-                      'مقروء',
-                      style: TextStyle(
-                        color: AppTheme.success,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+              ),
+              Expanded(
+                child: AppCard(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  background:
+                      unread ? const Color(0xFFF5F3FF) : AppTheme.surface,
+                  borderColor:
+                      unread ? const Color(0xFFDDD6FE) : AppTheme.line,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (unread)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(top: 6, left: 6),
+                              decoration: const BoxDecoration(
+                                color: AppTheme.violet,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: TextStyle(
+                                color: AppTheme.ink,
+                                fontSize: 13.5,
+                                fontWeight:
+                                    unread ? FontWeight.w900 : FontWeight.w700,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
+                          if (tag.isNotEmpty) _Chip(text: tag),
+                        ],
                       ),
-                    ),
-                ],
+                      if (message.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          message,
+                          style: const TextStyle(
+                            color: AppTheme.softInk,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            height: 1.55,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.schedule,
+                              size: 12, color: AppTheme.faintMuted),
+                          const SizedBox(width: 4),
+                          Text(
+                            time,
+                            style: const TextStyle(
+                              color: AppTheme.faintMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (!unread)
+                            const Text(
+                              'مقروء',
+                              style: TextStyle(
+                                color: AppTheme.success,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -449,11 +616,35 @@ class _LoadMoreButton extends StatelessWidget {
   }
 }
 
-String _formatIsoUtc(String? iso) {
+/// Calm Arabic-friendly humanizer for server ISO timestamps.
+///
+///   * Today               → `HH:mm`
+///   * Yesterday           → `أمس HH:mm`
+///   * Older (same year)   → `MM-DD HH:mm`
+///   * Older (other year)  → `YYYY-MM-DD HH:mm`
+///
+/// No "X minutes ago" interpretation — server time is rendered honestly
+/// in the device's local timezone via [DateTime.toLocal].
+String _humanizeTimestamp(String? iso) {
   if (iso == null || iso.isEmpty) return '—';
-  // Display server timestamp as-is — no client-side timezone math, no
-  // "X minutes ago" interpretation. A future localisation phase will
-  // add a locale-safe formatter.
-  final dot = iso.indexOf('.');
-  return dot > 0 ? iso.substring(0, dot) : iso;
+  final parsed = DateTime.tryParse(iso);
+  if (parsed == null) {
+    // Backend value didn't parse — fall back to a truncated copy so the
+    // user still sees something rather than a question mark.
+    final dot = iso.indexOf('.');
+    return dot > 0 ? iso.substring(0, dot) : iso;
+  }
+  final local = parsed.toLocal();
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final dayOf = DateTime(local.year, local.month, local.day);
+  final daysAgo = today.difference(dayOf).inDays;
+  final hh = local.hour.toString().padLeft(2, '0');
+  final mm = local.minute.toString().padLeft(2, '0');
+  if (daysAgo == 0) return '$hh:$mm';
+  if (daysAgo == 1) return 'أمس $hh:$mm';
+  final mo = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  if (local.year == now.year) return '$mo-$d  $hh:$mm';
+  return '${local.year}-$mo-$d  $hh:$mm';
 }
