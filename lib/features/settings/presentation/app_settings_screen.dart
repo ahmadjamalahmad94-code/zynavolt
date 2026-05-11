@@ -92,7 +92,11 @@ class _AppSettingsScreenState extends ConsumerState<AppSettingsScreen> {
 class _BrandCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    // v70: brand card is the screen's hero — uses the v58 design-system
+    // softShadow via `elevated: true` so it stands out above the calmer
+    // info / connection / device / language cards.
     return AppCard(
+      elevated: true,
       child: Row(
         children: [
           ClipRRect(
@@ -315,20 +319,45 @@ class _LanguageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v70: dressed-up language card with a small icon container, so the
+    // "coming soon" note reads as a deliberate info chip instead of a
+    // plain paragraph at the bottom of the screen.
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          _SectionTitle(label: 'اللغة'),
-          SizedBox(height: 6),
-          Text(
-            'الواجهة متاحة حالياً بالعربية فقط. ستضاف لغات إضافية '
-            'لاحقاً بعد اكتمال إعداد الترجمة.',
-            style: TextStyle(
-              color: AppTheme.faintMuted,
-              fontSize: 12.5,
-              height: 1.6,
-            ),
+        children: [
+          const _SectionTitle(label: 'اللغة'),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppTheme.indigoSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.translate_outlined,
+                  color: AppTheme.indigoPrimary,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'الواجهة متاحة حالياً بالعربية فقط. '
+                  'ستضاف لغات إضافية لاحقاً بعد اكتمال إعداد الترجمة.',
+                  style: TextStyle(
+                    color: AppTheme.softInk,
+                    fontSize: 12.5,
+                    height: 1.6,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
