@@ -12,5 +12,5 @@ class BuildInfo {
   const BuildInfo._();
 
   /// Short, human-readable build label. Format: `vNN-short-kebab-summary`.
-  static const String label = 'v90-visual-product-rc';
+  static const String label = 'v90c-notification-settings-ux';
 }

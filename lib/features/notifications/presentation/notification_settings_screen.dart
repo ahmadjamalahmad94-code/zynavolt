@@ -30,33 +30,128 @@ class NotificationSettingsScreen extends ConsumerStatefulWidget {
 
 class _NotificationSettingsScreenState
     extends ConsumerState<NotificationSettingsScreen> {
-  /// Tracks which key is currently being PATCHed so the row can show a
-  /// spinner instead of a switch.
-  String? _busyKey;
+  /// v90c: per-key optimistic overrides. A key in this map means "the user
+  /// just toggled this; show the new value immediately, regardless of what
+  /// the server currently says." Entries are dropped automatically once
+  /// the server-side truth catches up (see `_reconcile`).
+  final Map<String, bool> _optimistic = {};
 
-  Future<void> _patchOne(String key, bool value) async {
-    if (_busyKey != null) return;
-    setState(() => _busyKey = key);
+  /// v90c: per-key in-flight tracking. We allow parallel PATCHes across
+  /// different keys — the user can flip three switches in rapid succession
+  /// and each one runs its own request without blocking the others.
+  /// Re-tapping the SAME key while it's in flight is ignored.
+  final Set<String> _busy = {};
+
+  /// Throttles the success snackbar so a fast sequence of toggles shows
+  /// one calm confirmation instead of stacking five.
+  DateTime _lastSuccessSnack =
+      DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Drop overrides whose server value has caught up to (or differs from)
+  /// our optimistic guess. Called after every fresh fetch.
+  void _reconcile(NotificationSettingsSnapshot fresh) {
+    if (_optimistic.isEmpty) return;
+    final next = <String, bool>{};
+    bool serverMatchesOverride(String key, bool override) {
+      if (key == 'notifications_enabled') {
+        return fresh.notificationsMasterEnabled == override;
+      }
+      if (key == 'telegram_enabled') return fresh.telegram.enabled == override;
+      if (key == 'sms_enabled') return fresh.sms.enabled == override;
+      for (final s in fresh.sectionSwitches) {
+        if (s.enabledKey == key) return s.enabled == override;
+      }
+      return false;
+    }
+
+    _optimistic.forEach((key, value) {
+      if (!serverMatchesOverride(key, value)) {
+        // Server hasn't acknowledged yet — keep the override so the
+        // switch doesn't flicker back to the old value mid-flight.
+        next[key] = value;
+      }
+    });
+    if (next.length != _optimistic.length) {
+      _optimistic
+        ..clear()
+        ..addAll(next);
+    }
+  }
+
+  Future<void> _patchOne(String key, bool newValue) async {
+    if (_busy.contains(key)) return;
+    final previousServerValue = _readServerValue(key);
+    setState(() {
+      _optimistic[key] = newValue;
+      _busy.add(key);
+    });
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref
           .read(notificationsRepositoryProvider)
-          .patchSettings({key: value});
+          .patchSettings({key: newValue});
       ref.invalidate(notificationSettingsProvider);
+      if (!mounted) return;
+      _maybeShowSuccessSnack(messenger);
     } on ApiException catch (e) {
       if (!mounted) return;
+      setState(() {
+        if (previousServerValue != null) {
+          _optimistic[key] = previousServerValue;
+        } else {
+          _optimistic.remove(key);
+        }
+      });
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        if (previousServerValue != null) {
+          _optimistic[key] = previousServerValue;
+        } else {
+          _optimistic.remove(key);
+        }
+      });
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-            SnackBar(content: Text('تعذّر تحديث الإعدادات: $e')));
+        ..showSnackBar(const SnackBar(
+          content: Text('تعذّر حفظ الإعدادات'),
+        ));
     } finally {
-      if (mounted) setState(() => _busyKey = null);
+      if (mounted) setState(() => _busy.remove(key));
     }
+  }
+
+  /// Reads the current server-truth value for a key. Used to remember
+  /// what to revert to on failure. Returns `null` if the key is unknown.
+  bool? _readServerValue(String key) {
+    final snap = ref.read(notificationSettingsProvider).valueOrNull;
+    if (snap == null) return null;
+    if (key == 'notifications_enabled') {
+      return snap.notificationsMasterEnabled;
+    }
+    if (key == 'telegram_enabled') return snap.telegram.enabled;
+    if (key == 'sms_enabled') return snap.sms.enabled;
+    for (final s in snap.sectionSwitches) {
+      if (s.enabledKey == key) return s.enabled;
+    }
+    return null;
+  }
+
+  /// Show a calm "تم حفظ إعدادات الإشعارات" snackbar at most once every
+  /// ~1.5 s, so a rapid flurry of toggles doesn't stack confirmations.
+  void _maybeShowSuccessSnack(ScaffoldMessengerState messenger) {
+    final now = DateTime.now();
+    if (now.difference(_lastSuccessSnack).inMilliseconds < 1500) return;
+    _lastSuccessSnack = now;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        duration: Duration(seconds: 2),
+        content: Text('تم حفظ إعدادات الإشعارات'),
+      ));
   }
 
   @override
@@ -101,11 +196,16 @@ class _NotificationSettingsScreenState
                 ),
               ],
             ),
-            data: (s) => _Body(
-              snapshot: s,
-              busyKey: _busyKey,
-              onPatch: _patchOne,
-            ),
+            data: (s) {
+              // Drop overrides whose server-side truth has caught up.
+              _reconcile(s);
+              return _Body(
+                snapshot: s,
+                optimistic: _optimistic,
+                busy: _busy,
+                onPatch: _patchOne,
+              );
+            },
           ),
         ),
       ),
@@ -116,13 +216,18 @@ class _NotificationSettingsScreenState
 class _Body extends StatelessWidget {
   const _Body({
     required this.snapshot,
-    required this.busyKey,
+    required this.optimistic,
+    required this.busy,
     required this.onPatch,
   });
 
   final NotificationSettingsSnapshot snapshot;
-  final String? busyKey;
+  final Map<String, bool> optimistic;
+  final Set<String> busy;
   final void Function(String key, bool value) onPatch;
+
+  bool _value(String key, bool serverValue) =>
+      optimistic[key] ?? serverValue;
 
   @override
   Widget build(BuildContext context) {
@@ -133,22 +238,27 @@ class _Body extends StatelessWidget {
         _ScopeBanner(scope: snapshot.scope),
         const SizedBox(height: 12),
         _MasterCard(
-          enabled: snapshot.notificationsMasterEnabled,
-          busy: busyKey == 'notifications_enabled',
+          enabled: _value(
+              'notifications_enabled', snapshot.notificationsMasterEnabled),
+          busy: busy.contains('notifications_enabled'),
           onChanged: (v) => onPatch('notifications_enabled', v),
         ),
         const SizedBox(height: 12),
         _ChannelsCard(
           telegram: snapshot.telegram,
           sms: snapshot.sms,
-          busyKey: busyKey,
+          telegramEffective:
+              _value('telegram_enabled', snapshot.telegram.enabled),
+          smsEffective: _value('sms_enabled', snapshot.sms.enabled),
+          busy: busy,
           onPatch: onPatch,
         ),
         if (snapshot.sectionSwitches.isNotEmpty) ...[
           const SizedBox(height: 12),
           _SectionsCard(
             switches: snapshot.sectionSwitches,
-            busyKey: busyKey,
+            effective: (s) => _value(s.enabledKey, s.enabled),
+            busy: busy,
             onPatch: onPatch,
           ),
         ],
@@ -271,13 +381,17 @@ class _ChannelsCard extends StatelessWidget {
   const _ChannelsCard({
     required this.telegram,
     required this.sms,
-    required this.busyKey,
+    required this.telegramEffective,
+    required this.smsEffective,
+    required this.busy,
     required this.onPatch,
   });
 
   final NotificationChannelStatus telegram;
   final NotificationChannelStatus sms;
-  final String? busyKey;
+  final bool telegramEffective;
+  final bool smsEffective;
+  final Set<String> busy;
   final void Function(String key, bool value) onPatch;
 
   @override
@@ -299,7 +413,8 @@ class _ChannelsCard extends StatelessWidget {
             label: 'تيليجرام',
             settingKey: 'telegram_enabled',
             channel: telegram,
-            busy: busyKey == 'telegram_enabled',
+            value: telegramEffective,
+            busy: busy.contains('telegram_enabled'),
             onChanged: (v) => onPatch('telegram_enabled', v),
           ),
           const SizedBox(height: 8),
@@ -307,7 +422,8 @@ class _ChannelsCard extends StatelessWidget {
             label: 'الرسائل القصيرة SMS',
             settingKey: 'sms_enabled',
             channel: sms,
-            busy: busyKey == 'sms_enabled',
+            value: smsEffective,
+            busy: busy.contains('sms_enabled'),
             onChanged: (v) => onPatch('sms_enabled', v),
           ),
         ],
@@ -321,6 +437,7 @@ class _ChannelRow extends StatelessWidget {
     required this.label,
     required this.settingKey,
     required this.channel,
+    required this.value,
     required this.busy,
     required this.onChanged,
   });
@@ -329,6 +446,10 @@ class _ChannelRow extends StatelessWidget {
   // ignore: unused_element_parameter
   final String settingKey;
   final NotificationChannelStatus channel;
+
+  /// v90c: effective (optimistic) value to render. Falls back to the
+  /// server value at the parent level when no override is present.
+  final bool value;
   final bool busy;
   final ValueChanged<bool> onChanged;
 
@@ -377,7 +498,7 @@ class _ChannelRow extends StatelessWidget {
           ),
         ),
         _SwitchOrSpinner(
-          value: channel.enabled,
+          value: value,
           busy: busy,
           onChanged: channel.configured ? onChanged : null,
         ),
@@ -389,12 +510,17 @@ class _ChannelRow extends StatelessWidget {
 class _SectionsCard extends StatelessWidget {
   const _SectionsCard({
     required this.switches,
-    required this.busyKey,
+    required this.effective,
+    required this.busy,
     required this.onPatch,
   });
 
   final List<NotificationSectionSwitch> switches;
-  final String? busyKey;
+
+  /// v90c: parent-supplied resolver that returns the effective (possibly
+  /// optimistic) value for a given section switch.
+  final bool Function(NotificationSectionSwitch s) effective;
+  final Set<String> busy;
   final void Function(String key, bool value) onPatch;
 
   static const Map<String, String> _sectionLabels = {
@@ -426,8 +552,8 @@ class _SectionsCard extends StatelessWidget {
           for (final s in switches) ...[
             _SectionRow(
               label: _sectionLabels[s.sectionId] ?? s.sectionId,
-              value: s.enabled,
-              busy: busyKey == s.enabledKey,
+              value: effective(s),
+              busy: busy.contains(s.enabledKey),
               onChanged: (v) => onPatch(s.enabledKey, v),
             ),
             if (s != switches.last)
@@ -483,6 +609,10 @@ class _SectionRow extends StatelessWidget {
   }
 }
 
+/// v90c: switch with an inline "جارٍ الحفظ" pill while a PATCH is in
+/// flight. The switch itself stays visible and reflects the optimistic
+/// value passed in, mirroring the v90b loads pattern. `onChanged: null`
+/// while busy prevents a double-tap on the same row.
 class _SwitchOrSpinner extends StatelessWidget {
   const _SwitchOrSpinner({
     required this.value,
@@ -496,23 +626,35 @@ class _SwitchOrSpinner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (busy) {
-      return const SizedBox(
-        width: 36,
-        height: 24,
-        child: Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2.2),
-          ),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Switch(
+          value: value,
+          activeThumbColor: AppTheme.indigoPrimary,
+          onChanged: busy ? null : onChanged,
         ),
-      );
-    }
-    return Switch(
-      value: value,
-      activeThumbColor: AppTheme.indigoPrimary,
-      onChanged: onChanged,
+        if (busy)
+          Positioned(
+            bottom: -2,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppTheme.indigoSoft,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Text(
+                'جارٍ الحفظ',
+                style: TextStyle(
+                  color: AppTheme.indigoPrimary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

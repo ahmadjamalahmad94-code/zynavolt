@@ -427,11 +427,34 @@ class _LoadTile extends ConsumerStatefulWidget {
 }
 
 class _LoadTileState extends ConsumerState<_LoadTile> {
-  bool _toggling = false;
+  /// v90b: per-row optimistic override. `null` means the Switch shows the
+  /// server's truth (`widget.load.isEnabled`). When the user taps, we set
+  /// this immediately so the Switch flips with no perceptible delay, and
+  /// only revert it if the backend rejects the request.
+  bool? _optimistic;
+
+  /// Prevents double-tap on the SAME row while a request is in flight.
+  /// Other rows stay fully interactive.
+  bool _busy = false;
+
+  @override
+  void didUpdateWidget(_LoadTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When the list refetches and the new server value matches our
+    // optimistic guess, drop the override so future toggles compare
+    // against the canonical truth.
+    if (_optimistic != null && widget.load.isEnabled == _optimistic) {
+      _optimistic = null;
+    }
+  }
 
   Future<void> _onToggle(bool newValue) async {
-    if (_toggling) return;
-    setState(() => _toggling = true);
+    if (_busy) return;
+    final previousServerValue = widget.load.isEnabled;
+    setState(() {
+      _optimistic = newValue;
+      _busy = true;
+    });
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref
@@ -449,20 +472,25 @@ class _LoadTileState extends ConsumerState<_LoadTile> {
                 : 'تم إيقاف الحمل في إعداداتك.'),
           ),
         );
+      // Keep `_optimistic` until didUpdateWidget reconciles with fresh
+      // server data — avoids a brief flicker back to the old value
+      // between the toggle returning and the list refetch arriving.
     } on ApiException catch (e) {
       if (!mounted) return;
+      setState(() => _optimistic = previousServerValue);
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
+      setState(() => _optimistic = previousServerValue);
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(content: Text('تعذّر تحديث الحمل: $e')),
         );
     } finally {
-      if (mounted) setState(() => _toggling = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -532,27 +560,41 @@ class _LoadTileState extends ConsumerState<_LoadTile> {
             ),
           ),
           const SizedBox(width: 8),
-          // v86: real toggle. While the backend call is in flight we
-          // show a tiny inline spinner instead of the switch so the user
-          // gets immediate "we're doing it" feedback.
-          if (_toggling)
-            const SizedBox(
-              width: 36,
-              height: 24,
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2.2),
-                ),
+          // v90b: optimistic Switch. The toggle reflects the user's
+          // intent immediately; if the backend later rejects the change,
+          // the catch block flips `_optimistic` back. While in flight,
+          // `_busy` blocks a second tap on THIS row only (other rows
+          // remain fully interactive).
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Switch(
+                value: _optimistic ?? load.isEnabled,
+                activeThumbColor: AppTheme.indigoPrimary,
+                onChanged: _busy ? null : _onToggle,
               ),
-            )
-          else
-            Switch(
-              value: load.isEnabled,
-              activeThumbColor: AppTheme.indigoPrimary,
-              onChanged: _onToggle,
-            ),
+              if (_busy)
+                Positioned(
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppTheme.indigoSoft,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'جارٍ الحفظ',
+                      style: TextStyle(
+                        color: AppTheme.indigoPrimary,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
