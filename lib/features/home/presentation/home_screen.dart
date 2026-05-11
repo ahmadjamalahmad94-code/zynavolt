@@ -9,6 +9,8 @@ import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../bootstrap/data/bootstrap_repository.dart';
+import '../../devices/data/device_models.dart';
+import '../../devices/state/selected_device_provider.dart';
 
 /// Placeholder home tab. The full dashboard is intentionally out of v37 scope;
 /// this screen only confirms the bootstrap call works and the user is loaded.
@@ -19,13 +21,16 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(appSessionProvider);
     final bootstrap = ref.watch(bootstrapProvider);
+    final activeDevice = ref.watch(effectiveDeviceProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.softBg,
       appBar: AppBar(title: const Text('الرئيسية')),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(bootstrapProvider),
+          onRefresh: () async {
+            ref.invalidate(bootstrapProvider);
+          },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -41,6 +46,8 @@ class HomeScreen extends ConsumerWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    _ActiveDeviceLine(device: activeDevice),
                     const SizedBox(height: 6),
                     const Text(
                       'سيتم تحميل البيانات من واجهات SolarDeye API.',
@@ -122,6 +129,54 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ActiveDeviceLine extends StatelessWidget {
+  const _ActiveDeviceLine({required this.device});
+
+  final Device? device;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = device;
+    if (d == null) {
+      return Row(
+        children: const [
+          Icon(Icons.info_outline, size: 14, color: AppTheme.muted),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'اختر جهازاً من تبويب الأجهزة.',
+              style: TextStyle(
+                color: AppTheme.muted,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        const Icon(Icons.solar_power_outlined,
+            size: 14, color: AppTheme.indigoPrimary),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'الجهاز النشط: ${d.name.isNotEmpty ? d.name : '#${d.id}'}',
+            style: const TextStyle(
+              color: AppTheme.softInk,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

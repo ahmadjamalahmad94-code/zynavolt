@@ -20,12 +20,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _submitting = false;
   bool _obscure = true;
   String? _error;
+  bool _restoreErrorChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _username.addListener(_clearErrorOnInput);
+    _password.addListener(_clearErrorOnInput);
+  }
 
   @override
   void dispose() {
+    _username.removeListener(_clearErrorOnInput);
+    _password.removeListener(_clearErrorOnInput);
     _username.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  void _clearErrorOnInput() {
+    if (_error != null) {
+      setState(() => _error = null);
+    }
+  }
+
+  /// Pull `AppSession.lastError` exactly once on first build so a failed
+  /// cold-start restore (network down, refresh token expired, etc.) is
+  /// honestly visible instead of silently dumping the user back here.
+  void _hydrateRestoreErrorIfNeeded() {
+    if (_restoreErrorChecked) return;
+    _restoreErrorChecked = true;
+    final lastError = ref.read(appSessionProvider).lastError;
+    if (lastError != null && _error == null) {
+      _error = lastError.message;
+    }
   }
 
   Future<void> _submit() async {
@@ -49,6 +77,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _hydrateRestoreErrorIfNeeded();
     return Scaffold(
       backgroundColor: AppTheme.softBg,
       body: SafeArea(

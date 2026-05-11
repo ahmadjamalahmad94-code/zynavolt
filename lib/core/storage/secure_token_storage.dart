@@ -26,6 +26,7 @@ class SecureTokenStorage {
 
   static const String _kAccess = 'solardeye.access_token';
   static const String _kRefresh = 'solardeye.refresh_token';
+  static const String _kSelectedDeviceId = 'solardeye.selected_device_id';
 
   final FlutterSecureStorage _storage;
   final Map<String, String>? _inMemory;
@@ -66,13 +67,43 @@ class SecureTokenStorage {
     }
   }
 
+  /// Selected device id is stored alongside the tokens because it is
+  /// per-account state. Cleared in `clearAll` so signing out cannot leak
+  /// the previous account's selection into the next sign-in.
+  Future<int?> readSelectedDeviceId() async {
+    final raw = _inMemory != null
+        ? _inMemory[_kSelectedDeviceId]
+        : await _storage.read(key: _kSelectedDeviceId);
+    if (raw == null || raw.isEmpty) return null;
+    return int.tryParse(raw);
+  }
+
+  Future<void> writeSelectedDeviceId(int id) async {
+    final value = id.toString();
+    if (_inMemory != null) {
+      _inMemory[_kSelectedDeviceId] = value;
+      return;
+    }
+    await _storage.write(key: _kSelectedDeviceId, value: value);
+  }
+
+  Future<void> clearSelectedDeviceId() async {
+    if (_inMemory != null) {
+      _inMemory.remove(_kSelectedDeviceId);
+      return;
+    }
+    await _storage.delete(key: _kSelectedDeviceId);
+  }
+
   Future<void> clearAll() async {
     if (_inMemory != null) {
       _inMemory.remove(_kAccess);
       _inMemory.remove(_kRefresh);
+      _inMemory.remove(_kSelectedDeviceId);
       return;
     }
     await _storage.delete(key: _kAccess);
     await _storage.delete(key: _kRefresh);
+    await _storage.delete(key: _kSelectedDeviceId);
   }
 }

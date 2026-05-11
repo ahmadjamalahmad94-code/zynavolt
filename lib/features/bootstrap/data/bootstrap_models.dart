@@ -115,3 +115,16 @@ class BootstrapProvider {
   final String category;
   final String status;
 }
+
+/// Minimal payload for GET /api/mobile/health.
+class HealthStatus {
+  HealthStatus({required this.version, required this.message});
+
+  factory HealthStatus.fromJson(Map<String, dynamic> json) => HealthStatus(
+        version: (json['version'] ?? '').toString(),
+        message: (json['message'] ?? '').toString(),
+      );
+
+  final String version;
+  final String message;
+}

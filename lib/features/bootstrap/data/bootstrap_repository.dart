@@ -13,6 +13,17 @@ class BootstrapRepository {
     final response = await _api.get('/api/mobile/bootstrap');
     return AppBootstrap.fromJson(response.data);
   }
+
+  /// `GET /api/mobile/health` — unauthenticated probe used by the
+  /// "تحقّق من الاتصال" diagnostic in the More tab. Sends no Bearer
+  /// header so a stale/missing token does not produce a misleading 401.
+  Future<HealthStatus> health() async {
+    final response = await _api.get(
+      '/api/mobile/health',
+      options: ApiClient.skipAuth(),
+    );
+    return HealthStatus.fromJson(response.data);
+  }
 }
 
 final bootstrapRepositoryProvider = Provider<BootstrapRepository>((ref) {
