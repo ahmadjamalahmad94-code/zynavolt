@@ -209,26 +209,32 @@ class _FilterChip extends StatelessWidget {
       fg = AppTheme.indigoPrimary;
       border = AppTheme.indigoBright.withValues(alpha: 0.30);
     }
+    // v72: AnimatedContainer + AnimatedDefaultTextStyle so the chip
+     // glides between selected and unselected states instead of snapping.
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: border),
           ),
-          child: Text(
-            label,
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
             style: TextStyle(
               color: fg,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
+            child: Text(label),
           ),
         ),
       ),
