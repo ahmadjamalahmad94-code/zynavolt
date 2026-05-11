@@ -14,7 +14,9 @@ class AppTheme {
   static const Color muted = Color(0xFF475569);
   static const Color faintMuted = Color(0xFF64748B);
   static const Color line = Color(0xFFCBD5E1);
-  static const Color softBg = Color(0xFFF8FAFC);
+  // v83: cooler page background — subtle indigo tint instead of flat near-
+  // white. Every screen picks this up via scaffoldBackgroundColor.
+  static const Color softBg = Color(0xFFF1F5FF);
   static const Color surface = Color(0xFFFFFFFF);
 
   static const Color indigoPrimary = Color(0xFF4338CA);
@@ -26,11 +28,20 @@ class AppTheme {
   static const Color warning = Color(0xFFF59E0B);
   static const Color danger = Color(0xFFDC2626);
 
+  // v83: accent palette — used sparingly for visual variety on chips,
+  // category tags, and small status pills. The core stays indigo/violet.
+  static const Color cyan = Color(0xFF06B6D4);
+  static const Color emerald = Color(0xFF10B981);
+  static const Color amber = Color(0xFFF59E0B); // alias of warning
+
   // ── Radii (v35 §8.4) ─────────────────────────────────────────────────
   static const double radiusInput = 10;
-  static const double radiusCard = 12;
-  static const double radiusHero = 14;
-  static const double radiusGlass = 16;
+  // v83: softer card corner (12 → 14) for a more premium / glassy feel.
+  // Every AppCard in the app picks this up; pre-existing screens look
+  // marginally rounder without behavior changes.
+  static const double radiusCard = 14;
+  static const double radiusHero = 16;
+  static const double radiusGlass = 18;
 
   // ── Sizing (v35 §4.1) ────────────────────────────────────────────────
   /// Standard form control height — 42 dp mirrors the 42 px web rule.
@@ -60,20 +71,21 @@ class AppTheme {
 
   // Soft shadows for elevated cards / hero surfaces. Indigo-tinted so
   // they harmonise with the brand instead of looking like a generic grey
-  // drop-shadow.
+  // drop-shadow. v83: bumped intensity so depth is actually visible on
+  // a real device.
   static List<BoxShadow> softShadow = [
     BoxShadow(
-      color: indigoPrimary.withValues(alpha: 0.06),
-      blurRadius: 12,
-      offset: const Offset(0, 4),
+      color: indigoPrimary.withValues(alpha: 0.08),
+      blurRadius: 14,
+      offset: const Offset(0, 5),
     ),
   ];
 
   static List<BoxShadow> liftedShadow = [
     BoxShadow(
-      color: indigoPrimary.withValues(alpha: 0.10),
-      blurRadius: 22,
-      offset: const Offset(0, 8),
+      color: indigoPrimary.withValues(alpha: 0.14),
+      blurRadius: 26,
+      offset: const Offset(0, 10),
     ),
   ];
 
