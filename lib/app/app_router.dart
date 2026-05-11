@@ -13,6 +13,7 @@ import '../features/more/presentation/more_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
+import '../features/support/presentation/support_case_detail_screen.dart';
 import '../features/support/presentation/support_screen.dart';
 
 class AppRoutes {
@@ -31,6 +32,11 @@ class AppRoutes {
   /// bottom-nav shell so it has full-screen real estate and a normal back
   /// button — same pattern as [profile].
   static String deviceDetail(int id) => '/devices/$id';
+
+  /// Build a typed path for a single support case (mail thread or
+  /// ticket). `kind` is always `'message'` or `'ticket'`, taken from the
+  /// case summary, never user-typed.
+  static String supportCase(String kind, int id) => '/support/$kind/$id';
 }
 
 /// GoRouter wired to [appSessionProvider]. Redirects are session-driven:
@@ -87,6 +93,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.loads,
         builder: (_, _) => const LoadsScreen(),
+      ),
+      // v50: support case detail (read-only thread). Kept outside the
+      // bottom-nav shell so a back arrow returns to the support list.
+      GoRoute(
+        path: '/support/:kind/:id',
+        builder: (_, state) {
+          final kind = state.pathParameters['kind'] ?? '';
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return SupportCaseDetailScreen(kind: kind, id: id);
+        },
       ),
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
