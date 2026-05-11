@@ -4,13 +4,15 @@ Drop the official Zynavolt logo here:
 
     assets/branding/zynavolt_logo.png
 
-The app uses this single PNG in three places:
+The app uses this single PNG in these places (as of v59):
 
-- Splash screen (large)
+- Splash screen (large rounded square)
+- Login screen header (rounded square)
 - Home hero wordmark (small, rounded)
 - Energy-flow hub badge on Home (small, circular)
+- App Settings → brand card (small, rounded)
 
-If the file is missing, each of those falls back to a calm text "Z"
+If the file is missing, each of those falls back to a calm sun-icon
 placeholder via `Image.asset(..., errorBuilder: ...)` so the build never
 breaks. To swap the logo, just replace the PNG — no code change required.
 
@@ -19,6 +21,18 @@ breaks. To swap the logo, just replace the PNG — no code change required.
 - Format: PNG (RGBA, transparent or matte navy)
 - Recommended source: 1024 × 1024 (Flutter scales down crisply)
 - Aspect ratio: 1:1 (square)
+- File name (exact, case-sensitive): `zynavolt_logo.png`
+
+## Verification after dropping the file
+
+1. `flutter clean && flutter pub get`
+2. `flutter run --dart-define=SOLARDEYE_API_BASE_URL=https://solardeye.onrender.com`
+3. Confirm the logo appears on:
+   - Splash (cold start)
+   - Login (signed-out cold start)
+   - Home hero card (header)
+   - Home energy-flow hub (centre badge)
+   - More → إعدادات التطبيق → top brand card
 
 ## Future asset slots (do not add until needed)
 
