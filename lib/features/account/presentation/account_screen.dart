@@ -5,6 +5,7 @@ import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
+import '../../../core/utils/timestamp.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
 import '../../../core/widgets/read_only_notice.dart';
@@ -187,12 +188,12 @@ class _SubscriptionCard extends StatelessWidget {
               subscription.expiresAt!.isNotEmpty)
             _KvRow(
               label: 'تاريخ الانتهاء',
-              value: _formatTimestamp(subscription.expiresAt) ?? '—',
+              value: formatDate(subscription.expiresAt) ?? '—',
             ),
           if (subscription.isTrial)
             _KvRow(
               label: 'نهاية الفترة التجريبية',
-              value: _formatTimestamp(subscription.trialEndsAt) ?? '—',
+              value: formatDate(subscription.trialEndsAt) ?? '—',
             ),
           if (plan.features.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -438,15 +439,4 @@ class _CapRow extends StatelessWidget {
       ),
     );
   }
-}
-
-String? _formatTimestamp(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  final dt = DateTime.tryParse(raw);
-  if (dt == null) return raw;
-  final local = dt.toLocal();
-  final y = local.year.toString().padLeft(4, '0');
-  final m = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  return '$y-$m-$d';
 }

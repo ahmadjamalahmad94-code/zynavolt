@@ -6,6 +6,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
+import '../../../core/utils/timestamp.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../../core/widgets/app_refresh_button.dart';
 import '../../../core/widgets/read_only_notice.dart';
@@ -180,14 +181,14 @@ class _SummaryCard extends StatelessWidget {
             const SizedBox(height: 10),
             _MetaRow(
               label: 'تاريخ الفتح',
-              value: _formatTimestamp(summary.createdAt) ?? '—',
+              value: formatDateTime(summary.createdAt) ?? '—',
             ),
           ],
           if (summary.lastReplyAt != null &&
               summary.lastReplyAt!.isNotEmpty)
             _MetaRow(
               label: 'آخر رد',
-              value: _formatTimestamp(summary.lastReplyAt) ?? '—',
+              value: formatDateTime(summary.lastReplyAt) ?? '—',
             ),
         ],
       ),
@@ -232,7 +233,7 @@ class _MessageBubble extends StatelessWidget {
               const Spacer(),
               if (message.createdAt != null && message.createdAt!.isNotEmpty)
                 Text(
-                  _formatTimestamp(message.createdAt) ?? '',
+                  formatDateTime(message.createdAt) ?? '',
                   style: const TextStyle(
                     color: AppTheme.faintMuted,
                     fontSize: 11,
@@ -344,17 +345,4 @@ class _MetaRow extends StatelessWidget {
       ),
     );
   }
-}
-
-String? _formatTimestamp(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  final dt = DateTime.tryParse(raw);
-  if (dt == null) return raw;
-  final local = dt.toLocal();
-  final y = local.year.toString().padLeft(4, '0');
-  final m = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  final hh = local.hour.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  return '$y-$m-$d  $hh:$mm';
 }

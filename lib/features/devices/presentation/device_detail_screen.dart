@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/utils/timestamp.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
@@ -169,7 +170,7 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final connected = device.connectionStatus.toLowerCase() == 'ok';
-    final lastSeen = _formatTimestamp(device.lastConnectedAt);
+    final lastSeen = formatDateTime(device.lastConnectedAt);
     return AppCard(
       // v63: status card is the screen's hero — soft shadow gives it
       // presence over the calmer info/settings cards below.
@@ -389,7 +390,7 @@ class _LatestCard extends StatelessWidget {
                     color: AppTheme.faintMuted, size: 14),
                 const SizedBox(width: 6),
                 Text(
-                  'تحديث: ${_formatTimestamp(latest.createdAt) ?? ''}',
+                  'تحديث: ${formatDateTime(latest.createdAt) ?? ''}',
                   style: const TextStyle(
                     color: AppTheme.faintMuted,
                     fontSize: 11.5,
@@ -568,15 +569,15 @@ class _InfoCard extends StatelessWidget {
           const Divider(color: AppTheme.line, height: 18, thickness: 1),
           _KvRow(
             label: 'آخر اتصال',
-            value: _formatTimestamp(device.lastConnectedAt) ?? '—',
+            value: formatDateTime(device.lastConnectedAt) ?? '—',
           ),
           _KvRow(
             label: 'تاريخ الإنشاء',
-            value: _formatTimestamp(device.createdAt) ?? '—',
+            value: formatDateTime(device.createdAt) ?? '—',
           ),
           _KvRow(
             label: 'آخر تحديث',
-            value: _formatTimestamp(device.updatedAt) ?? '—',
+            value: formatDateTime(device.updatedAt) ?? '—',
           ),
         ],
       ),
@@ -728,20 +729,4 @@ String _fmt(double v) {
   if (abs >= 100) return v.toStringAsFixed(0);
   if (abs >= 10) return v.toStringAsFixed(1);
   return v.toStringAsFixed(2);
-}
-
-/// Compact local-time formatter for ISO-8601 strings coming from the
-/// backend. Falls back to the raw string when parsing fails so the user
-/// still sees what the server sent.
-String? _formatTimestamp(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  final dt = DateTime.tryParse(raw);
-  if (dt == null) return raw;
-  final local = dt.toLocal();
-  final y = local.year.toString().padLeft(4, '0');
-  final m = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  final hh = local.hour.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  return '$y-$m-$d  $hh:$mm';
 }
