@@ -79,8 +79,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     _hydrateRestoreErrorIfNeeded();
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
-      body: SafeArea(
+      backgroundColor: Colors.transparent,
+      // v46: match the Home pale-indigo backdrop so Splash → Login → Home
+      // feel like one continuous brand surface.
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFE0E7FF),
+              Color(0xFFF1F5FF),
+              Color(0xFFF8FAFC),
+            ],
+            stops: [0.0, 0.35, 0.85],
+          ),
+        ),
+        child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -89,18 +104,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppTheme.indigoSoft,
+                  // v46: Zynavolt logo with calm fallback to the prior
+                  // sun-icon tile so the screen never breaks if the PNG
+                  // asset is missing during dev / pre-release builds.
+                  Center(
+                    child: ClipRRect(
                       borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: const Icon(
-                      Icons.wb_sunny_outlined,
-                      color: AppTheme.indigoPrimary,
-                      size: 30,
+                      child: Image.asset(
+                        'assets/branding/zynavolt_logo.png',
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          width: 72,
+                          height: 72,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppTheme.indigoSoft,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Icon(
+                            Icons.wb_sunny_outlined,
+                            color: AppTheme.indigoPrimary,
+                            size: 32,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -206,6 +235,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

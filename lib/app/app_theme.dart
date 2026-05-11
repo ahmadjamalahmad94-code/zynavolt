@@ -53,8 +53,15 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: softBg,
-      // Cairo is not bundled in v37; fall back to system. Add the font later
-      // via the fonts: section in pubspec.yaml once the asset is in place.
+      // v46: Arabic typography slot. Cairo / Tajawal is the intended brand
+      // family but no font asset is bundled yet — falling back to Roboto
+      // keeps the UI rendering on every device today.
+      //
+      // To wire it up later, drop the .ttf files under
+      //   assets/branding/fonts/Cairo/
+      // then declare a `fonts:` section in pubspec.yaml pointing at them,
+      // and change this line to `fontFamily: 'Cairo'`. No code elsewhere
+      // depends on this — all text styles inherit through the theme.
       fontFamily: 'Roboto',
     );
 

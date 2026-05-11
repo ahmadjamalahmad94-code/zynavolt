@@ -34,19 +34,15 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('الرئيسية'),
+    // v46: Home has no AppBar — the gradient hero card *is* the page
+    // header. Status bar icons forced dark via AnnotatedRegion since the
+    // gradient backdrop is pale-indigo (light).
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: const Scaffold(
         backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppTheme.ink,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        body: _ScreenBackground(child: _HomeBody()),
       ),
-      body: const _ScreenBackground(child: _HomeBody()),
     );
   }
 }
@@ -95,7 +91,9 @@ class _HomeBody extends ConsumerWidget {
         await ref.read(dashboardProvider.future);
       },
       child: ListView(
-        padding: EdgeInsets.fromLTRB(16, kToolbarHeight - 6, 16, 32),
+        // v46: no AppBar above, SafeArea already accounts for the status
+        // bar — just a small 12 dp breathing margin before the hero.
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
           _HomeHero(
             user: session.user,
