@@ -1,40 +1,33 @@
-/// Shared timestamp formatters (v79).
+/// Shared timestamp formatters (v79 → v97).
 ///
-/// Replaces 3 near-identical local copies that lived in
-/// `device_detail_screen.dart`, `support_case_detail_screen.dart`, and
-/// `account_screen.dart`. No behavior change — just one source of truth.
+/// **v97**: these two functions are now thin wrappers around
+/// [formatBackendDateTime] and [formatBackendDate] in
+/// `lib/core/utils/backend_time.dart`. The actual UTC-aware parsing
+/// logic lives there so every screen — Home, Notifications, Device
+/// Detail, Support, Account — shares one source of truth and the
+/// "naive ISO without `Z` was being treated as device-local" bug
+/// stays fixed across the whole app.
 ///
-/// Both functions accept a nullable ISO-8601 string and return:
+/// Both functions still accept a nullable ISO-8601 string and return:
 ///   * `null` when input is null or empty;
-///   * the raw input when `DateTime.tryParse` fails (so the user still
-///     sees what the server sent);
+///   * the raw input when parsing fails (so the user still sees what
+///     the server sent);
 ///   * a formatted local-time string otherwise.
+///
+/// Existing call sites in
+/// `lib/features/devices/presentation/device_detail_screen.dart`,
+/// `lib/features/support/presentation/support_case_detail_screen.dart`,
+/// and `lib/features/account/presentation/account_screen.dart` remain
+/// unchanged — same function names, same return shape, just the
+/// correct UTC-aware behaviour underneath.
 library;
 
-/// `YYYY-MM-DD  HH:mm` — date + 24-hour clock, local time.
-String? formatDateTime(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  final dt = DateTime.tryParse(raw);
-  if (dt == null) return raw;
-  final local = dt.toLocal();
-  final y = local.year.toString().padLeft(4, '0');
-  final m = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  final hh = local.hour.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  return '$y-$m-$d  $hh:$mm';
-}
+import 'backend_time.dart';
 
-/// `YYYY-MM-DD` — date only, local time. Used by the Account screen for
-/// subscription expiry / trial-end dates where the wall-clock time of
-/// day is not meaningful.
-String? formatDate(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  final dt = DateTime.tryParse(raw);
-  if (dt == null) return raw;
-  final local = dt.toLocal();
-  final y = local.year.toString().padLeft(4, '0');
-  final m = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  return '$y-$m-$d';
-}
+/// `YYYY-MM-DD  HH:mm` — date + 24-hour clock, device-local time, with
+/// the v97 UTC-aware parser underneath. See [formatBackendDateTime].
+String? formatDateTime(String? raw) => formatBackendDateTime(raw);
+
+/// `YYYY-MM-DD` — date only, device-local time, with the v97
+/// UTC-aware parser underneath. See [formatBackendDate].
+String? formatDate(String? raw) => formatBackendDate(raw);

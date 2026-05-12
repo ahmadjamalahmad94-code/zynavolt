@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/state/app_session.dart';
+import '../../../core/utils/backend_time.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
@@ -149,7 +150,12 @@ class _HomeHero extends StatelessWidget {
     final greetingName = u == null
         ? ''
         : (u.fullName.isNotEmpty ? u.fullName : u.username);
-    final lastReading = _formatHm(snapshot?.latest.createdAt);
+    // v97: route through the shared UTC-aware parser in
+    // `core/utils/backend_time.dart`. Previously this used a naive
+    // substring of the ISO string, which displayed the backend's
+    // UTC wall-clock as if it were local time — three hours behind
+    // for users in Asia/Hebron during summer.
+    final lastReading = formatBackendHm(snapshot?.latest.createdAt);
     final deviceName = device == null
         ? null
         : (device!.name.isNotEmpty ? device!.name : '#${device!.id}');
@@ -1756,16 +1762,12 @@ String _formatIsoUtc(String? iso) {
   return dot > 0 ? iso.substring(0, dot) : iso;
 }
 
-/// Compact "HH:MM" tail-extract from an ISO timestamp. Used by the hero's
-/// "آخر قراءة HH:MM" pill. Falls back to the full ISO if the format
-/// doesn't match, and to null for missing values.
-String? _formatHm(String? iso) {
-  if (iso == null || iso.isEmpty) return null;
-  final tIdx = iso.indexOf('T');
-  if (tIdx < 0 || tIdx + 6 > iso.length) return iso;
-  return iso.substring(tIdx + 1, tIdx + 6);
-}
-
+/// v97: the local `_formatHm` was replaced by [formatBackendHm] from
+/// `core/utils/backend_time.dart`, which routes through the same
+/// UTC-aware parser the Notifications screen uses. The previous
+/// naive substring approach displayed UTC wall-clock as if it were
+/// device-local time.
+//
 /// v85: render kWh values compactly for the hero pill. <100 keeps one
 /// decimal so small days still feel precise; ≥100 drops the decimal.
 String _fmtKwh(double v) {

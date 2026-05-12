@@ -8,6 +8,7 @@ import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/state/app_session.dart';
+import '../../../core/utils/backend_time.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
@@ -1496,7 +1497,11 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _DetailKvBlock extends StatelessWidget {
+/// v97: KV block is now stateful so it can host a collapsible
+/// "تفاصيل تقنية" section. The user-facing rows always use Arabic
+/// labels + mapped Arabic values; the raw English slugs only appear
+/// when the user explicitly expands the technical section.
+class _DetailKvBlock extends StatefulWidget {
   const _DetailKvBlock({
     required this.notification,
     required this.userTimezone,
@@ -1506,10 +1511,25 @@ class _DetailKvBlock extends StatelessWidget {
   final String userTimezone;
 
   @override
+  State<_DetailKvBlock> createState() => _DetailKvBlockState();
+}
+
+class _DetailKvBlockState extends State<_DetailKvBlock> {
+  bool _techExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final n = notification;
+    final n = widget.notification;
     final created = _exactTimestamp(n.createdAt);
     final read = _exactTimestamp(n.readAt);
+
+    // v97: every user-facing value goes through the Arabic localiser.
+    // Raw English slugs only appear inside the collapsed technical
+    // section below.
+    final eventLabel = NotificationLabels.eventTypeLabel(n.eventType);
+    final sourceLabel = NotificationLabels.sourceTypeLabel(n.sourceType);
+    final statusLabel = NotificationLabels.statusLabel(n.status);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -1519,22 +1539,26 @@ class _DetailKvBlock extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _KvRow(label: 'المعرّف', value: '#${n.id}'),
-          if (n.eventType.isNotEmpty)
-            _KvRow(label: 'نوع الحدث', value: n.eventType),
-          if (n.sourceType.isNotEmpty)
-            _KvRow(label: 'المصدر', value: n.sourceType),
+          _KvRow(label: 'نوع التنبيه', value: eventLabel),
+          _KvRow(label: 'المصدر', value: sourceLabel),
+          if (n.sourceId != null)
+            _KvRow(label: 'رقم المرجع', value: '#${n.sourceId}'),
+          _KvRow(label: 'الحالة', value: statusLabel),
           if (created != null)
             _KvRow(label: 'وقت الإنشاء', value: created),
-          if (read != null) _KvRow(label: 'وقت القراءة', value: read),
-          _KvRow(
-            label: 'الحالة',
-            value: n.status.isNotEmpty ? n.status : '—',
+          if (read != null)
+            _KvRow(label: 'وقت القراءة', value: read),
+          if (widget.userTimezone.isNotEmpty)
+            _KvRow(label: 'نطاق الملف الشخصي', value: widget.userTimezone),
+          const SizedBox(height: 6),
+          _TechDetailsToggle(
+            expanded: _techExpanded,
+            onTap: () => setState(() => _techExpanded = !_techExpanded),
           ),
-          // v96 fix C: surface the profile timezone honestly. Lets the
-          // user verify what zone the system thinks they're in.
-          if (userTimezone.isNotEmpty)
-            _KvRow(label: 'نطاق الملف الشخصي', value: userTimezone),
+          if (_techExpanded) ...[
+            const SizedBox(height: 6),
+            _TechDetailsPanel(notification: n),
+          ],
         ],
       ),
     );
@@ -1572,6 +1596,151 @@ class _KvRow extends StatelessWidget {
                 color: AppTheme.ink,
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// v97: collapsed-by-default disclosure row for the technical details
+/// panel. Tap to reveal the raw English `event_type` / `source_type` /
+/// `status` slugs — useful for support agents tracing an issue back to
+/// the backend payload without polluting the normal user-facing rows.
+class _TechDetailsToggle extends StatelessWidget {
+  const _TechDetailsToggle({required this.expanded, required this.onTap});
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          child: Row(
+            children: [
+              const Icon(Icons.terminal,
+                  size: 14, color: AppTheme.faintMuted),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'تفاصيل تقنية',
+                  style: TextStyle(
+                    color: AppTheme.faintMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              AnimatedRotation(
+                turns: expanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: const Icon(
+                  Icons.expand_more,
+                  size: 16,
+                  color: AppTheme.faintMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// v97: raw English slug panel. Renders the backend's identifiers
+/// verbatim — including the notification's primary key — so support
+/// agents have everything they need to trace a row. Only visible after
+/// the user taps [_TechDetailsToggle].
+class _TechDetailsPanel extends StatelessWidget {
+  const _TechDetailsPanel({required this.notification});
+  final AppNotification notification;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = notification;
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.line),
+      ),
+      child: Column(
+        children: [
+          _RawKvRow(label: 'id', value: '${n.id}'),
+          _RawKvRow(
+            label: 'event_type',
+            value: n.eventType.isEmpty ? '—' : n.eventType,
+          ),
+          _RawKvRow(
+            label: 'source_type',
+            value: n.sourceType.isEmpty ? '—' : n.sourceType,
+          ),
+          _RawKvRow(
+            label: 'source_id',
+            value: n.sourceId == null ? '—' : '${n.sourceId}',
+          ),
+          _RawKvRow(
+            label: 'status',
+            value: n.status.isEmpty ? '—' : n.status,
+          ),
+          _RawKvRow(
+            label: 'is_read',
+            value: NotificationLabels.boolLabel(n.isRead),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Monospace-styled raw KV row for [_TechDetailsPanel]. Same shape as
+/// [_KvRow] but with the label in latin slug-style on the start side
+/// and the value rendered slightly muted — visually signals "this is
+/// raw data, not a localised label".
+class _RawKvRow extends StatelessWidget {
+  const _RawKvRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.faintMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                color: AppTheme.softInk,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1887,85 +2056,11 @@ class _HelpBlock extends StatelessWidget {
 
 // ── Timestamp helpers ──────────────────────────────────────────────────
 
-/// Parse a backend ISO-8601 timestamp into a `DateTime` that can safely
-/// be converted to local wall-clock time.
-///
-/// The backend stores its timestamps as naive UTC (`datetime.utcnow()`)
-/// and serialises them with `.isoformat()`, which produces strings like
-/// `2026-05-11T10:00:00.123456` — **no `Z`, no offset**. Dart's
-/// [DateTime.tryParse] treats such bare strings as the **device local**
-/// timezone, so the previous code was effectively showing UTC wall-time
-/// as if it were local — every notification time was wrong by the
-/// device's UTC offset.
-///
-/// Fix: detect a tz-less string and reinterpret it as UTC before any
-/// further conversion. Strings that already carry `Z` or `±HH:MM` are
-/// parsed honestly and passed through.
-DateTime? _parseBackendIso(String? iso) {
-  if (iso == null || iso.isEmpty) return null;
-  final hasTz = iso.endsWith('Z') ||
-      RegExp(r'[+\-]\d{2}:?\d{2}$').hasMatch(iso);
-  // Append `Z` so DateTime.parse interprets it as UTC.
-  final normalised = hasTz ? iso : '${iso}Z';
-  return DateTime.tryParse(normalised);
-}
-
-/// Calm Arabic-friendly humanizer for server ISO timestamps:
-///   * Today               → `HH:mm`
-///   * Yesterday           → `أمس HH:mm`
-///   * Older (same year)   → `MM-DD HH:mm`
-///   * Older (other year)  → `YYYY-MM-DD HH:mm`
-///
-/// Conversion path:
-///   1. Treat the backend's tz-less ISO string as UTC (see
-///      [_parseBackendIso]).
-///   2. `.toLocal()` — convert to the **device** timezone for display.
-///
-/// Why device local and not the IANA `profile_timezone` the user
-/// configured? Dart's standard library cannot convert between arbitrary
-/// IANA zones (e.g. `Asia/Hebron`) without the `timezone` package,
-/// which the task brief forbids us from adding. For users whose device
-/// TZ matches their physical location (the overwhelming majority) the
-/// device-local conversion is correct. For users whose profile TZ
-/// disagrees with their device TZ we surface the profile string in the
-/// detail sheet so they can verify, and the help sheet explains the
-/// limitation honestly.
-String _humanizeTimestamp(String? iso) {
-  final parsed = _parseBackendIso(iso);
-  if (parsed == null) {
-    if (iso == null || iso.isEmpty) return '—';
-    final dot = iso.indexOf('.');
-    return dot > 0 ? iso.substring(0, dot) : iso;
-  }
-  final local = parsed.toLocal();
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final dayOf = DateTime(local.year, local.month, local.day);
-  final daysAgo = today.difference(dayOf).inDays;
-  final hh = local.hour.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  if (daysAgo == 0) return '$hh:$mm';
-  if (daysAgo == 1) return 'أمس $hh:$mm';
-  final mo = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  if (local.year == now.year) return '$mo-$d  $hh:$mm';
-  return '${local.year}-$mo-$d  $hh:$mm';
-}
-
-/// Full timestamp for the detail sheet's KV block. Same UTC-aware
-/// parsing as [_humanizeTimestamp].
-String? _exactTimestamp(String? iso) {
-  final parsed = _parseBackendIso(iso);
-  if (parsed == null) {
-    if (iso == null || iso.isEmpty) return null;
-    return iso;
-  }
-  final local = parsed.toLocal();
-  final y = local.year.toString().padLeft(4, '0');
-  final mo = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  final hh = local.hour.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  final ss = local.second.toString().padLeft(2, '0');
-  return '$y-$mo-$d  $hh:$mm:$ss';
-}
+/// v97: thin wrappers around the shared parser in
+/// `core/utils/backend_time.dart`. The actual UTC-aware logic lives
+/// there so Home, Notifications, Device Detail, Support, and Account
+/// all render backend timestamps consistently. Keeping the
+/// `_humanize…` / `_exact…` names here makes the call sites in this
+/// screen unchanged.
+String _humanizeTimestamp(String? iso) => formatBackendRelative(iso);
+String? _exactTimestamp(String? iso) => formatBackendExact(iso);
