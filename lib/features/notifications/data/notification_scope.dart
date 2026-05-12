@@ -31,18 +31,35 @@ String notificationScopeIntro(NotificationScope s) {
 
 /// Classify a single notification into one of the two tabs.
 ///
-/// Strategy:
-///   * Score each notification by checking its `event_type`,
-///     `source_type`, `title`, and `message` against keyword sets.
-///   * Energy keywords win in any tie — they're the more specific
-///     signal, and the only ones we want to never mis-route.
-///   * If neither set matches, default to [NotificationScope.app] as
-///     instructed in the v91 spec ("default to App notifications unless
-///     it clearly belongs to Energy/Loads").
+/// Strategy (v96):
+///   1. **Trust the backend's structured signal first.** Backend v43
+///      stamps every mirrored energy/load/solar/weather notification
+///      with `source_type = "energy"`. When that field is present, we
+///      route to the Energy tab immediately — no keyword matching, no
+///      ambiguity.
+///   2. As a second structured fallback, route by `event_type` against
+///      the v43 whitelist (`battery_status`, `load_alert`,
+///      `weather_alert`, …) so a clipped or missing `source_type`
+///      still lands the notification on the right tab.
+///   3. Only when neither structured signal is present do we fall back
+///      to the v91/v92/v94 keyword scan over event_type / source_type
+///      / title / message.
+///   4. If nothing matches at all, default to [NotificationScope.app]
+///      as instructed in the v91 spec ("default to App notifications
+///      unless it clearly belongs to Energy/Loads").
 NotificationScope classifyNotification(AppNotification n) {
+  // (1) backend-structured signal — source_type=energy from v43.
+  final src = n.sourceType.toLowerCase().trim();
+  if (src == 'energy') return NotificationScope.energy;
+
+  // (2) backend-structured signal — known v43 event_type whitelist.
+  final ev = n.eventType.toLowerCase().trim();
+  if (_v43EnergyEventTypes.contains(ev)) return NotificationScope.energy;
+
+  // (3) keyword fallback (preserved from v91/v92/v94).
   final fields = <String>[
-    n.eventType.toLowerCase(),
-    n.sourceType.toLowerCase(),
+    ev,
+    src,
     n.title.toLowerCase(),
     n.message.toLowerCase(),
   ];
@@ -59,8 +76,31 @@ NotificationScope classifyNotification(AppNotification n) {
 
   if (anyContains(_energyKeywords)) return NotificationScope.energy;
   if (anyContains(_appKeywords)) return NotificationScope.app;
+  // (4) safe default — App tab.
   return NotificationScope.app;
 }
+
+/// v96: machine-readable energy event_type values the backend (v43+)
+/// stamps onto mirrored energy notifications. An exact (case-insensitive,
+/// trimmed) match here routes the notification to the Energy tab even
+/// when the upstream `source_type` field is empty or unexpected.
+const Set<String> _v43EnergyEventTypes = {
+  'battery_status',
+  'battery_warning',
+  'load_alert',
+  'load_recommendation',
+  'solar_status',
+  'solar_surplus',
+  'weather_alert',
+  'daily_report',
+  'periodic_day',
+  'periodic_night',
+  'pre_sunset',
+  'night_discharge',
+  'grid_status',
+  'inverter_status',
+  'energy_status_change',
+};
 
 /// Coarse category inside the Energy tab — drives the v92 local filter
 /// chips (الكل / البطارية / الأحمال / الشمس والطقس / التقارير).

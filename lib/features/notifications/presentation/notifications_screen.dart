@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/state/app_session.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
@@ -16,15 +19,24 @@ import '../data/notification_scope.dart';
 import '../state/notifications_controller.dart';
 
 /// Real read-only feed backed by `GET /api/mobile/notifications`.
-/// Mark-read writes go through the backend; UI never marks locally
-/// without a server-confirmed response.
 ///
-/// v54 polish:
-///   * AppBar refresh button with snackbar feedback.
-///   * Local "الكل / غير المقروء" filter pills (client-side only).
-///   * Calmer humanized timestamps (today → `HH:mm`, yesterday →
-///     `أمس HH:mm`, older → `YYYY-MM-DD HH:mm`).
-///   * Stronger unread visual: a left accent bar in addition to the dot.
+/// v96 redesign — "scan first, details on demand":
+///   * AppBar carries title + filter + help + refresh + settings actions
+///     (no big explanation cards live in the main flow anymore).
+///   * Slim sticky-feeling header: scope tabs + 1-line unread summary
+///     row + (only on Energy) one horizontal category chip strip.
+///   * Compact list tiles: badge + 1-line title + 1-line summary + short
+///     time + tiny unread dot. Tap → full-detail BottomSheet.
+///   * Read/unread filter and category filter live in a BottomSheet
+///     opened from the AppBar — no permanent filter bars on screen.
+///
+/// All long copy (the v92 hero card, the "push notifications coming
+/// later" note, and the scope intro paragraph) moved into the
+/// help BottomSheet so the main scroll stays light.
+///
+/// Mark-read writes still go through the backend; the UI never marks
+/// locally without a server-confirmed response. The 10-second silent
+/// poller from v96 is preserved so the feed stays live without flicker.
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -36,24 +48,48 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _unreadOnly = false;
 
-  /// v91: which top-level tab is selected. Defaults to App so the feed
-  /// opens on the section that's most likely to need attention day-to-day.
+  /// Which top-level tab is selected. Defaults to App so the feed opens
+  /// on the section that's most likely to need attention day-to-day.
   NotificationScope _scope = NotificationScope.app;
 
-  /// v92: local category filter inside the Energy tab. Only meaningful
-  /// when [_scope] is [NotificationScope.energy].
+  /// Local category filter inside the Energy tab.
   EnergyCategory _energyCategory = EnergyCategory.all;
 
-  /// v94b: tracks whether the user has explicitly picked a tab during
-  /// this screen session. Once `true`, [_maybeAutoSwitchScope] is a
-  /// no-op so we never override a deliberate choice — this also
-  /// prevents tab-switch loops after pull-to-refresh.
+  /// Once `true`, the smart auto-jump is disabled — we never override a
+  /// deliberate tab choice.
   bool _userPickedScope = false;
 
-  /// v94b: belt-and-suspenders alongside [_userPickedScope]. Set to
-  /// `true` once the smart auto-switch fires, so subsequent rebuilds
-  /// (filter taps, mark-read updates) can't trigger a second auto-jump.
+  /// Belt-and-suspenders alongside [_userPickedScope]. Set to `true`
+  /// after the first auto-jump fires.
   bool _autoSwitched = false;
+
+  /// 10-second auto-refresh polling cadence (v96).
+  static const Duration _pollInterval = Duration(seconds: 10);
+
+  /// Single Timer guarded by [_pollTimer == null] so screen rebuilds
+  /// can never accidentally start a second poller.
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pollTimer = Timer.periodic(_pollInterval, _tick);
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    super.dispose();
+  }
+
+  void _tick(Timer _) {
+    if (!mounted) return;
+    final current = ref.read(notificationsControllerProvider).valueOrNull;
+    if (current == null) return;
+    if (current.isLoadingMore || current.isMarkingAll) return;
+    ref.read(notificationsControllerProvider.notifier).silentRefresh();
+  }
 
   void _onScopePicked(NotificationScope s) {
     setState(() {
@@ -62,9 +98,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     });
   }
 
-  /// v94b: if the current scope is empty but the other scope has items,
-  /// jump to the populated tab — but only on the **first** data load
-  /// of this screen session, before the user has touched a tab.
+  /// If the current scope is empty but the other has items, jump to the
+  /// populated tab — but only on the first load of this session.
   void _maybeAutoSwitchScope(NotificationsFeedState state) {
     if (_userPickedScope || _autoSwitched) return;
     var appCount = 0;
@@ -77,9 +112,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       }
     }
     NotificationScope? target;
-    if (_scope == NotificationScope.app &&
-        appCount == 0 &&
-        energyCount > 0) {
+    if (_scope == NotificationScope.app && appCount == 0 && energyCount > 0) {
       target = NotificationScope.energy;
     } else if (_scope == NotificationScope.energy &&
         energyCount == 0 &&
@@ -87,7 +120,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       target = NotificationScope.app;
     }
     if (target == null) return;
-    // Defer the setState — we're inside the build phase here.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
@@ -97,16 +129,141 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     });
   }
 
+  // ── Sheet openers ──────────────────────────────────────────────────
+
+  Future<void> _openHelpSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppTheme.surface,
+      builder: (_) => const _HelpSheet(),
+    );
+  }
+
+  Future<void> _openFilterSheet() async {
+    final result = await showModalBottomSheet<_FilterResult>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppTheme.surface,
+      builder: (_) => _FilterSheet(
+        scope: _scope,
+        unreadOnly: _unreadOnly,
+        energyCategory: _energyCategory,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _unreadOnly = result.unreadOnly;
+      _energyCategory = result.energyCategory;
+    });
+  }
+
+  Future<void> _openDetailSheet(AppNotification n) async {
+    // v96: resolve the profile timezone so the detail sheet can show
+    // it honestly. The notification times themselves are converted via
+    // the device local TZ (see `_humanizeTimestamp` docs for why), but
+    // surfacing the profile string lets the user verify what the
+    // system thinks their zone is.
+    final userTimezone =
+        ref.read(appSessionProvider).user?.timezone ?? '';
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppTheme.surface,
+      builder: (_) => _DetailSheet(
+        notification: n,
+        userTimezone: userTimezone,
+        onMarkRead: () => _runMarkOne(n.id),
+      ),
+    );
+  }
+
+  // ── Mark-read actions ──────────────────────────────────────────────
+
+  Future<void> _runMarkOne(int id) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(notificationsControllerProvider.notifier)
+          .markRead(id);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('تعذّر التحديث: $e')));
+    }
+  }
+
+  Future<void> _runMarkAll() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final changed = await ref
+          .read(notificationsControllerProvider.notifier)
+          .markAllRead();
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+          changed > 0
+              ? 'تم تعليم $changed إشعاراً كمقروء.'
+              : 'لا توجد إشعارات غير مقروءة.',
+        ),
+      ));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('تعذّر التحديث: $e')));
+    }
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final feed = ref.watch(notificationsControllerProvider);
+    final filtersActive =
+        _unreadOnly || (_scope == NotificationScope.energy &&
+            _energyCategory != EnergyCategory.all);
 
     return Scaffold(
       backgroundColor: AppTheme.softBg,
       appBar: AppBar(
         title: const Text('الإشعارات'),
         actions: [
-          // v87: settings shortcut — opens the notification-settings editor.
+          IconButton(
+            tooltip: 'تصفية',
+            icon: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.filter_list),
+                if (filtersActive)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.violet,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: _openFilterSheet,
+          ),
+          IconButton(
+            tooltip: 'شرح',
+            icon: const Icon(Icons.help_outline),
+            onPressed: _openHelpSheet,
+          ),
           IconButton(
             tooltip: 'إعدادات الإشعارات',
             icon: const Icon(Icons.tune),
@@ -136,8 +293,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   .refresh(),
             ),
             data: (state) {
-              // v94b: smart default — auto-jump to the populated scope
-              // on first load. No-op once the user has picked a tab.
               _maybeAutoSwitchScope(state);
               return _FeedBody(
                 state: state,
@@ -145,9 +300,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 unreadOnly: _unreadOnly,
                 energyCategory: _energyCategory,
                 onScopeChanged: _onScopePicked,
-                onFilterChanged: (v) => setState(() => _unreadOnly = v),
                 onEnergyCategoryChanged: (c) =>
                     setState(() => _energyCategory = c),
+                onMarkAll: _runMarkAll,
+                onTileTap: _openDetailSheet,
+                onClearFilters: () => setState(() {
+                  _unreadOnly = false;
+                  _energyCategory = EnergyCategory.all;
+                }),
               );
             },
           ),
@@ -157,6 +317,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 }
 
+// ── Loading / error scroll wrappers ────────────────────────────────────
+
 class _LoadingScroll extends StatelessWidget {
   const _LoadingScroll();
   @override
@@ -164,9 +326,7 @@ class _LoadingScroll extends StatelessWidget {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-      children: const [
-        AppLoading(message: 'جارٍ تحميل الإشعارات...'),
-      ],
+      children: const [AppLoading(message: 'جارٍ تحميل الإشعارات...')],
     );
   }
 }
@@ -181,12 +341,12 @@ class _ErrorScroll extends StatelessWidget {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
-      children: [
-        AppErrorState(error: error, onRetry: onRetry),
-      ],
+      children: [AppErrorState(error: error, onRetry: onRetry)],
     );
   }
 }
+
+// ── Feed body ──────────────────────────────────────────────────────────
 
 class _FeedBody extends ConsumerWidget {
   const _FeedBody({
@@ -195,20 +355,24 @@ class _FeedBody extends ConsumerWidget {
     required this.unreadOnly,
     required this.energyCategory,
     required this.onScopeChanged,
-    required this.onFilterChanged,
     required this.onEnergyCategoryChanged,
+    required this.onMarkAll,
+    required this.onTileTap,
+    required this.onClearFilters,
   });
   final NotificationsFeedState state;
   final NotificationScope scope;
   final bool unreadOnly;
   final EnergyCategory energyCategory;
   final ValueChanged<NotificationScope> onScopeChanged;
-  final ValueChanged<bool> onFilterChanged;
   final ValueChanged<EnergyCategory> onEnergyCategoryChanged;
+  final VoidCallback onMarkAll;
+  final void Function(AppNotification) onTileTap;
+  final VoidCallback onClearFilters;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // v91: partition the flat backend feed into the two scopes first.
+    // Partition the flat backend feed into the two scopes first.
     final appItems = <AppNotification>[];
     final energyItems = <AppNotification>[];
     for (final n in state.items) {
@@ -222,7 +386,6 @@ class _FeedBody extends ConsumerWidget {
     final scopedItems =
         scope == NotificationScope.energy ? energyItems : appItems;
 
-    // v92: local Energy category filter applies only inside the Energy tab.
     final List<AppNotification> categoryFiltered;
     if (scope == NotificationScope.energy &&
         energyCategory != EnergyCategory.all) {
@@ -239,23 +402,17 @@ class _FeedBody extends ConsumerWidget {
         ? categoryFiltered.where((n) => !n.isRead).toList(growable: false)
         : categoryFiltered;
     final hasItems = visible.isNotEmpty;
-    // v94: gate "تحميل المزيد" on actually having items in the current
-    // tab. Previously the button rendered the empty-state widget twice
-    // when `!hasItems && state.hasMore` — that's the "duplicate
-    // placeholder cards" the user saw on real devices.
     final showLoadMore = hasItems && !unreadOnly && state.hasMore;
-    // v94: when this tab is empty, surface an honest hint pointing to
-    // the OTHER tab if it has items there. The empty card itself shows
-    // exactly once (also fixed in itemBuilder below).
     final otherScope = scope == NotificationScope.app
         ? NotificationScope.energy
         : NotificationScope.app;
     final otherScopeItems =
         otherScope == NotificationScope.energy ? energyItems : appItems;
 
-    // v92: build leading widgets eagerly so the layout can differ per
-    // scope. App tab stays simple; Energy tab gets the hero card, the
-    // mobile-alerts readiness note, and the category filter strip.
+    final bool filtersActive = unreadOnly ||
+        (scope == NotificationScope.energy &&
+            energyCategory != EnergyCategory.all);
+
     final leading = <Widget>[
       _ScopeTabs(
         scope: scope,
@@ -263,52 +420,56 @@ class _FeedBody extends ConsumerWidget {
         energyUnread: energyItems.where((n) => !n.isRead).length,
         onChanged: onScopeChanged,
       ),
-      _HeaderCard(
+      const SizedBox(height: 10),
+      _CompactSummaryBar(
         unreadCount: unreadInScope,
         isMarkingAll: state.isMarkingAll,
         onMarkAll: state.unreadCount == 0 || state.isMarkingAll
             ? null
-            : () => _runMarkAll(context, ref),
+            : onMarkAll,
       ),
-      if (scope == NotificationScope.energy)
-        _EnergyHeroCard(latestEnergyItem: energyItems.firstOrNull),
-      _ScopeIntro(scope: scope),
-      if (scope == NotificationScope.energy)
-        const _MobileAlertsReadinessCard(),
-      if (scope == NotificationScope.energy)
-        const _FilterSectionLabel(label: 'تصفية الفئة'),
-      if (scope == NotificationScope.energy)
-        _EnergyCategoryFilters(
+      if (scope == NotificationScope.energy) ...[
+        const SizedBox(height: 8),
+        _CompactCategoryStrip(
           selected: energyCategory,
           onChanged: onEnergyCategoryChanged,
         ),
-      const _FilterSectionLabel(label: 'حالة القراءة'),
-      _FilterRow(
-        unreadOnly: unreadOnly,
-        unreadCount: unreadInScope,
-        onChanged: onFilterChanged,
-      ),
+      ],
+      if (filtersActive) ...[
+        const SizedBox(height: 6),
+        _ActiveFiltersChip(
+          unreadOnly: unreadOnly,
+          energyCategory:
+              scope == NotificationScope.energy ? energyCategory : null,
+          onClear: onClearFilters,
+        ),
+      ],
+      const SizedBox(height: 10),
     ];
 
     final headerCount = leading.length;
 
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       itemCount: headerCount +
           (hasItems ? visible.length : 1) +
           (showLoadMore ? 1 : 0),
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      separatorBuilder: (_, index) {
+        // No spacer between leading widgets (they include their own
+        // SizedBox padding); only between list rows.
+        if (index < headerCount - 1) return const SizedBox.shrink();
+        return const SizedBox(height: 8);
+      },
       itemBuilder: (context, index) {
         if (index < headerCount) return leading[index];
-        // v94: only one extra index ever exists post-header — either
-        // the single empty-state card, or the items + optional
-        // load-more. The previous logic mistakenly returned the empty
-        // card for every post-header index when `!hasItems && hasMore`.
         if (!hasItems) {
           return _EmptyStateCard(
             scope: scope,
             unreadOnly: unreadOnly,
+            energyCategory: scope == NotificationScope.energy
+                ? energyCategory
+                : null,
             otherScopeUnread:
                 otherScopeItems.where((n) => !n.isRead).length,
             otherScopeTotal: otherScopeItems.length,
@@ -320,12 +481,10 @@ class _FeedBody extends ConsumerWidget {
         final listIndex = index - headerCount;
         if (listIndex < visible.length) {
           final n = visible[listIndex];
-          return _NotificationTile(
+          return _CompactTile(
             notification: n,
             energyAccent: scope == NotificationScope.energy,
-            onTap: n.isRead
-                ? null
-                : () => _runMarkOne(context, ref, n.id),
+            onTap: () => onTileTap(n),
           );
         }
         return _LoadMoreButton(
@@ -339,50 +498,15 @@ class _FeedBody extends ConsumerWidget {
       },
     );
   }
-
-  // v94: empty-state copy moved into the `_EmptyStateCard` widget — that
-  // widget knows both scopes' counts so it can suggest jumping tabs.
-
-  Future<void> _runMarkOne(
-    BuildContext context,
-    WidgetRef ref,
-    int id,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ref
-          .read(notificationsControllerProvider.notifier)
-          .markRead(id);
-    } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('تعذّر التحديث: $e')));
-    }
-  }
-
-  Future<void> _runMarkAll(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final changed = await ref
-          .read(notificationsControllerProvider.notifier)
-          .markAllRead();
-      messenger.showSnackBar(SnackBar(
-        content: Text(
-          changed > 0
-              ? 'تم تعليم $changed إشعاراً كمقروء.'
-              : 'لا توجد إشعارات غير مقروءة.',
-        ),
-      ));
-    } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('تعذّر التحديث: $e')));
-    }
-  }
 }
 
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({
+// ── Compact summary bar ────────────────────────────────────────────────
+
+/// Single-row replacement for the old big `_HeaderCard`. Renders the
+/// unread count (or a green "all read" tick) and a tiny inline
+/// "اقرأ الكل" link when there's work to do.
+class _CompactSummaryBar extends StatelessWidget {
+  const _CompactSummaryBar({
     required this.unreadCount,
     required this.isMarkingAll,
     required this.onMarkAll,
@@ -395,64 +519,66 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasUnread = unreadCount > 0;
-    return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.line),
+      ),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: hasUnread ? AppTheme.indigoSoft : AppTheme.softBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              hasUnread
-                  ? Icons.notifications_active_outlined
-                  : Icons.notifications_none_outlined,
-              size: 20,
-              color: hasUnread ? AppTheme.indigoPrimary : AppTheme.faintMuted,
-            ),
+          Icon(
+            hasUnread
+                ? Icons.notifications_active_outlined
+                : Icons.check_circle_outline,
+            size: 16,
+            color: hasUnread ? AppTheme.indigoPrimary : AppTheme.success,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hasUnread
-                      ? '$unreadCount إشعاراً غير مقروء'
-                      : 'كل الإشعارات مقروءة',
-                  style: const TextStyle(
-                    color: AppTheme.ink,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'يتم تحديث القائمة من خادم Zynavolt مباشرة.',
-                  style: TextStyle(
-                    color: AppTheme.faintMuted,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+            child: Text(
+              hasUnread
+                  ? '$unreadCount غير مقروء'
+                  : 'كل الإشعارات مقروءة',
+              style: const TextStyle(
+                color: AppTheme.ink,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           if (hasUnread)
-            TextButton.icon(
-              onPressed: onMarkAll,
-              icon: isMarkingAll
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.done_all, size: 16),
-              label: const Text('اقرأ الكل'),
+            InkWell(
+              onTap: onMarkAll,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isMarkingAll)
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      const Icon(Icons.done_all,
+                          size: 14, color: AppTheme.indigoPrimary),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'اقرأ الكل',
+                      style: TextStyle(
+                        color: AppTheme.indigoPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
         ],
       ),
@@ -460,66 +586,51 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
-/// v94: tiny uppercase-style label that sits above each filter row so
-/// the user knows which filter scope each pill cluster belongs to —
-/// removes the "two `الكل` chips next to each other with no context"
-/// confusion the previous layout had.
-class _FilterSectionLabel extends StatelessWidget {
-  const _FilterSectionLabel({required this.label});
-  final String label;
+// ── Compact horizontal category strip (Energy tab only) ────────────────
+
+class _CompactCategoryStrip extends StatelessWidget {
+  const _CompactCategoryStrip({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final EnergyCategory selected;
+  final ValueChanged<EnergyCategory> onChanged;
+
+  static const _categories = [
+    EnergyCategory.all,
+    EnergyCategory.battery,
+    EnergyCategory.load,
+    EnergyCategory.sunWeather,
+    EnergyCategory.reports,
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(start: 4, top: 4),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: AppTheme.faintMuted,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.4,
-        ),
+    return SizedBox(
+      height: 32,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        itemCount: _categories.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (_, i) {
+          final c = _categories[i];
+          return _MicroPill(
+            label: energyCategoryLabel(c),
+            selected: c == selected,
+            onTap: () => onChanged(c),
+          );
+        },
       ),
     );
   }
 }
 
-class _FilterRow extends StatelessWidget {
-  const _FilterRow({
-    required this.unreadOnly,
-    required this.unreadCount,
-    required this.onChanged,
-  });
-
-  final bool unreadOnly;
-  final int unreadCount;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _Pill(
-          label: 'الكل',
-          selected: !unreadOnly,
-          onTap: () => onChanged(false),
-        ),
-        const SizedBox(width: 8),
-        _Pill(
-          label: unreadCount > 0
-              ? 'غير المقروء ($unreadCount)'
-              : 'غير المقروء',
-          selected: unreadOnly,
-          onTap: () => onChanged(true),
-        ),
-      ],
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({
+/// Smaller, slimmer pill — used in the compact category strip and the
+/// filter sheet. Visually lighter than the v94 `_Pill`.
+class _MicroPill extends StatelessWidget {
+  const _MicroPill({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -536,8 +647,6 @@ class _Pill extends StatelessWidget {
     final border = selected
         ? AppTheme.indigoPrimary
         : AppTheme.indigoBright.withValues(alpha: 0.30);
-    // v72: AnimatedContainer + AnimatedDefaultTextStyle so toggling the
-    // "الكل / غير المقروء" filter glides instead of snapping.
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
@@ -545,23 +654,22 @@ class _Pill extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: border),
           ),
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
+          child: Text(
+            label,
             style: TextStyle(
               color: fg,
-              fontSize: 12,
+              fontSize: 11.5,
               fontWeight: FontWeight.w800,
             ),
-            child: Text(label),
           ),
         ),
       ),
@@ -569,8 +677,287 @@ class _Pill extends StatelessWidget {
   }
 }
 
-/// v91: segmented control for the two notification scopes. The unread
-/// dot only renders when there's at least one unread in that bucket.
+/// Tiny "filters active — clear" hint that surfaces when read-state or
+/// category filters are narrowing the visible list. Tapping it resets
+/// every filter at once so the user is never stuck with an empty view
+/// because they forgot a chip is still on.
+class _ActiveFiltersChip extends StatelessWidget {
+  const _ActiveFiltersChip({
+    required this.unreadOnly,
+    required this.energyCategory,
+    required this.onClear,
+  });
+
+  final bool unreadOnly;
+  final EnergyCategory? energyCategory;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = <String>[
+      if (unreadOnly) 'غير مقروء',
+      if (energyCategory != null && energyCategory != EnergyCategory.all)
+        energyCategoryLabel(energyCategory!),
+    ];
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onClear,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppTheme.violet.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: AppTheme.violet.withValues(alpha: 0.30),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.filter_alt_outlined,
+                  size: 14, color: AppTheme.violet),
+              const SizedBox(width: 6),
+              Text(
+                'تصفية: ${parts.join(' • ')}',
+                style: const TextStyle(
+                  color: AppTheme.violet,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.close, size: 13, color: AppTheme.violet),
+              const SizedBox(width: 2),
+              const Text(
+                'مسح',
+                style: TextStyle(
+                  color: AppTheme.violet,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Compact notification tile ──────────────────────────────────────────
+
+/// Much shorter notification card — the v96 redesign's centrepiece.
+/// One-line title + one-line summary + short time + tiny unread dot.
+/// Tap opens [_DetailSheet] for the full body.
+class _CompactTile extends StatelessWidget {
+  const _CompactTile({
+    required this.notification,
+    required this.onTap,
+    this.energyAccent = false,
+  });
+
+  final AppNotification notification;
+  final VoidCallback onTap;
+  final bool energyAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = notification;
+    final unread = !n.isRead;
+    final title = n.title.isNotEmpty ? n.title : '—';
+    final time = _humanizeTimestamp(n.createdAt);
+
+    final Color accentColor;
+    if (unread) {
+      accentColor = AppTheme.violet;
+    } else if (energyAccent) {
+      accentColor = AppTheme.emerald;
+    } else {
+      accentColor = Colors.transparent;
+    }
+
+    final Color iconBg;
+    final Color iconColor;
+    final IconData icon;
+    if (energyAccent) {
+      icon = _energyIconFor(n);
+      iconBg = AppTheme.emerald.withValues(alpha: 0.12);
+      iconColor = AppTheme.emerald;
+    } else {
+      icon = _appIconFor(n);
+      iconBg = AppTheme.indigoSoft;
+      iconColor = AppTheme.indigoPrimary;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Compact left accent stripe — only paints when meaningful.
+              Container(
+                width: 3,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(AppTheme.radiusCard),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: AppCard(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 10),
+                  background:
+                      unread ? const Color(0xFFFAF8FF) : AppTheme.surface,
+                  borderColor:
+                      unread ? const Color(0xFFE9E2FF) : AppTheme.line,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: iconBg,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Icon(icon, size: 16, color: iconColor),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppTheme.ink,
+                                fontSize: 13,
+                                fontWeight: unread
+                                    ? FontWeight.w900
+                                    : FontWeight.w700,
+                                height: 1.3,
+                              ),
+                            ),
+                            if (n.message.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _summary(n.message),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppTheme.softInk,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            time,
+                            style: const TextStyle(
+                              color: AppTheme.faintMuted,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          if (unread)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppTheme.violet,
+                                shape: BoxShape.circle,
+                              ),
+                            )
+                          else
+                            const SizedBox(width: 8, height: 8),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Collapse multi-line backend bodies into a single line for the list.
+String _summary(String message) {
+  final flat = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return flat;
+}
+
+/// Pick a coarse icon for an Energy-tab tile based on the energy
+/// sub-category. Used only for the compact icon badge in the list — the
+/// full event_type / source_type is shown in the detail sheet.
+IconData _energyIconFor(AppNotification n) {
+  switch (classifyEnergyCategory(n)) {
+    case EnergyCategory.battery:
+      return Icons.battery_charging_full_outlined;
+    case EnergyCategory.load:
+      return Icons.bolt_outlined;
+    case EnergyCategory.sunWeather:
+      return Icons.wb_sunny_outlined;
+    case EnergyCategory.reports:
+      return Icons.summarize_outlined;
+    case EnergyCategory.other:
+    case EnergyCategory.all:
+      return Icons.bolt_outlined;
+  }
+}
+
+IconData _appIconFor(AppNotification n) {
+  final src = n.sourceType.toLowerCase();
+  final ev = n.eventType.toLowerCase();
+  if (src.contains('support') ||
+      ev.contains('support') ||
+      ev.contains('ticket') ||
+      ev.contains('case')) {
+    return Icons.support_agent_outlined;
+  }
+  if (src.contains('account') ||
+      ev.contains('account') ||
+      ev.contains('subscription') ||
+      ev.contains('plan')) {
+    return Icons.person_outline;
+  }
+  if (src.contains('device') || ev.contains('device')) {
+    return Icons.solar_power_outlined;
+  }
+  return Icons.notifications_none_outlined;
+}
+
+// ── Scope tabs (segmented control) ─────────────────────────────────────
+
 class _ScopeTabs extends StatelessWidget {
   const _ScopeTabs({
     required this.scope,
@@ -590,7 +977,7 @@ class _ScopeTabs extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.line),
       ),
       child: Row(
@@ -608,7 +995,13 @@ class _ScopeTabs extends StatelessWidget {
           Expanded(
             child: _ScopeTab(
               icon: Icons.bolt_outlined,
-              label: notificationScopeTitle(NotificationScope.energy),
+              // Deliberately shorter than the canonical title from
+              // [notificationScopeTitle] — the full "متابعة الطاقة
+              // والأحمال" gets clipped to "...ولا" once the unread
+              // count badge appears next to it inside the segmented
+              // control. The shorter "الطاقة والأحمال" preserves
+              // meaning and leaves room for a two-digit badge.
+              label: 'الطاقة والأحمال',
               selected: scope == NotificationScope.energy,
               unreadCount: energyUnread,
               onTap: () => onChanged(NotificationScope.energy),
@@ -635,77 +1028,66 @@ class _ScopeTab extends StatelessWidget {
   final int unreadCount;
   final VoidCallback onTap;
 
-  /// v94: vertical layout (icon row on top, label below) so the full
-  /// label is always readable. The unread chip sits next to the icon
-  /// instead of competing with the label for horizontal space — that
-  /// was the root cause of "متابعة الطاقة والأحم..." clipping.
   @override
   Widget build(BuildContext context) {
     final bg = selected ? AppTheme.indigoPrimary : Colors.transparent;
     final fg = selected ? Colors.white : AppTheme.muted;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(9),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 18, color: fg),
-                  if (unreadCount > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? Colors.white
-                            : AppTheme.indigoSoft,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '$unreadCount',
-                        style: const TextStyle(
-                          color: AppTheme.indigoPrimary,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+              Icon(icon, size: 16, color: fg),
+              const SizedBox(width: 6),
+              Flexible(
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                  ),
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ),
+              if (unreadCount > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: selected ? Colors.white : AppTheme.indigoSoft,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$unreadCount',
+                    style: const TextStyle(
+                      color: AppTheme.indigoPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
                     ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 4),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  height: 1.25,
+                  ),
                 ),
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  softWrap: true,
-                  overflow: TextOverflow.visible,
-                ),
-              ),
+              ],
             ],
           ),
         ),
@@ -714,306 +1096,13 @@ class _ScopeTab extends StatelessWidget {
   }
 }
 
-/// v91: one-liner scope intro under the header card. Uses the
-/// scope-specific copy from [notificationScopeIntro].
-class _ScopeIntro extends StatelessWidget {
-  const _ScopeIntro({required this.scope});
-  final NotificationScope scope;
+// ── Empty state ────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    final isEnergy = scope == NotificationScope.energy;
-    final accent =
-        isEnergy ? AppTheme.emerald : AppTheme.indigoPrimary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: accent.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isEnergy ? Icons.bolt_outlined : Icons.info_outline,
-            color: accent,
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              notificationScopeIntro(scope),
-              style: TextStyle(
-                color: accent,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                height: 1.55,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// v92: hero card for the Energy tab. Shows category chips and (if any
-/// energy notifications are loaded) a tiny "آخر تنبيه" preview of the
-/// most recent one. No fake data — purely a summary of the already-
-/// fetched feed.
-class _EnergyHeroCard extends StatelessWidget {
-  const _EnergyHeroCard({required this.latestEnergyItem});
-  final AppNotification? latestEnergyItem;
-
-  @override
-  Widget build(BuildContext context) {
-    final latestTitle = latestEnergyItem?.title.trim();
-    return AppCard(
-      elevated: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppTheme.emerald.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.bolt_outlined,
-                  color: AppTheme.emerald,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'متابعة الطاقة والأحمال',
-                      style: TextStyle(
-                        color: AppTheme.ink,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'هنا تظهر تنبيهات البطارية، الأحمال، الشمس، والفائض.',
-                      style: TextStyle(
-                        color: AppTheme.faintMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: const [
-              _CategoryPill(
-                icon: Icons.battery_charging_full_outlined,
-                label: 'البطارية',
-                tone: AppTheme.emerald,
-              ),
-              _CategoryPill(
-                icon: Icons.bolt_outlined,
-                label: 'الأحمال',
-                tone: AppTheme.indigoPrimary,
-              ),
-              _CategoryPill(
-                icon: Icons.wb_sunny_outlined,
-                label: 'الشمس',
-                tone: AppTheme.warning,
-              ),
-              _CategoryPill(
-                icon: Icons.cloud_outlined,
-                label: 'الطقس',
-                tone: AppTheme.cyan,
-              ),
-              _CategoryPill(
-                icon: Icons.summarize_outlined,
-                label: 'التقرير اليومي',
-                tone: AppTheme.violet,
-              ),
-            ],
-          ),
-          if (latestTitle != null && latestTitle.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppTheme.softBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.line),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.history,
-                      size: 14, color: AppTheme.faintMuted),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'آخر تنبيه: $latestTitle',
-                      style: const TextStyle(
-                        color: AppTheme.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        height: 1.5,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryPill extends StatelessWidget {
-  const _CategoryPill({
-    required this.icon,
-    required this.label,
-    required this.tone,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: tone.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: tone),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: tone,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// v92: honest "push notifications coming later" note. Prevents the user
-/// from assuming they'll receive these alerts on the lock screen.
-class _MobileAlertsReadinessCard extends StatelessWidget {
-  const _MobileAlertsReadinessCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.amber.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.amber.withValues(alpha: 0.30)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Icon(Icons.notifications_paused_outlined,
-              color: AppTheme.amber, size: 16),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'إشعارات الجوال المباشرة ستُفعّل في مرحلة لاحقة. '
-              'حالياً تظهر التنبيهات داخل التطبيق.',
-              style: TextStyle(
-                color: AppTheme.amber,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                height: 1.55,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// v92: local category-filter strip inside the Energy tab. Filters the
-/// already-fetched list client-side via [classifyEnergyCategory] — no
-/// extra backend round-trips.
-class _EnergyCategoryFilters extends StatelessWidget {
-  const _EnergyCategoryFilters({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final EnergyCategory selected;
-  final ValueChanged<EnergyCategory> onChanged;
-
-  static const _categories = [
-    EnergyCategory.all,
-    EnergyCategory.battery,
-    EnergyCategory.load,
-    EnergyCategory.sunWeather,
-    EnergyCategory.reports,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final c in _categories) ...[
-            _Pill(
-              label: energyCategoryLabel(c),
-              selected: c == selected,
-              onTap: () => onChanged(c),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// v94: single, honest empty state. Renders **once** per empty tab and
-/// — when the other tab actually has items — surfaces a jump button so
-/// the user isn't stuck staring at "no notifications" while their feed
-/// sits in the other scope.
 class _EmptyStateCard extends StatelessWidget {
   const _EmptyStateCard({
     required this.scope,
     required this.unreadOnly,
+    required this.energyCategory,
     required this.otherScopeUnread,
     required this.otherScopeTotal,
     required this.onJumpToOther,
@@ -1021,25 +1110,59 @@ class _EmptyStateCard extends StatelessWidget {
 
   final NotificationScope scope;
   final bool unreadOnly;
+
+  /// The active Energy-tab category — used to tailor the empty-state
+  /// copy when a specific filter is on. `null` (or `all`) renders the
+  /// generic Energy empty state.
+  final EnergyCategory? energyCategory;
   final int otherScopeUnread;
   final int otherScopeTotal;
   final VoidCallback? onJumpToOther;
 
   String get _title {
-    if (unreadOnly) return 'لا توجد إشعارات غير مقروءة';
     if (scope == NotificationScope.energy) {
-      return 'لا توجد تنبيهات طاقة أو أحمال حالياً.';
+      switch (energyCategory) {
+        case EnergyCategory.battery:
+          return 'لا توجد تنبيهات للبطارية حالياً.';
+        case EnergyCategory.load:
+          return 'لا توجد تنبيهات للأحمال حالياً.';
+        case EnergyCategory.sunWeather:
+          return 'لا توجد تنبيهات للشمس والطقس حالياً.';
+        case EnergyCategory.reports:
+          return 'لا توجد تقارير طاقة حالياً.';
+        case EnergyCategory.other:
+        case EnergyCategory.all:
+        case null:
+          return 'لا توجد تنبيهات طاقة حالياً.';
+      }
     }
     return 'لا توجد إشعارات تطبيق حالياً.';
   }
 
   String get _subtitle {
-    if (unreadOnly) return 'كل إشعاراتك الحالية في هذا التبويب مقروءة.';
     if (scope == NotificationScope.energy) {
-      return 'عند توفر تنبيهات البطارية أو الأحمال ستظهر هنا.';
+      switch (energyCategory) {
+        case EnergyCategory.battery:
+        case EnergyCategory.load:
+        case EnergyCategory.sunWeather:
+        case EnergyCategory.other:
+          return 'جرّب كل الفئات أو انتظر وصول تنبيه جديد.';
+        case EnergyCategory.reports:
+          return 'جرّب كل الفئات أو انتظر وصول تقرير جديد.';
+        case EnergyCategory.all:
+        case null:
+          return 'ستظهر هنا تنبيهات البطارية، الأحمال، الشمس والطقس '
+              'عند توفرها.';
+      }
     }
-    return 'سيظهر كل إشعار جديد من النظام أو من فريق الدعم هنا.';
+    return 'ستظهر هنا رسائل الدعم، الحساب، المزامنة وحالة التطبيق.';
   }
+
+  /// Additional honest line appended only when the read-state filter
+  /// is hiding rows from the user. Returns `null` when no extra
+  /// explanation is needed.
+  String? get _unreadHint =>
+      unreadOnly ? 'الفلتر الحالي يعرض غير المقروء فقط.' : null;
 
   @override
   Widget build(BuildContext context) {
@@ -1061,11 +1184,42 @@ class _EmptyStateCard extends StatelessWidget {
             title: _title,
             subtitle: _subtitle,
           ),
+          if (_unreadHint != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.violet.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppTheme.violet.withValues(alpha: 0.30),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.filter_alt_outlined,
+                      size: 14, color: AppTheme.violet),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _unreadHint!,
+                      style: const TextStyle(
+                        color: AppTheme.violet,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (hasOther) ...[
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 color: AppTheme.indigoSoft,
                 borderRadius: BorderRadius.circular(AppTheme.radiusCard),
@@ -1077,9 +1231,6 @@ class _EmptyStateCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    // v94b: drop the inline quotes (clearer Arabic),
-                    // and prefer the unread count when there's at least
-                    // one unread item in the other scope.
                     otherScopeUnread > 0
                         ? 'يوجد $otherScopeUnread إشعار في $otherTitle.'
                         : 'يوجد $otherScopeTotal إشعار في $otherTitle.',
@@ -1093,8 +1244,6 @@ class _EmptyStateCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   SizedBox(
                     height: AppTheme.formControlHeight,
-                    // v94b: promoted from TextButton → FilledButton so
-                    // the CTA reads as a real action, not an afterthought.
                     child: FilledButton.icon(
                       onPressed: onJumpToOther,
                       icon: const Icon(Icons.arrow_forward, size: 18),
@@ -1111,179 +1260,7 @@ class _EmptyStateCard extends StatelessWidget {
   }
 }
 
-class _NotificationTile extends StatelessWidget {
-  const _NotificationTile({
-    required this.notification,
-    this.onTap,
-    this.energyAccent = false,
-  });
-
-  final AppNotification notification;
-  final VoidCallback? onTap;
-
-  /// v92: render an emerald left-edge stripe for Energy-tab tiles so the
-  /// reader can scan energy notifications at a glance. Unread items take
-  /// precedence (violet) when both flags would apply.
-  final bool energyAccent;
-
-  @override
-  Widget build(BuildContext context) {
-    final unread = !notification.isRead;
-    final title = notification.title.isNotEmpty ? notification.title : '—';
-    final message = notification.message;
-    final time = _humanizeTimestamp(notification.createdAt);
-    // v65: translate the raw event_type / source_type slug into a
-    // user-facing Arabic chip label. Unknown slugs fall back to the raw
-    // value so the chip never goes blank.
-    final tag = NotificationLabels.chipLabel(
-      eventType: notification.eventType,
-      sourceType: notification.sourceType,
-    );
-
-    final Color accentColor;
-    if (unread) {
-      accentColor = AppTheme.violet;
-    } else if (energyAccent) {
-      accentColor = AppTheme.emerald;
-    } else {
-      accentColor = Colors.transparent;
-    }
-
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // v54: left accent bar — strong visual cue for unread state.
-              // v92: emerald variant when rendered in the Energy tab.
-              Container(
-                width: 4,
-                decoration: BoxDecoration(
-                  color: accentColor,
-                  borderRadius: const BorderRadius.horizontal(
-                    right: Radius.circular(AppTheme.radiusCard),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: AppCard(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
-                  background:
-                      unread ? const Color(0xFFF5F3FF) : AppTheme.surface,
-                  borderColor:
-                      unread ? const Color(0xFFDDD6FE) : AppTheme.line,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (unread)
-                            Container(
-                              width: 8,
-                              height: 8,
-                              margin: const EdgeInsets.only(top: 6, left: 6),
-                              decoration: const BoxDecoration(
-                                color: AppTheme.violet,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: TextStyle(
-                                color: AppTheme.ink,
-                                fontSize: 13.5,
-                                fontWeight:
-                                    unread ? FontWeight.w900 : FontWeight.w700,
-                                height: 1.45,
-                              ),
-                            ),
-                          ),
-                          if (tag.isNotEmpty) _Chip(text: tag),
-                        ],
-                      ),
-                      if (message.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          message,
-                          style: const TextStyle(
-                            color: AppTheme.softInk,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            height: 1.55,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(Icons.schedule,
-                              size: 12, color: AppTheme.faintMuted),
-                          const SizedBox(width: 4),
-                          Text(
-                            time,
-                            style: const TextStyle(
-                              color: AppTheme.faintMuted,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Spacer(),
-                          if (!unread)
-                            const Text(
-                              'مقروء',
-                              style: TextStyle(
-                                color: AppTheme.success,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsetsDirectional.only(start: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppTheme.indigoPrimary,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
-        ),
-      ),
-    );
-  }
-}
+// ── Load more button ───────────────────────────────────────────────────
 
 class _LoadMoreButton extends StatelessWidget {
   const _LoadMoreButton({required this.isLoading, required this.onPressed});
@@ -1312,21 +1289,651 @@ class _LoadMoreButton extends StatelessWidget {
   }
 }
 
-/// Calm Arabic-friendly humanizer for server ISO timestamps.
+// ── Bottom sheets ──────────────────────────────────────────────────────
+
+/// "Scan first, details on demand" — tap a [_CompactTile] and the full
+/// title + message body + technical fields render here. Mark-as-read is
+/// surfaced as the primary action when the row is unread.
+class _DetailSheet extends StatelessWidget {
+  const _DetailSheet({
+    required this.notification,
+    required this.userTimezone,
+    required this.onMarkRead,
+  });
+
+  final AppNotification notification;
+
+  /// Profile timezone string (e.g. `Asia/Hebron`). Empty when the user
+  /// has no profile TZ configured. Shown in the KV block for honesty —
+  /// the actual time conversion path still goes through device local
+  /// (see `_humanizeTimestamp` docs).
+  final String userTimezone;
+  final Future<void> Function() onMarkRead;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = notification;
+    final unread = !n.isRead;
+    final tag = NotificationLabels.chipLabel(
+      eventType: n.eventType,
+      sourceType: n.sourceType,
+    );
+    final isEnergy = n.sourceType.toLowerCase() == 'energy' ||
+        classifyNotification(n) == NotificationScope.energy;
+    final accent =
+        isEnergy ? AppTheme.emerald : AppTheme.indigoPrimary;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.82,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isEnergy
+                          ? _energyIconFor(n)
+                          : _appIconFor(n),
+                      size: 18,
+                      color: accent,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (tag.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color:
+                                  accent.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              tag,
+                              style: TextStyle(
+                                color: accent,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isEnergy
+                              ? 'متابعة الطاقة والأحمال'
+                              : 'إشعارات التطبيق',
+                          style: const TextStyle(
+                            color: AppTheme.faintMuted,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _StatusPill(unread: unread),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SelectableText(
+                        n.title.isNotEmpty ? n.title : '—',
+                        style: const TextStyle(
+                          color: AppTheme.ink,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          height: 1.4,
+                        ),
+                      ),
+                      if (n.message.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          n.message,
+                          style: const TextStyle(
+                            color: AppTheme.softInk,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w500,
+                            height: 1.65,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      _DetailKvBlock(
+                        notification: n,
+                        userTimezone: userTimezone,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  if (unread)
+                    Expanded(
+                      child: SizedBox(
+                        height: AppTheme.formControlHeight,
+                        child: FilledButton.icon(
+                          onPressed: () async {
+                            await onMarkRead();
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop();
+                          },
+                          icon: const Icon(Icons.done, size: 18),
+                          label: const Text('تحديد كمقروء'),
+                        ),
+                      ),
+                    ),
+                  if (unread) const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: AppTheme.formControlHeight,
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, size: 18),
+                        label: const Text('إغلاق'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.unread});
+  final bool unread;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = unread ? AppTheme.violet : AppTheme.success;
+    final label = unread ? 'غير مقروء' : 'مقروء';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tone.withValues(alpha: 0.30)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: tone,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailKvBlock extends StatelessWidget {
+  const _DetailKvBlock({
+    required this.notification,
+    required this.userTimezone,
+  });
+
+  final AppNotification notification;
+  final String userTimezone;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = notification;
+    final created = _exactTimestamp(n.createdAt);
+    final read = _exactTimestamp(n.readAt);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.softBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.line),
+      ),
+      child: Column(
+        children: [
+          _KvRow(label: 'المعرّف', value: '#${n.id}'),
+          if (n.eventType.isNotEmpty)
+            _KvRow(label: 'نوع الحدث', value: n.eventType),
+          if (n.sourceType.isNotEmpty)
+            _KvRow(label: 'المصدر', value: n.sourceType),
+          if (created != null)
+            _KvRow(label: 'وقت الإنشاء', value: created),
+          if (read != null) _KvRow(label: 'وقت القراءة', value: read),
+          _KvRow(
+            label: 'الحالة',
+            value: n.status.isNotEmpty ? n.status : '—',
+          ),
+          // v96 fix C: surface the profile timezone honestly. Lets the
+          // user verify what zone the system thinks they're in.
+          if (userTimezone.isNotEmpty)
+            _KvRow(label: 'نطاق الملف الشخصي', value: userTimezone),
+        ],
+      ),
+    );
+  }
+}
+
+class _KvRow extends StatelessWidget {
+  const _KvRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.muted,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                color: AppTheme.ink,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Filter sheet — read-state + (when scope=energy) category. Returned
+/// via Navigator.pop so the caller can apply the new selection in one
+/// `setState` call.
+class _FilterResult {
+  const _FilterResult({
+    required this.unreadOnly,
+    required this.energyCategory,
+  });
+  final bool unreadOnly;
+  final EnergyCategory energyCategory;
+}
+
+class _FilterSheet extends StatefulWidget {
+  const _FilterSheet({
+    required this.scope,
+    required this.unreadOnly,
+    required this.energyCategory,
+  });
+
+  final NotificationScope scope;
+  final bool unreadOnly;
+  final EnergyCategory energyCategory;
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  late bool _unreadOnly;
+  late EnergyCategory _energyCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    _unreadOnly = widget.unreadOnly;
+    _energyCategory = widget.energyCategory;
+  }
+
+  void _reset() {
+    setState(() {
+      _unreadOnly = false;
+      _energyCategory = EnergyCategory.all;
+    });
+  }
+
+  void _apply() {
+    Navigator.of(context).pop(
+      _FilterResult(
+        unreadOnly: _unreadOnly,
+        energyCategory: _energyCategory,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnergy = widget.scope == NotificationScope.energy;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'تصفية الإشعارات',
+                    style: TextStyle(
+                      color: AppTheme.ink,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _reset,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('مسح'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const _SheetSectionLabel(label: 'حالة القراءة'),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _MicroPill(
+                  label: 'الكل',
+                  selected: !_unreadOnly,
+                  onTap: () => setState(() => _unreadOnly = false),
+                ),
+                _MicroPill(
+                  label: 'غير المقروء',
+                  selected: _unreadOnly,
+                  onTap: () => setState(() => _unreadOnly = true),
+                ),
+              ],
+            ),
+            if (isEnergy) ...[
+              const SizedBox(height: 14),
+              const _SheetSectionLabel(label: 'فئة الطاقة'),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final c in const [
+                    EnergyCategory.all,
+                    EnergyCategory.battery,
+                    EnergyCategory.load,
+                    EnergyCategory.sunWeather,
+                    EnergyCategory.reports,
+                  ])
+                    _MicroPill(
+                      label: energyCategoryLabel(c),
+                      selected: _energyCategory == c,
+                      onTap: () => setState(() => _energyCategory = c),
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              height: AppTheme.formControlHeight,
+              child: FilledButton.icon(
+                onPressed: _apply,
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('تطبيق'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetSectionLabel extends StatelessWidget {
+  const _SheetSectionLabel({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 2),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppTheme.faintMuted,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+}
+
+/// Help sheet — keeps the v92 explanation text accessible without
+/// pushing it into the main scroll. Includes the energy hero summary,
+/// the "push notifications coming later" honesty note, and a brief
+/// scope reminder.
+class _HelpSheet extends StatelessWidget {
+  const _HelpSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'كيف يعمل تبويب الإشعارات',
+                  style: TextStyle(
+                    color: AppTheme.ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _HelpBlock(
+                  icon: Icons.notifications_outlined,
+                  tone: AppTheme.indigoPrimary,
+                  title: notificationScopeTitle(NotificationScope.app),
+                  body: notificationScopeIntro(NotificationScope.app),
+                ),
+                const SizedBox(height: 10),
+                _HelpBlock(
+                  icon: Icons.bolt_outlined,
+                  tone: AppTheme.emerald,
+                  title: notificationScopeTitle(NotificationScope.energy),
+                  body: 'تظهر هنا تنبيهات الطاقة والأحمال التي يحفظها '
+                      'النظام: البطارية، الأحمال، الشمس، الفائض، '
+                      'والتقارير الدورية.',
+                ),
+                const SizedBox(height: 10),
+                _HelpBlock(
+                  icon: Icons.notifications_paused_outlined,
+                  tone: AppTheme.amber,
+                  title: 'إشعارات الجوال المباشرة',
+                  body: 'إشعارات الجوال المباشرة ستُفعّل في مرحلة لاحقة. '
+                      'حالياً تظهر التنبيهات داخل التطبيق فقط، وتُحدَّث '
+                      'كل عشر ثوانٍ تلقائياً أثناء فتح هذه الشاشة.',
+                ),
+                const SizedBox(height: 10),
+                _HelpBlock(
+                  icon: Icons.schedule,
+                  tone: AppTheme.faintMuted,
+                  title: 'النطاق الزمني للتنبيهات',
+                  body: 'تُحفظ أوقات التنبيهات على الخادم بصيغة UTC، '
+                      'وتُعرض على هذه الشاشة بحسب توقيت جهازك. '
+                      'إذا اخترتَ نطاقاً زمنياً مختلفاً في ملفك الشخصي '
+                      'فقد يختلف العرض حتى تتوفر تحويلات النطاقات '
+                      'الزمنية الكاملة في تحديث لاحق.',
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  height: AppTheme.formControlHeight,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, size: 18),
+                    label: const Text('إغلاق'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HelpBlock extends StatelessWidget {
+  const _HelpBlock({
+    required this.icon,
+    required this.tone,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final Color tone;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        border: Border.all(color: tone.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: tone),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: tone,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: const TextStyle(
+                    color: AppTheme.softInk,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Timestamp helpers ──────────────────────────────────────────────────
+
+/// Parse a backend ISO-8601 timestamp into a `DateTime` that can safely
+/// be converted to local wall-clock time.
 ///
+/// The backend stores its timestamps as naive UTC (`datetime.utcnow()`)
+/// and serialises them with `.isoformat()`, which produces strings like
+/// `2026-05-11T10:00:00.123456` — **no `Z`, no offset**. Dart's
+/// [DateTime.tryParse] treats such bare strings as the **device local**
+/// timezone, so the previous code was effectively showing UTC wall-time
+/// as if it were local — every notification time was wrong by the
+/// device's UTC offset.
+///
+/// Fix: detect a tz-less string and reinterpret it as UTC before any
+/// further conversion. Strings that already carry `Z` or `±HH:MM` are
+/// parsed honestly and passed through.
+DateTime? _parseBackendIso(String? iso) {
+  if (iso == null || iso.isEmpty) return null;
+  final hasTz = iso.endsWith('Z') ||
+      RegExp(r'[+\-]\d{2}:?\d{2}$').hasMatch(iso);
+  // Append `Z` so DateTime.parse interprets it as UTC.
+  final normalised = hasTz ? iso : '${iso}Z';
+  return DateTime.tryParse(normalised);
+}
+
+/// Calm Arabic-friendly humanizer for server ISO timestamps:
 ///   * Today               → `HH:mm`
 ///   * Yesterday           → `أمس HH:mm`
 ///   * Older (same year)   → `MM-DD HH:mm`
 ///   * Older (other year)  → `YYYY-MM-DD HH:mm`
 ///
-/// No "X minutes ago" interpretation — server time is rendered honestly
-/// in the device's local timezone via [DateTime.toLocal].
+/// Conversion path:
+///   1. Treat the backend's tz-less ISO string as UTC (see
+///      [_parseBackendIso]).
+///   2. `.toLocal()` — convert to the **device** timezone for display.
+///
+/// Why device local and not the IANA `profile_timezone` the user
+/// configured? Dart's standard library cannot convert between arbitrary
+/// IANA zones (e.g. `Asia/Hebron`) without the `timezone` package,
+/// which the task brief forbids us from adding. For users whose device
+/// TZ matches their physical location (the overwhelming majority) the
+/// device-local conversion is correct. For users whose profile TZ
+/// disagrees with their device TZ we surface the profile string in the
+/// detail sheet so they can verify, and the help sheet explains the
+/// limitation honestly.
 String _humanizeTimestamp(String? iso) {
-  if (iso == null || iso.isEmpty) return '—';
-  final parsed = DateTime.tryParse(iso);
+  final parsed = _parseBackendIso(iso);
   if (parsed == null) {
-    // Backend value didn't parse — fall back to a truncated copy so the
-    // user still sees something rather than a question mark.
+    if (iso == null || iso.isEmpty) return '—';
     final dot = iso.indexOf('.');
     return dot > 0 ? iso.substring(0, dot) : iso;
   }
@@ -1343,4 +1950,22 @@ String _humanizeTimestamp(String? iso) {
   final d = local.day.toString().padLeft(2, '0');
   if (local.year == now.year) return '$mo-$d  $hh:$mm';
   return '${local.year}-$mo-$d  $hh:$mm';
+}
+
+/// Full timestamp for the detail sheet's KV block. Same UTC-aware
+/// parsing as [_humanizeTimestamp].
+String? _exactTimestamp(String? iso) {
+  final parsed = _parseBackendIso(iso);
+  if (parsed == null) {
+    if (iso == null || iso.isEmpty) return null;
+    return iso;
+  }
+  final local = parsed.toLocal();
+  final y = local.year.toString().padLeft(4, '0');
+  final mo = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  final hh = local.hour.toString().padLeft(2, '0');
+  final mm = local.minute.toString().padLeft(2, '0');
+  final ss = local.second.toString().padLeft(2, '0');
+  return '$y-$mo-$d  $hh:$mm:$ss';
 }

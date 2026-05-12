@@ -83,6 +83,49 @@ class NotificationsController extends AsyncNotifier<NotificationsFeedState> {
     });
   }
 
+  /// v96: silent re-fetch used by the Notifications screen's 10-second
+  /// poller. Differs from [refresh] in three deliberate ways so a
+  /// background tick can't disrupt the user:
+  ///
+  ///   * Does **not** flip state to `AsyncLoading` first — the existing
+  ///     list stays on screen, no spinner flash, no flicker.
+  ///   * On network/API error keeps the previously rendered data and
+  ///     swallows the error (logs nothing visible) — a 10-second
+  ///     poll must never blast SnackBars at the user.
+  ///   * Preserves `isMarkingAll` so a poll that races a "mark-all
+  ///     read" round-trip cannot reset that in-flight flag.
+  ///
+  /// Returns `true` when fresh data was applied, `false` when the call
+  /// failed or no prior data was on screen yet (in which case the
+  /// initial `build()` is still responsible for the first paint).
+  Future<bool> silentRefresh() async {
+    final current = state.valueOrNull;
+    if (current == null) {
+      // First load is still in flight (or errored). Don't intervene —
+      // the AsyncNotifier's own build() / refresh() owns that path.
+      return false;
+    }
+    try {
+      final page = await _repo.fetchPage(page: 1, pageSize: _pageSize);
+      // Guard against the screen leaving while we were awaiting.
+      // valueOrNull returning null here means the controller was
+      // re-initialised; in that case the new build() owns the data.
+      if (state.valueOrNull == null) return false;
+      state = AsyncData(NotificationsFeedState(
+        items: page.items,
+        unreadCount: page.unreadCount,
+        meta: page.meta,
+        isLoadingMore: false,
+        // Preserve in-flight mark-all so a racing poll cannot clear it.
+        isMarkingAll: current.isMarkingAll,
+      ));
+      return true;
+    } catch (_) {
+      // Silent failure — keep the previously rendered data.
+      return false;
+    }
+  }
+
   /// "تحميل المزيد" — appends the next page if [hasMore] is true and we
   /// are not already loading. Errors are surfaced via `state.error`.
   Future<void> loadMore() async {
