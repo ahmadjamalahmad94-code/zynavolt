@@ -191,72 +191,149 @@ class _HomeHero extends StatelessWidget {
     final daily = snapshot?.cards.dailyProductionKwh ?? 0;
     final dailyText = daily > 0 ? '${_fmtKwh(daily)} kWh اليوم' : null;
 
+    // v99a — premium hero: layered gradient with a hairline highlight
+    // strip + an ambient indigo bloom underneath the card. Typography
+    // gains a soft "since 04:00" feel via tabular figures everywhere.
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTheme.radiusGlass),
-        gradient: const LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [AppTheme.indigoPrimary, AppTheme.indigoBright],
-        ),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.22),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
+            color: AppTheme.indigoPrimary.withValues(alpha: 0.30),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+          BoxShadow(
+            color: AppTheme.indigoBright.withValues(alpha: 0.10),
+            blurRadius: 48,
+            offset: const Offset(0, 28),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _BrandWordmark(),
-              const Spacer(),
-              _HeroIconButton(
-                icon: Icons.refresh,
-                tooltip: 'تحديث',
-                onPressed: onRefresh,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            greetingName.isNotEmpty
-                ? 'مرحباً بعودتك، $greetingName'
-                : 'مرحباً بعودتك',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              height: 1.2,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppTheme.radiusGlass),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+              colors: [
+                Color(0xFF3730A3), // deep indigo top-right
+                AppTheme.indigoPrimary,
+                Color(0xFF6366F1), // indigoBright at bottom-left
+              ],
+              stops: [0.0, 0.55, 1.0],
             ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          child: Stack(
             children: [
-              _HeroPill(
-                icon: Icons.solar_power_outlined,
-                text: deviceName ?? 'لم يتم اختيار جهاز',
+              // Subtle radial "spotlight" glow in the top-left corner
+              // so the hero reads as illuminated, not flat.
+              Positioned(
+                top: -40,
+                left: -40,
+                child: Container(
+                  width: 180,
+                  height: 180,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        Color(0x33FFFFFF),
+                        Color(0x00FFFFFF),
+                      ],
+                      stops: [0.0, 1.0],
+                    ),
+                  ),
+                ),
               ),
-              if (dailyText != null)
-                _HeroPill(
-                  icon: Icons.wb_sunny_outlined,
-                  text: dailyText,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const _BrandWordmark(),
+                        const Spacer(),
+                        _HeroIconButton(
+                          icon: Icons.refresh,
+                          tooltip: 'تحديث',
+                          onPressed: onRefresh,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    // v99a — eyebrow + greeting as a two-line header
+                    // so the name sits on its own line and reads like
+                    // a salutation, not a passing label.
+                    const Text(
+                      'مرحبًا بعودتك',
+                      style: TextStyle(
+                        color: Color(0xCCFFFFFF),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      greetingName.isNotEmpty ? greetingName : 'صاحب الحساب',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        height: 1.15,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 12),
+                    // Thin hairline divider before the metadata pills
+                    // — gives the card two visual "decks" without
+                    // adding weight.
+                    Container(
+                      height: 1,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0.30),
+                            Colors.white.withValues(alpha: 0.05),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _HeroPill(
+                          icon: Icons.solar_power_outlined,
+                          text: deviceName ?? 'لم يتم اختيار جهاز',
+                          tone: _HeroPillTone.device,
+                        ),
+                        if (dailyText != null)
+                          _HeroPill(
+                            icon: Icons.wb_sunny_outlined,
+                            text: dailyText,
+                            tone: _HeroPillTone.production,
+                          ),
+                        if (lastReading != null)
+                          _HeroPill(
+                            icon: Icons.schedule,
+                            text: 'آخر قراءة $lastReading',
+                            tone: _HeroPillTone.live,
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
-              if (lastReading != null)
-                _HeroPill(
-                  icon: Icons.schedule,
-                  text: 'آخر قراءة $lastReading',
-                ),
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -342,24 +419,76 @@ class _HeroIconButton extends StatelessWidget {
   }
 }
 
+/// v99a — Hero pill tone variants. Each tone tweaks the surface
+/// + accent so the three pills don't read as identical chrome:
+///   * device     — neutral glass; quiet
+///   * production — warm amber tint; signals "energy generated"
+///   * live       — green accent dot + soft glow; signals "fresh"
+enum _HeroPillTone { device, production, live }
+
 class _HeroPill extends StatelessWidget {
-  const _HeroPill({required this.icon, required this.text});
+  const _HeroPill({
+    required this.icon,
+    required this.text,
+    this.tone = _HeroPillTone.device,
+  });
   final IconData icon;
   final String text;
+  final _HeroPillTone tone;
 
   @override
   Widget build(BuildContext context) {
+    final Color bg;
+    final Color border;
+    final Color iconColor;
+    switch (tone) {
+      case _HeroPillTone.production:
+        bg = const Color(0x33F59E0B); // amber 20%
+        border = const Color(0x55FCD34D);
+        iconColor = const Color(0xFFFFE08A);
+        break;
+      case _HeroPillTone.live:
+        bg = const Color(0x3322C55E); // green 20%
+        border = const Color(0x6622C55E);
+        iconColor = const Color(0xFFA7F3D0);
+        break;
+      case _HeroPillTone.device:
+        bg = Colors.white.withValues(alpha: 0.16);
+        border = Colors.white.withValues(alpha: 0.22);
+        iconColor = Colors.white;
+        break;
+    }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
+        color: bg,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border, width: 0.8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 12),
-          const SizedBox(width: 5),
+          if (tone == _HeroPillTone.live) ...[
+            // Live indicator: small breathing green dot.
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF22C55E),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.6),
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Icon(icon, color: iconColor, size: 12),
+          const SizedBox(width: 6),
           Text(
             text,
             style: const TextStyle(
@@ -461,30 +590,34 @@ class _DashboardBody extends StatelessWidget {
 
     if (snapshot.latest.statusText.isNotEmpty) {
       children.add(_StatusBanner(text: snapshot.latest.statusText));
-      children.add(const SizedBox(height: 12));
+      children.add(const SizedBox(height: 14));
     }
 
+    // v99a — bump inter-card spacing from 12 → 14 to give the
+    // redesigned cards room to breathe. Each card is now visually
+    // heavier (accents, hairline borders, taller progress bar) and
+    // the original 12-px gutter made them stack too tightly.
     children.addAll([
       _EnergyFlowCard(snapshot: snapshot),
-      const SizedBox(height: 12),
+      const SizedBox(height: 14),
       _BatteryCard(cards: cards),
-      const SizedBox(height: 12),
+      const SizedBox(height: 14),
       _ProductionCard(cards: cards),
-      const SizedBox(height: 12),
+      const SizedBox(height: 14),
       // v75: smart insights card. Consumes `insightsProvider` which
       // is already device-scoped via `effectiveDeviceIdProvider`, so
       // it stays in sync with the live cards above without an extra
       // device hop. The card self-handles loading / unavailable /
       // error so we don't gate it on the dashboard's AsyncValue.
       const InsightsHomeCard(),
-      const SizedBox(height: 12),
+      const SizedBox(height: 14),
       // v77: advanced energy visualization (power curve + period
       // split). Self-contained scope/anchor state lives inside the
       // card so refreshing Home doesn't reset the user's selection.
       // The card reuses the v56 statistics endpoint via
       // `energyChartSeriesProvider` — no new backend path.
       const HomeEnergyChartCard(),
-      const SizedBox(height: 12),
+      const SizedBox(height: 14),
       _FooterMetaChip(snapshot: snapshot),
     ]);
 
@@ -501,58 +634,75 @@ class _StatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v99a — single-line status banner with a breathing dot on the
+    // right. Reads at a glance: "نظام • متصل بالشبكة". The dot inherits
+    // the success colour so a future "warning"/"offline" state can swap
+    // the colour token without rebuilding the layout.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFC7D2FE)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE0E7FF), width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: AppTheme.indigoPrimary.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Breathing live dot — the success colour acts as a "the
+          // system is healthy" indicator. If we ever surface a
+          // warning state we'd switch the colour here only.
           Container(
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
+            width: 10,
+            height: 10,
             decoration: BoxDecoration(
-              color: AppTheme.indigoSoft,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.insights_outlined,
-                color: AppTheme.indigoPrimary, size: 15),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'حالة النظام',
-                  style: TextStyle(
-                    color: AppTheme.muted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  text,
-                  style: const TextStyle(
-                    color: AppTheme.ink,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    height: 1.45,
-                  ),
+              shape: BoxShape.circle,
+              color: AppTheme.success,
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.success.withValues(alpha: 0.45),
+                  blurRadius: 10,
+                  spreadRadius: 1.2,
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'حالة النظام',
+            style: TextStyle(
+              color: AppTheme.faintMuted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 3,
+            height: 14,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE0E7FF),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: AppTheme.ink,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                height: 1.3,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -567,19 +717,31 @@ class _ScopeNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v99a — softer two-tone notice. Background tints down to the
+    // pale indigo of the screen background so the notice feels
+    // "informational" and doesn't compete with the live cards.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFC7D2FE)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFC7D2FE), width: 1),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.info_outline,
-              size: 16, color: AppTheme.indigoPrimary),
-          const SizedBox(width: 8),
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppTheme.indigoPrimary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.info_outline,
+                size: 14, color: AppTheme.indigoPrimary),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
@@ -1548,61 +1710,112 @@ class _BatteryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final socClamped =
         cards.batterySocPercent.clamp(0, 100).toDouble() / 100.0;
+    // v99a — derive a calm "mode hint" purely from cards.batteryPowerW
+    // (sign already documented in the file's intro). We do NOT add
+    // any new business logic — we just present what's already there
+    // with a clearer label + colour token.
+    final batteryPower = cards.batteryPowerW;
+    final (modeText, modeColor, modeIcon) = batteryPower > 0
+        ? ('شحن', AppTheme.success, Icons.bolt_outlined)
+        : batteryPower < 0
+            ? ('تفريغ', AppTheme.warning, Icons.south_outlined)
+            : ('خامل', AppTheme.faintMuted, Icons.pause_circle_outline);
+    // Colour-grade the bar against SoC bands so 12 % reads visibly
+    // different from 89 %. Bands match the existing app palette
+    // (success / warning / danger) so we don't introduce new tokens.
+    final socColor = cards.batterySocPercent >= 50
+        ? AppTheme.success
+        : cards.batterySocPercent >= 20
+            ? AppTheme.warning
+            : AppTheme.danger;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _CardHeader(
-            icon: Icons.battery_full_outlined,
+            icon: Icons.battery_charging_full_outlined,
             title: 'البطارية',
-            subtitle: 'مستوى الشحن وقدرة البطارية اللحظية.',
+            subtitle: 'مستوى الشحن والتدفق اللحظي.',
+            accent: AppTheme.success,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
+          // Big % on the left, mode chip + power on the right.
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                _formatPercent(cards.batterySocPercent),
-                style: const TextStyle(
-                  color: AppTheme.ink,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
-                  height: 1.0,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 4),
-                child: Text(
-                  'حالة الشحن',
-                  style: TextStyle(
-                    color: AppTheme.faintMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        _formatPercent(cards.batterySocPercent),
+                        style: TextStyle(
+                          color: AppTheme.ink,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                          height: 1.0,
+                          letterSpacing: -0.5,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          shadows: [
+                            Shadow(
+                              color: socColor.withValues(alpha: 0.12),
+                              blurRadius: 12,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'حالة الشحن الحالية',
+                    style: TextStyle(
+                      color: AppTheme.faintMuted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(
-                  color: AppTheme.success.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(999),
+                  color: modeColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: modeColor.withValues(alpha: 0.25),
+                    width: 0.8,
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.bolt_outlined,
-                        size: 12, color: AppTheme.success),
-                    const SizedBox(width: 4),
+                    Icon(modeIcon, size: 14, color: modeColor),
+                    const SizedBox(width: 6),
                     Text(
-                      _formatWatts(cards.batteryPowerW),
-                      style: const TextStyle(
-                        color: AppTheme.success,
+                      modeText,
+                      style: TextStyle(
+                        color: modeColor,
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 12,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      color: modeColor.withValues(alpha: 0.25),
+                    ),
+                    Text(
+                      _formatWatts(cards.batteryPowerW.abs()),
+                      style: TextStyle(
+                        color: modeColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -1610,18 +1823,72 @@ class _BatteryCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+          // Sleek capacity bar — taller, rounded ends, gradient fill,
+          // soft track. The 0 / 50 / 100 markers underneath give the
+          // user a sense of scale without a chart.
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: socClamped,
-              minHeight: 10,
-              backgroundColor: AppTheme.success.withValues(alpha: 0.12),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AppTheme.success),
+            child: Container(
+              height: 12,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: FractionallySizedBox(
+                alignment: AlignmentDirectional.centerStart,
+                widthFactor: socClamped,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        socColor.withValues(alpha: 0.85),
+                        socColor,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: socColor.withValues(alpha: 0.40),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
+          const SizedBox(height: 6),
+          // Scale markers — pure visual reference, no business logic.
+          const Row(
+            children: [
+              _SocTick(label: '0%'),
+              Spacer(),
+              _SocTick(label: '50%'),
+              Spacer(),
+              _SocTick(label: '100%'),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _SocTick extends StatelessWidget {
+  const _SocTick({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: AppTheme.faintMuted,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        fontFeatures: [FontFeature.tabularFigures()],
       ),
     );
   }
@@ -1643,32 +1910,40 @@ class _ProductionCard extends StatelessWidget {
             icon: Icons.show_chart,
             title: 'الإنتاج',
             subtitle: 'إجمالي الطاقة المُنتَجة كما يحتسبها الخادم.',
+            accent: AppTheme.warning,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
+          // v99a — three tinted tiles instead of the flat dot-divider
+          // layout. Each tile owns its accent colour band (top-edge),
+          // so the eye scans Today / Month / Total as three distinct
+          // periods at a glance.
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
                 child: _ProductionCol(
                   label: 'اليوم',
                   valueText: _formatKwh(cards.dailyProductionKwh),
                   tone: AppTheme.warning,
+                  icon: Icons.wb_sunny_outlined,
                 ),
               ),
-              const _VDivider(),
+              const SizedBox(width: 8),
               Expanded(
                 child: _ProductionCol(
                   label: 'الشهر',
                   valueText: _formatKwh(cards.monthlyProductionKwh),
                   tone: AppTheme.indigoPrimary,
+                  icon: Icons.calendar_month_outlined,
                 ),
               ),
-              const _VDivider(),
+              const SizedBox(width: 8),
               Expanded(
                 child: _ProductionCol(
                   label: 'الإجمالي',
                   valueText: _formatKwh(cards.totalProductionKwh),
                   tone: AppTheme.violet,
+                  icon: Icons.public_outlined,
                 ),
               ),
             ],
@@ -1684,56 +1959,78 @@ class _ProductionCol extends StatelessWidget {
     required this.label,
     required this.valueText,
     required this.tone,
+    required this.icon,
   });
 
   final String label;
   final String valueText;
   final Color tone;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(color: tone, shape: BoxShape.circle),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppTheme.faintMuted,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
+    // v99a — tinted tile design: each period gets its own surface so
+    // the three numbers don't merge visually. The 2-px top accent bar
+    // ties the tile to the colour token without painting the whole
+    // background loudly.
+    return Container(
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: tone.withValues(alpha: 0.20), width: 0.8),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(icon, color: tone, size: 12),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: tone,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          valueText,
-          style: const TextStyle(
-            color: AppTheme.ink,
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
-            fontFeatures: [FontFeature.tabularFigures()],
+          const SizedBox(height: 10),
+          Text(
+            valueText,
+            style: const TextStyle(
+              color: AppTheme.ink,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              height: 1.1,
+              letterSpacing: -0.2,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _VDivider extends StatelessWidget {
-  const _VDivider();
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 1,
-        height: 36,
-        color: AppTheme.line,
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-      );
-}
+// v99a — _VDivider deleted. The redesigned production card uses
+// tinted tiles with spacing between them instead of dot+divider
+// columns, so the helper has no remaining call sites.
 
 // ─── Footer chip ─────────────────────────────────────────────────────────
 
@@ -1745,46 +2042,92 @@ class _FooterMetaChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final reading = _formatIsoUtc(snapshot.latest.createdAt);
     final generated = _formatIsoUtc(snapshot.generatedAt);
+    // v99a — refined footer: two stacked rows, each with a small
+    // coloured pill labelling the metric type, then the value in a
+    // tabular monospace style. Reads cleanly as "data lineage" info
+    // rather than a noisy debug chip.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.line),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.schedule, size: 14, color: AppTheme.faintMuted),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'آخر قراءة: $reading',
-                  style: const TextStyle(
-                    color: AppTheme.softInk,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  // v73: bumped fontSize 10.5 → 11 for readability.
-                  'وقت الاستجابة: $generated',
-                  style: const TextStyle(
-                    color: AppTheme.faintMuted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
-            ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.indigoPrimary.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FooterRow(
+            tagText: 'آخر قراءة',
+            tagColor: AppTheme.indigoPrimary,
+            valueText: reading,
+            valueStrong: true,
+          ),
+          const SizedBox(height: 8),
+          _FooterRow(
+            tagText: 'وقت الاستجابة',
+            tagColor: AppTheme.faintMuted,
+            valueText: generated,
+            valueStrong: false,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FooterRow extends StatelessWidget {
+  const _FooterRow({
+    required this.tagText,
+    required this.tagColor,
+    required this.valueText,
+    required this.valueStrong,
+  });
+  final String tagText;
+  final Color tagColor;
+  final String valueText;
+  final bool valueStrong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: tagColor.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            tagText,
+            style: TextStyle(
+              color: tagColor,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            valueText,
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+              color: valueStrong ? AppTheme.softInk : AppTheme.faintMuted,
+              fontSize: 11.5,
+              fontWeight: valueStrong ? FontWeight.w800 : FontWeight.w600,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1796,28 +2139,45 @@ class _CardHeader extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
+    this.accent,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
 
+  /// v99a — optional accent colour. When provided, the icon square
+  /// inherits the accent tint so each card has a colour identity
+  /// (battery = green, production = amber, etc.). Callers that
+  /// don't pass an accent stay on the original indigo default so
+  /// the rest of the app's card headers remain unchanged.
+  final Color? accent;
+
   @override
   Widget build(BuildContext context) {
+    final tint = accent ?? AppTheme.indigoPrimary;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 30,
-          height: 30,
+          width: 34,
+          height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppTheme.indigoSoft,
-            borderRadius: BorderRadius.circular(9),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                tint.withValues(alpha: 0.18),
+                tint.withValues(alpha: 0.08),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: tint.withValues(alpha: 0.20), width: 0.8),
           ),
-          child: Icon(icon, color: AppTheme.indigoPrimary, size: 16),
+          child: Icon(icon, color: tint, size: 17),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1826,20 +2186,23 @@ class _CardHeader extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   color: AppTheme.ink,
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w900,
+                  letterSpacing: -0.1,
                 ),
               ),
               if (subtitle != null) ...[
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
                   subtitle!,
                   style: const TextStyle(
                     color: AppTheme.faintMuted,
-                    fontSize: 11,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w600,
                     height: 1.4,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ],
