@@ -163,6 +163,10 @@ void main() {
       batteryPowerW: 0,
       gridPowerW: 0,
       inverterPowerW: 0,
+      // v99r added generatorPowerW as a required field on
+      // DashboardCards. The chart-range tests don't exercise it,
+      // so we pass 0 here.
+      generatorPowerW: 0,
       dailyProductionKwh: 12.5,
       monthlyProductionKwh: 345.0,
       totalProductionKwh: 9876.5,

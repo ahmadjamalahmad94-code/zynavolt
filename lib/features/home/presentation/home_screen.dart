@@ -2434,11 +2434,8 @@ String _formatWatts(double w) {
   return '$sign$str W';
 }
 
-String _formatPercent(double p) {
-  final str =
-      p >= 100 || p <= -100 ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
-  return '$str %';
-}
+// v100 — `_formatPercent` removed (no remaining call sites since
+// `_BatteryCard` now inlines its own Text.rich rendering).
 
 String _formatKwh(double k) {
   if (k == 0) return '0 kWh';

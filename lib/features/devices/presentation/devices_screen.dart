@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
-import '../../../core/widgets/app_card.dart';
+// v100 — app_card import removed; the redesigned tile uses a
+// hand-rolled glossy gradient container instead.
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';

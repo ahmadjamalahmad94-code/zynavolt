@@ -23,11 +23,9 @@ class BatteryLabRepository {
         'device_id': ?deviceId,
       },
     );
-    final data = response.data;
-    if (data is! Map) {
-      throw StateError('Unexpected battery-lab payload shape');
-    }
-    return BatteryLabSnapshot.fromJson(data.cast<String, dynamic>());
+    // ApiClient.get returns `ApiResponse<Map<String, dynamic>>`, so
+    // `response.data` is already a typed map — no defensive cast.
+    return BatteryLabSnapshot.fromJson(response.data);
   }
 }
 
