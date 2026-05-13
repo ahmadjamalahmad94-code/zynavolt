@@ -1,85 +1,152 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 
-/// Splash held until [AppSessionController.restore] resolves the auth phase.
-/// The router redirect handles transitioning out — this screen is just paint.
+/// v100 — Splash, built on the design-system dark hero gradient.
+///
+/// Held while [AppSessionController.restore] resolves auth phase.
+/// The router redirect transitions out; this screen is just paint.
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // v46: indigo gradient matching the Home hero card — splash now
-      // feels like the same brand surface, not a separate dark screen.
       body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [AppTheme.indigoPrimary, AppTheme.indigoBright],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                  child: Image.asset(
-                    'assets/branding/zynavolt_logo.png',
-                    width: 96,
-                    height: 96,
-                    fit: BoxFit.cover,
-                    // Calm fallback when the asset is missing — keeps the
-                    // splash visually correct during dev / before the asset
-                    // ships, and never breaks layout on a damaged install.
-                    errorBuilder: (_, _, _) => Container(
-                      width: 96,
-                      height: 96,
+        decoration: const BoxDecoration(gradient: ZynColors.heroGradient),
+        child: Stack(
+          children: [
+            // Two radial blooms — top-left cyan, bottom-right violet —
+            // so the splash reads as "lit glass slab" not a flat plane.
+            Positioned(
+              top: -120,
+              left: -80,
+              child: _Bloom(
+                color: const Color(0xFF38BDF8).withValues(alpha: 0.35),
+                size: 360,
+              ),
+            ),
+            Positioned(
+              bottom: -100,
+              right: -80,
+              child: _Bloom(
+                color: ZynColors.violet.withValues(alpha: 0.30),
+                size: 320,
+              ),
+            ),
+            SafeArea(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Logo tile with gradient ring + glow.
+                    Container(
+                      width: 108,
+                      height: 108,
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(22),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF38BDF8),
+                            ZynColors.indigoBright,
+                            ZynColors.indigoDeep,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.20),
+                          width: 1.6,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: ZynColors.indigoBright
+                                .withValues(alpha: 0.50),
+                            blurRadius: 28,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
                       ),
-                      child: const Icon(
-                        Icons.wb_sunny_outlined,
-                        color: Colors.white,
-                        size: 44,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: Image.asset(
+                          'assets/branding/zynavolt_logo.png',
+                          width: 96,
+                          height: 96,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.wb_sunny_outlined,
+                            color: Colors.white,
+                            size: 50,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 22),
+                    const Text(
+                      'ZYNAVOLT',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 3.0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'منصة إدارة الطاقة الشمسية',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    // Spinner — subtle, on-brand.
+                    Container(
+                      width: 32,
+                      height: 32,
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.10),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.20),
+                          width: 1,
+                        ),
+                      ),
+                      child: const CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 22),
-                const Text(
-                  'Zynavolt',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'منصة إدارة الطاقة الشمسية',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Bloom extends StatelessWidget {
+  const _Bloom({required this.color, required this.size});
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color, color.withValues(alpha: 0.0)],
           ),
         ),
       ),

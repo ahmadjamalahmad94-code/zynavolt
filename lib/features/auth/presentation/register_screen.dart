@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/state/app_session.dart';
 
 /// v54 — subscriber self-registration screen.
@@ -102,94 +104,80 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      // Match the login screen's pale-indigo backdrop so login →
-      // register feels like one continuous brand surface.
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE0E7FF),
-              Color(0xFFF1F5FF),
-              Color(0xFFF8FAFC),
-            ],
-            stops: [0.0, 0.35, 0.85],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _Header(onBackToLogin: _goToLogin),
-                    const SizedBox(height: 22),
-                    Form(
-                      key: _formKey,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _UsernameField(controller: _username),
-                          const SizedBox(height: 12),
-                          _FullNameField(controller: _fullName),
-                          const SizedBox(height: 12),
-                          _EmailField(controller: _email),
-                          const SizedBox(height: 12),
-                          _PasswordField(
-                            controller: _password,
-                            obscure: _obscurePassword,
-                            onToggleObscure: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _ConfirmPasswordField(
-                            controller: _confirmPassword,
-                            passwordController: _password,
-                            obscure: _obscureConfirm,
-                            onToggleObscure: () => setState(
-                              () => _obscureConfirm = !_obscureConfirm,
-                            ),
-                            onFieldSubmitted: _submit,
-                          ),
-                          if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            _ErrorBanner(message: _error!),
-                          ],
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            height: AppTheme.formControlHeight + 4,
-                            child: FilledButton(
-                              onPressed: _submitting ? null : _submit,
-                              child: _submitting
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text('إنشاء الحساب'),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          _LoginPrompt(onTap: _goToLogin),
-                        ],
+    // v100 — rewrap on the design system: ZynPage backdrop +
+    // dark navy brand hero + glossy white form card + ZynButton.
+    return ZynPage(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              const _BrandHero(),
+              const SizedBox(height: 18),
+              ZynCard(
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'إنشاء حساب جديد',
+                        textAlign: TextAlign.center,
+                        style: ZynText.title,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'يكفي اسم مستخدم وكلمة مرور للبدء. تستكمل بياناتك وجهازك في خطوات قصيرة بعد إنشاء الحساب.',
+                        textAlign: TextAlign.center,
+                        style: ZynText.caption.copyWith(height: 1.6),
+                      ),
+                      const SizedBox(height: 22),
+                      _UsernameField(controller: _username),
+                      const SizedBox(height: 12),
+                      _FullNameField(controller: _fullName),
+                      const SizedBox(height: 12),
+                      _EmailField(controller: _email),
+                      const SizedBox(height: 12),
+                      _PasswordField(
+                        controller: _password,
+                        obscure: _obscurePassword,
+                        onToggleObscure: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _ConfirmPasswordField(
+                        controller: _confirmPassword,
+                        passwordController: _password,
+                        obscure: _obscureConfirm,
+                        onToggleObscure: () => setState(
+                          () => _obscureConfirm = !_obscureConfirm,
+                        ),
+                        onFieldSubmitted: _submit,
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        _ErrorBanner(message: _error!),
+                      ],
+                      const SizedBox(height: 22),
+                      ZynButton(
+                        label: 'إنشاء الحساب',
+                        icon: Icons.person_add_alt_1_rounded,
+                        onTap: _submitting ? null : _submit,
+                        busy: _submitting,
+                      ),
+                      const SizedBox(height: 14),
+                      _LoginPrompt(onTap: _goToLogin),
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -203,64 +191,128 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 }
 
-// ─── Header ──────────────────────────────────────────────────────────
+// ─── Brand hero ────────────────────────────────────────────────────
 
-class _Header extends StatelessWidget {
-  const _Header({required this.onBackToLogin});
-  final VoidCallback onBackToLogin;
+class _BrandHero extends StatelessWidget {
+  const _BrandHero();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Image.asset(
-              'assets/branding/zynavolt_logo.png',
-              width: 64,
-              height: 64,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
-                width: 64,
-                height: 64,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppTheme.indigoSoft,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(
-                  Icons.wb_sunny_outlined,
-                  color: AppTheme.indigoPrimary,
-                  size: 28,
+    return Container(
+      decoration: zynHeroOuterDecoration(radius: 26),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: ZynColors.heroGradient),
+          child: Stack(
+            children: [
+              Positioned(
+                top: -50,
+                right: -50,
+                child: Container(
+                  width: 180,
+                  height: 180,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        ZynColors.violet.withValues(alpha: 0.40),
+                        ZynColors.violet.withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 1,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0.0),
+                        Colors.white.withValues(alpha: 0.28),
+                        Colors.white.withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF38BDF8),
+                            ZynColors.indigoBright,
+                            ZynColors.indigoDeep,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          width: 1.4,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: ZynColors.indigoBright
+                                .withValues(alpha: 0.45),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.asset(
+                          'assets/branding/zynavolt_logo.png',
+                          width: 56,
+                          height: 56,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.wb_sunny_outlined,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'ZYNAVOLT',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2.6,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'انضم إلى منصة إدارة الطاقة',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        const Text(
-          'إنشاء حساب جديد',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppTheme.ink,
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'يكفي اسم مستخدم وكلمة مرور للبدء. تستكمل بياناتك وجهازك '
-          'في خطوات قصيرة بعد إنشاء الحساب.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppTheme.faintMuted,
-            fontSize: 13,
-            height: 1.7,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

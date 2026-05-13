@@ -4,10 +4,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_config.dart';
 import '../../../app/app_router.dart';
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/state/app_session.dart';
 
+/// v100 — Login screen rebuilt on the design system.
+///
+/// Structure:
+///   * Dark navy hero panel: logo + brand wordmark + tagline.
+///   * Glossy white form card: username + password + error banner +
+///     submit button + "create account" footer link.
+///   * Backend URL whisper at the very bottom for support.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -46,9 +54,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  /// Pull `AppSession.lastError` exactly once on first build so a failed
-  /// cold-start restore (network down, refresh token expired, etc.) is
-  /// honestly visible instead of silently dumping the user back here.
   void _hydrateRestoreErrorIfNeeded() {
     if (_restoreErrorChecked) return;
     _restoreErrorChecked = true;
@@ -69,7 +74,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             username: _username.text.trim(),
             password: _password.text,
           );
-      // Router redirect picks up the new session phase.
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } finally {
@@ -80,203 +84,305 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     _hydrateRestoreErrorIfNeeded();
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      // v46: match the Home pale-indigo backdrop so Splash → Login → Home
-      // feel like one continuous brand surface.
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE0E7FF),
-              Color(0xFFF1F5FF),
-              Color(0xFFF8FAFC),
-            ],
-            stops: [0.0, 0.35, 0.85],
-          ),
-        ),
-        child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // v46: Zynavolt logo with calm fallback to the prior
-                  // sun-icon tile so the screen never breaks if the PNG
-                  // asset is missing during dev / pre-release builds.
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(
-                        'assets/branding/zynavolt_logo.png',
-                        width: 72,
-                        height: 72,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          width: 72,
-                          height: 72,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: AppTheme.indigoSoft,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: const Icon(
-                            Icons.wb_sunny_outlined,
-                            color: AppTheme.indigoPrimary,
-                            size: 32,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'تسجيل الدخول إلى Zynavolt',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppTheme.ink,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'استخدم بيانات حسابك لمتابعة منظومات الطاقة الشمسية الخاصة بك.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppTheme.faintMuted,
-                      fontSize: 13,
-                      height: 1.6,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextFormField(
-                          controller: _username,
-                          textInputAction: TextInputAction.next,
-                          autofillHints: const [
-                            AutofillHints.username,
-                            AutofillHints.email,
-                          ],
-                          decoration: const InputDecoration(
-                            labelText: 'اسم المستخدم أو البريد الإلكتروني',
-                            prefixIcon: Icon(Icons.person_outline),
-                          ),
-                          validator: (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? 'هذا الحقل مطلوب.'
-                                  : null,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _password,
-                          textInputAction: TextInputAction.done,
-                          obscureText: _obscure,
-                          autofillHints: const [AutofillHints.password],
-                          decoration: InputDecoration(
-                            labelText: 'كلمة المرور',
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              icon: Icon(_obscure
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined),
-                              onPressed: () =>
-                                  setState(() => _obscure = !_obscure),
-                            ),
-                          ),
-                          validator: (v) => (v == null || v.isEmpty)
-                              ? 'هذا الحقل مطلوب.'
-                              : null,
-                          onFieldSubmitted: (_) => _submit(),
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 12),
-                          _ErrorBanner(message: _error!),
-                        ],
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          height: AppTheme.formControlHeight + 4,
-                          child: FilledButton(
-                            onPressed: _submitting ? null : _submit,
-                            child: _submitting
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text('دخول'),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        // v54: link to the new register screen. Kept
-                        // as a subtle TextButton row so the existing
-                        // login surface isn't redesigned.
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text(
-                              'ليس لديك حساب؟ ',
-                              style: TextStyle(
-                                color: AppTheme.faintMuted,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () =>
-                                  context.go(AppRoutes.register),
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: const Size(0, 32),
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text(
-                                'إنشاء حساب جديد',
-                                style: TextStyle(
-                                  color: AppTheme.indigoPrimary,
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Center(
-                          child: Text(
-                            'الواجهة الخلفية: ${AppConfig.apiBaseUrl}',
-                            style: const TextStyle(
-                              color: AppTheme.faintMuted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+    return ZynPage(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              _BrandHero(),
+              const SizedBox(height: 18),
+              _FormCard(
+                formKey: _formKey,
+                username: _username,
+                password: _password,
+                obscure: _obscure,
+                onToggleObscure: () => setState(() => _obscure = !_obscure),
+                submitting: _submitting,
+                error: _error,
+                onSubmit: _submit,
+                onGotoRegister: () => context.go(AppRoutes.register),
               ),
-            ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  'الواجهة الخلفية: ${AppConfig.apiBaseUrl}',
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(
+                    color: ZynColors.faintMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ),
       ),
     );
   }
 }
+
+// ─── Brand hero panel ──────────────────────────────────────────────
+
+class _BrandHero extends StatelessWidget {
+  const _BrandHero();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: zynHeroOuterDecoration(radius: 26),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: ZynColors.heroGradient),
+          child: Stack(
+            children: [
+              // Cyan bloom in the top-right corner.
+              Positioned(
+                top: -50,
+                right: -50,
+                child: Container(
+                  width: 180,
+                  height: 180,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFF38BDF8).withValues(alpha: 0.40),
+                        const Color(0xFF38BDF8).withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Top specular sheen.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 1,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0.0),
+                        Colors.white.withValues(alpha: 0.28),
+                        Colors.white.withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
+                child: Column(
+                  children: [
+                    // Logo
+                    Container(
+                      width: 76,
+                      height: 76,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF38BDF8),
+                            ZynColors.indigoBright,
+                            ZynColors.indigoDeep,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          width: 1.4,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: ZynColors.indigoBright
+                                .withValues(alpha: 0.50),
+                            blurRadius: 22,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.asset(
+                          'assets/branding/zynavolt_logo.png',
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.wb_sunny_outlined,
+                            color: Colors.white,
+                            size: 34,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'ZYNAVOLT',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2.6,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'منصة إدارة الطاقة الشمسية',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.78),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Form card ─────────────────────────────────────────────────────
+
+class _FormCard extends StatelessWidget {
+  const _FormCard({
+    required this.formKey,
+    required this.username,
+    required this.password,
+    required this.obscure,
+    required this.onToggleObscure,
+    required this.submitting,
+    required this.error,
+    required this.onSubmit,
+    required this.onGotoRegister,
+  });
+
+  final GlobalKey<FormState> formKey;
+  final TextEditingController username;
+  final TextEditingController password;
+  final bool obscure;
+  final VoidCallback onToggleObscure;
+  final bool submitting;
+  final String? error;
+  final VoidCallback onSubmit;
+  final VoidCallback onGotoRegister;
+
+  @override
+  Widget build(BuildContext context) {
+    return ZynCard(
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      child: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'تسجيل الدخول',
+              textAlign: TextAlign.center,
+              style: ZynText.title,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'استخدم بيانات حسابك لمتابعة منظومات الطاقة الخاصة بك.',
+              textAlign: TextAlign.center,
+              style: ZynText.caption.copyWith(height: 1.6),
+            ),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: username,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [
+                AutofillHints.username,
+                AutofillHints.email,
+              ],
+              decoration: const InputDecoration(
+                labelText: 'اسم المستخدم أو البريد الإلكتروني',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+              ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'هذا الحقل مطلوب.' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: password,
+              textInputAction: TextInputAction.done,
+              obscureText: obscure,
+              autofillHints: const [AutofillHints.password],
+              decoration: InputDecoration(
+                labelText: 'كلمة المرور',
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  onPressed: onToggleObscure,
+                ),
+              ),
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? 'هذا الحقل مطلوب.' : null,
+              onFieldSubmitted: (_) => onSubmit(),
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 12),
+              _ErrorBanner(message: error!),
+            ],
+            const SizedBox(height: 22),
+            ZynButton(
+              label: 'دخول',
+              icon: Icons.login_rounded,
+              onTap: submitting ? null : onSubmit,
+              busy: submitting,
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'ليس لديك حساب؟ ',
+                  style: ZynText.caption.copyWith(fontSize: 12),
+                ),
+                TextButton(
+                  onPressed: onGotoRegister,
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'إنشاء حساب جديد',
+                    style: TextStyle(
+                      color: ZynColors.indigo,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Error banner ──────────────────────────────────────────────────
 
 class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message});
@@ -287,21 +393,30 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFECACA)),
+        gradient: LinearGradient(
+          colors: [
+            ZynColors.danger.withValues(alpha: 0.14),
+            ZynColors.danger.withValues(alpha: 0.06),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(ZynRadii.tile),
+        border: Border.all(
+          color: ZynColors.danger.withValues(alpha: 0.32),
+          width: 0.8,
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 18, color: AppTheme.danger),
+          const Icon(Icons.error_outline_rounded,
+              size: 18, color: ZynColors.danger),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.danger,
+                color: ZynColors.danger,
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 height: 1.5,
               ),
             ),
