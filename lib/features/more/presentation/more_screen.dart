@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+// v100 — `url_launcher` import dropped; Battery Lab is now a
+// native in-app screen, no external-browser hop. `AppConfig` is
+// still imported because the About card surfaces the API base URL.
 
 import '../../../app/app_config.dart';
 import '../../../app/app_router.dart';
@@ -92,25 +94,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
     }
   }
 
-  /// v99e — Open the web Battery Lab in the external browser. Built
-  /// from `AppConfig.apiBaseUrl` so it follows whatever environment
-  /// the app was compiled against (emulator localhost, staging, prod).
-  Future<void> _openBatteryLab() async {
-    final uri = Uri.tryParse('${AppConfig.apiBaseUrl}/battery-lab?lang=ar');
-    if (uri == null) return;
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('تعذّر فتح مختبر البطارية. تحقّق من اتصالك بالإنترنت.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-    }
-  }
+  // v100 — `_openBatteryLab` helper removed. Battery Lab is now a
+  // native in-app screen reached via `context.push(AppRoutes.batteryLab)`.
 
   @override
   Widget build(BuildContext context) {
@@ -187,13 +172,14 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             // the external browser. The web view has the rich AC-IN /
             // generator / SoC / voltage diagnostics; replicating
             // them on mobile is a larger task tracked separately.
+            // v100 — native Battery Lab. Was: external browser link
+            // built via url_launcher. Now: push the in-app screen.
             _ActionTile(
               icon: Icons.science_rounded,
               label: 'مختبر البطارية',
               subtitle: 'تحليلات SOC، الجهد، التيار، والمدخل الخارجي.',
               tone: AppTheme.success,
-              badge: 'ويب',
-              onTap: _openBatteryLab,
+              onTap: () => context.push(AppRoutes.batteryLab),
             ),
             const SizedBox(height: 10),
             _ActionTile(

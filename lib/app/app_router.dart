@@ -6,6 +6,7 @@ import '../core/state/app_session.dart';
 import '../features/account/presentation/account_screen.dart';
 import '../features/account/presentation/change_password_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/battery_lab/presentation/battery_lab_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/devices/presentation/device_detail_screen.dart';
 import '../features/devices/presentation/devices_screen.dart';
@@ -48,6 +49,8 @@ class AppRoutes {
   // honest placeholder until a mobile-side reports API arrives.
   static const String statistics = '/statistics';
   static const String reports = '/reports';
+  /// v100 — native Battery Lab screen (was an external-browser link).
+  static const String batteryLab = '/battery-lab';
   static const String notificationSettings = '/notifications/settings';
   static const String supportCreate = '/support/new';
   static const String changePassword = '/account/change-password';
@@ -195,6 +198,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.reports,
         builder: (_, _) => const ReportsScreen(),
+      ),
+      // v100: native Battery Lab. Replaces the external-browser link
+      // that the More tab used to open; full data set comes through
+      // `/api/mobile/battery-lab`.
+      GoRoute(
+        path: AppRoutes.batteryLab,
+        builder: (_, _) => const BatteryLabScreen(),
       ),
       // v87: notification settings editor (master + channels + per-section
       // toggles). Opened from the Notifications screen AppBar.
