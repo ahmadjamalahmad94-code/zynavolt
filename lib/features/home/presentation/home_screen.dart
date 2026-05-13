@@ -696,6 +696,7 @@ class _FlowActivity {
     required this.home,
     required this.battery,
     required this.grid,
+    required this.generator,
   });
 
   factory _FlowActivity.fromCards(DashboardCards c) => _FlowActivity(
@@ -703,14 +704,21 @@ class _FlowActivity {
         home: c.homeLoadW > 0,
         battery: c.batterySocPercent > 0 || c.batteryPowerW.abs() > 0,
         grid: c.gridPowerW.abs() > 0,
+        // v93r — generator card lights up when AC-IN > 5 W (real
+        // measurement or station-tier inference). Below that, the
+        // card stays muted so a stray watt of noise doesn't flicker.
+        generator: c.generatorPowerW > 5,
       );
 
   final bool solar;
   final bool home;
   final bool battery;
   final bool grid;
+  final bool generator;
 
-  List<bool> get asList => [solar, grid, battery, home]; // matches painter
+  /// Order: [solar, grid, battery, home, generator] — matches the
+  /// painter's connector order from `_BoardSpec.connectors`.
+  List<bool> get asList => [solar, grid, battery, home, generator];
 }
 
 // ─── Connector motion ────────────────────────────────────────────────────
@@ -760,6 +768,7 @@ class _FlowMotion {
     required this.grid,
     required this.battery,
     required this.home,
+    required this.generator,
   });
 
   factory _FlowMotion.fromCards(DashboardCards c) {
@@ -788,6 +797,12 @@ class _FlowMotion {
       grid: c.gridPowerW.abs() > 0
           ? _FlowMotionMode.pulse
           : _FlowMotionMode.none,
+      // v93r — generator/external AC-IN is unidirectional INTO the
+      // hub (the inverter never sends power back out the AC-IN
+      // port on a residential Deye hybrid).
+      generator: c.generatorPowerW > 5
+          ? _FlowMotionMode.towardHub
+          : _FlowMotionMode.none,
     );
   }
 
@@ -795,9 +810,11 @@ class _FlowMotion {
   final _FlowMotionMode grid;
   final _FlowMotionMode battery;
   final _FlowMotionMode home;
+  final _FlowMotionMode generator;
 
-  /// Order: [solar, grid, battery, home] — matches `_BoardSpec.connectors`.
-  List<_FlowMotionMode> get asList => [solar, grid, battery, home];
+  /// Order: [solar, grid, battery, home, generator] — matches
+  /// `_BoardSpec.connectors`.
+  List<_FlowMotionMode> get asList => [solar, grid, battery, home, generator];
 }
 
 // ─── Fixed-grid board spec ───────────────────────────────────────────────
@@ -867,6 +884,11 @@ class _BoardSpec {
   static const int hubRow   = 1,    hubCol   = 1;
   static const int batteryRow = 2,  batteryCol = 0;
   static const int homeRow  = 2,    homeCol  = 2;
+  // v93r — Generator sits in the top-middle cell, naturally between
+  // Solar (top-left) and Grid (top-right). The cell was previously
+  // empty in the 3×3 grid; placing the generator there does not
+  // disturb any existing card position.
+  static const int generatorRow = 0, generatorCol = 1;
 
   /// Connector anchor on the hub-facing vertical edge of a corner node.
   /// Returns either the right-mid or left-mid edge depending on which
@@ -900,21 +922,56 @@ class _BoardSpec {
       ..quadraticBezierTo(control.dx, control.dy, end.dx, end.dy);
   }
 
-  /// All four connector paths in board-pixel coordinates. Pure function
-  /// of the board size — same math the placements use, so anchors line
-  /// up exactly with the node cards.
+  /// v93r — vertical card anchor for nodes that sit ABOVE or BELOW
+  /// the hub (column-aligned). Returns the bottom-mid or top-mid
+  /// edge of the node card depending on its position relative to
+  /// the hub. The generator (top-middle) needs this because the
+  /// existing `cardAnchor` returns left/right-mid which would
+  /// anchor the line on the wrong edge for a column-aligned card.
+  static Offset cardAnchorVertical(Rect nodeRect, Rect hubRect) {
+    final onAboveHub = nodeRect.center.dy < hubRect.center.dy;
+    return Offset(
+      nodeRect.center.dx,
+      onAboveHub ? nodeRect.bottom : nodeRect.top,
+    );
+  }
+
+  /// v93r — hub edge anchor for a column-aligned node (top-mid /
+  /// bottom-mid of the hub instead of a corner). Used by the
+  /// generator connector.
+  static Offset hubVerticalEdgeFor(Rect nodeRect, Rect hubRect) {
+    final y = nodeRect.center.dy < hubRect.center.dy
+        ? hubRect.top
+        : hubRect.bottom;
+    return Offset(hubRect.center.dx, y);
+  }
+
+  /// All connector paths in board-pixel coordinates. Pure function
+  /// of the board size — same math the placements use, so anchors
+  /// line up exactly with the node cards.
+  ///
+  /// Order: [solar, grid, battery, home, generator]. The generator
+  /// path is the vertical line from the top-middle generator card
+  /// down to the top edge of the hub.
   static List<Path> connectors(Size board) {
     final solar = nodeBounds(solarRow, solarCol, board);
     final grid = nodeBounds(gridRow, gridCol, board);
     final hub = nodeBounds(hubRow, hubCol, board);
     final battery = nodeBounds(batteryRow, batteryCol, board);
     final home = nodeBounds(homeRow, homeCol, board);
+    final generator = nodeBounds(generatorRow, generatorCol, board);
 
     return [
       _curve(cardAnchor(solar, hub), hubCornerFor(solar, hub)),
       _curve(cardAnchor(grid, hub), hubCornerFor(grid, hub)),
       _curve(cardAnchor(battery, hub), hubCornerFor(battery, hub)),
       _curve(cardAnchor(home, hub), hubCornerFor(home, hub)),
+      // v93r — straight vertical line for the generator → hub
+      // connector. We still use `_curve` so the dash math + paint
+      // pipeline matches the other four; the control point at
+      // (end.dx, start.dy) collapses to a straight segment when
+      // start and end share an x-coordinate.
+      _curve(cardAnchorVertical(generator, hub), hubVerticalEdgeFor(generator, hub)),
     ];
   }
 
@@ -926,11 +983,13 @@ class _BoardSpec {
     final hub = nodeBounds(hubRow, hubCol, board);
     final battery = nodeBounds(batteryRow, batteryCol, board);
     final home = nodeBounds(homeRow, homeCol, board);
+    final generator = nodeBounds(generatorRow, generatorCol, board);
     return [
       cardAnchor(solar, hub),
       cardAnchor(grid, hub),
       cardAnchor(battery, hub),
       cardAnchor(home, hub),
+      cardAnchorVertical(generator, hub),
     ];
   }
 }
@@ -1041,6 +1100,25 @@ class _FlowDiagram extends StatelessWidget {
                   label: 'البيت',
                   value: _formatNodeValue(cards.homeLoadW),
                   active: flags.home,
+                ),
+              ),
+              // v93r — Generator (top-middle, between Solar + Grid).
+              // The Deye AC-IN port carries either utility grid OR a
+              // generator on residential hybrids; we surface its
+              // wattage here so the user can see incoming external
+              // power separate from the bidirectional grid card.
+              // Cyan tone distinguishes it from solar (amber), grid
+              // (violet), battery (green) and home (indigo).
+              _place(
+                _BoardSpec.nodeBounds(
+                  _BoardSpec.generatorRow, _BoardSpec.generatorCol, board,
+                ),
+                _FlowNodeCard(
+                  icon: Icons.power_outlined,
+                  tone: AppTheme.cyan,
+                  label: 'المولد',
+                  value: _formatNodeValue(cards.generatorPowerW),
+                  active: flags.generator,
                 ),
               ),
             ],

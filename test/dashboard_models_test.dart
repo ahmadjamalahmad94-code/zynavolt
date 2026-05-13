@@ -114,9 +114,35 @@ void main() {
       expect(c.batteryPowerW, 0);
       expect(c.gridPowerW, 0);
       expect(c.inverterPowerW, 0);
+      // v93r — generator field defaults to zero on empty.
+      expect(c.generatorPowerW, 0);
       expect(c.dailyProductionKwh, 0);
       expect(c.monthlyProductionKwh, 0);
       expect(c.totalProductionKwh, 0);
+    });
+  });
+
+  group('DashboardCards generator field (v93r)', () {
+    test('parses generator_power_w from the server payload', () {
+      final c = DashboardCards.fromJson({
+        'solar_power_w': 7,
+        'grid_power_w': 0,
+        'battery_power_w': 641,
+        'generator_power_w': 997,
+      });
+      expect(c.generatorPowerW, 997);
+      expect(c.gridPowerW, 0);
+      expect(c.solarPowerW, 7);
+    });
+
+    test('defaults to zero when the field is missing', () {
+      final c = DashboardCards.fromJson({
+        'solar_power_w': 1000,
+      });
+      // Older server builds didn't include the field; new field
+      // must not throw and must report 0 W so the generator card
+      // stays muted.
+      expect(c.generatorPowerW, 0);
     });
   });
 }

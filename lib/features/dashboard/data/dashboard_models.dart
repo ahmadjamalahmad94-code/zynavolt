@@ -36,6 +36,7 @@ class DashboardCards {
     required this.batteryPowerW,
     required this.gridPowerW,
     required this.inverterPowerW,
+    required this.generatorPowerW,
     required this.dailyProductionKwh,
     required this.monthlyProductionKwh,
     required this.totalProductionKwh,
@@ -57,6 +58,10 @@ class DashboardCards {
       batteryPowerW: n('battery_power_w'),
       gridPowerW: n('grid_power_w'),
       inverterPowerW: n('inverter_power_w'),
+      // v93r — Generator (external AC-IN) power for the new
+      // flow-graph node. Defaults to 0 when the server hasn't
+      // been upgraded yet, so older builds stay functional.
+      generatorPowerW: n('generator_power_w'),
       dailyProductionKwh: n('daily_production_kwh'),
       monthlyProductionKwh: n('monthly_production_kwh'),
       totalProductionKwh: n('total_production_kwh'),
@@ -70,6 +75,7 @@ class DashboardCards {
         batteryPowerW: 0,
         gridPowerW: 0,
         inverterPowerW: 0,
+        generatorPowerW: 0,
         dailyProductionKwh: 0,
         monthlyProductionKwh: 0,
         totalProductionKwh: 0,
@@ -81,6 +87,11 @@ class DashboardCards {
   final double batteryPowerW;
   final double gridPowerW;
   final double inverterPowerW;
+  /// v93r — Generator / external AC-IN power (W). On a Deye hybrid
+  /// inverter the AC-IN port carries either utility grid OR a
+  /// backup generator; the server cannot distinguish the two, so
+  /// this field reflects the AC-IN flow regardless of source.
+  final double generatorPowerW;
   final double dailyProductionKwh;
   final double monthlyProductionKwh;
   final double totalProductionKwh;
