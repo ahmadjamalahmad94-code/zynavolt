@@ -123,6 +123,40 @@ class AppSessionController extends StateNotifier<AppSessionState> {
     }
   }
 
+  /// v54: subscriber self-registration. Mirrors [signIn] — on success
+  /// writes the issued tokens, fetches `/auth/me`, and flips to the
+  /// authenticated phase. The router redirect then takes over and
+  /// routes the brand-new user into `/onboarding` because the backend
+  /// stamps `onboarding_completed=False` on every new registration.
+  Future<void> register({
+    required String username,
+    required String password,
+    String? fullName,
+    String? email,
+    String? preferredLanguage,
+    String? deviceLabel,
+  }) async {
+    try {
+      final result = await _auth.register(
+        username: username,
+        password: password,
+        fullName: fullName,
+        email: email,
+        preferredLanguage: preferredLanguage,
+        deviceLabel: deviceLabel,
+      );
+      await _storage.writeTokens(
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      );
+      final user = await _auth.fetchMe();
+      state = AppSessionState.authenticated(user);
+    } on ApiException catch (e) {
+      state = AppSessionState.unauthenticated(lastError: e);
+      rethrow;
+    }
+  }
+
   Future<void> signOut() async {
     try {
       final refresh = await _storage.readRefreshToken();

@@ -12,6 +12,7 @@ import '../../../core/widgets/app_loading.dart';
 import '../data/device_models.dart';
 import '../data/devices_repository.dart';
 import '../state/selected_device_provider.dart';
+import 'add_device_screen.dart';
 
 class DevicesScreen extends ConsumerWidget {
   const DevicesScreen({super.key});
@@ -24,6 +25,15 @@ class DevicesScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.softBg,
       appBar: AppBar(title: const Text('الأجهزة')),
+      // v48: subscriber-facing entry point to the add-device flow.
+      // Uses Navigator.push (not go_router) because the brief's
+      // allow-list does not include `lib/app/app_router.dart` —
+      // adding a named route entry is out-of-scope for v48.
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openAddDeviceFlow(context, ref),
+        icon: const Icon(Icons.add),
+        label: const Text('إضافة جهاز'),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async => ref.invalidate(devicesListProvider),
@@ -58,11 +68,14 @@ class DevicesScreen extends ConsumerWidget {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),
                   children: const [
+                    // v48: copy updated to point users at the new
+                    // in-app add-device FAB instead of asking them
+                    // to fall back to the web portal.
                     AppEmptyState(
                       icon: Icons.solar_power_outlined,
                       title: 'لا توجد أجهزة بعد',
                       subtitle:
-                          'سيظهر كل جهاز مرتبط بحسابك هنا. أضف جهازاً من الواجهة الخلفية للبدء.',
+                          'اضغط زر «إضافة جهاز» في الأسفل لربط جهازك الأول.',
                     ),
                   ],
                 );
@@ -88,6 +101,19 @@ class DevicesScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// v48: opens [AddDeviceScreen] and refreshes the device list when
+  /// the user successfully creates one. Uses Navigator.push instead
+  /// of a go_router-named route because the v48 brief's allow-list
+  /// does not include `lib/app/app_router.dart`.
+  Future<void> _openAddDeviceFlow(BuildContext context, WidgetRef ref) async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const AddDeviceScreen()),
+    );
+    if (created == true) {
+      ref.invalidate(devicesListProvider);
+    }
   }
 }
 

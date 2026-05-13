@@ -13,10 +13,15 @@ import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../auth/data/auth_models.dart';
+import '../../charts/data/energy_chart_repository.dart';
+import '../../charts/presentation/home_energy_chart_card.dart';
 import '../../dashboard/data/dashboard_models.dart';
 import '../../dashboard/data/dashboard_repository.dart';
 import '../../devices/data/device_models.dart';
 import '../../devices/state/selected_device_provider.dart';
+import '../../insights/data/insights_repository.dart';
+import '../../insights/presentation/insights_card.dart';
+import '../../statistics/data/statistics_repository.dart';
 
 // The Zynavolt logo lives at `assets/branding/zynavolt_logo.png`. Both
 // `_BrandWordmark` and `_HubBadge` consume it via `Image.asset(...,
@@ -91,6 +96,17 @@ class _HomeBody extends ConsumerWidget {
       color: AppTheme.indigoPrimary,
       onRefresh: () async {
         ref.invalidate(dashboardProvider);
+        // v75: also refresh the insights card so pull-to-refresh
+        // updates the "what should I do right now?" guidance
+        // alongside the live cards.
+        ref.invalidate(insightsProvider);
+        // v77: invalidate the advanced energy chart's underlying
+        // statistics + derived series so the curve and the period
+        // split bars also re-fetch on pull-to-refresh. We invalidate
+        // both layers because the chart provider memoizes on its
+        // own EnergyChartQuery key.
+        ref.invalidate(statisticsProvider);
+        ref.invalidate(energyChartSeriesProvider);
         await ref.read(dashboardProvider.future);
       },
       child: ListView(
@@ -104,7 +120,17 @@ class _HomeBody extends ConsumerWidget {
             user: session.user,
             device: activeDevice,
             snapshot: dashboard.valueOrNull,
-            onRefresh: () => ref.invalidate(dashboardProvider),
+            onRefresh: () {
+              ref.invalidate(dashboardProvider);
+              // v75: pair the hero refresh button with the
+              // insights provider so the user sees both fresh.
+              ref.invalidate(insightsProvider);
+              // v77: also refresh the advanced energy chart layers so
+              // tapping the hero refresh button feels consistent with
+              // pull-to-refresh.
+              ref.invalidate(statisticsProvider);
+              ref.invalidate(energyChartSeriesProvider);
+            },
           ),
           const SizedBox(height: 12),
           if (activeDeviceId == null)
@@ -444,6 +470,20 @@ class _DashboardBody extends StatelessWidget {
       _BatteryCard(cards: cards),
       const SizedBox(height: 12),
       _ProductionCard(cards: cards),
+      const SizedBox(height: 12),
+      // v75: smart insights card. Consumes `insightsProvider` which
+      // is already device-scoped via `effectiveDeviceIdProvider`, so
+      // it stays in sync with the live cards above without an extra
+      // device hop. The card self-handles loading / unavailable /
+      // error so we don't gate it on the dashboard's AsyncValue.
+      const InsightsHomeCard(),
+      const SizedBox(height: 12),
+      // v77: advanced energy visualization (power curve + period
+      // split). Self-contained scope/anchor state lives inside the
+      // card so refreshing Home doesn't reset the user's selection.
+      // The card reuses the v56 statistics endpoint via
+      // `energyChartSeriesProvider` — no new backend path.
+      const HomeEnergyChartCard(),
       const SizedBox(height: 12),
       _FooterMetaChip(snapshot: snapshot),
     ]);

@@ -26,6 +26,8 @@ class DeviceDetail {
     required this.createdAt,
     required this.updatedAt,
     required this.safeSettings,
+    this.providerSupportTier,
+    this.providerSupportTierLabel,
   });
 
   factory DeviceDetail.fromJson(Map<String, dynamic>? json) {
@@ -54,6 +56,11 @@ class DeviceDetail {
       createdAt: j['created_at']?.toString(),
       updatedAt: j['updated_at']?.toString(),
       safeSettings: settings,
+      // v45 additive: see `device_models.dart` for the contract notes.
+      providerSupportTier:
+          _optionalString(j['provider_support_tier']),
+      providerSupportTierLabel:
+          _optionalString(j['provider_support_tier_label']),
     );
   }
 
@@ -73,6 +80,20 @@ class DeviceDetail {
   /// set (battery_capacity_kwh, battery_reserve_percent). Empty when the
   /// device has no safe settings configured.
   final Map<String, String> safeSettings;
+
+  /// Structured tier value (v45). See `device_models.dart` for the
+  /// fallback semantics.
+  final String? providerSupportTier;
+
+  /// Polished Arabic label for the tier. Null when the backend
+  /// predates v45 or the device's provider code is unknown.
+  final String? providerSupportTierLabel;
+}
+
+String? _optionalString(Object? raw) {
+  if (raw is! String) return null;
+  final t = raw.trim();
+  return t.isEmpty ? null : t;
 }
 
 /// Latest reading summary for a single device. Mirrors the `cards` block of

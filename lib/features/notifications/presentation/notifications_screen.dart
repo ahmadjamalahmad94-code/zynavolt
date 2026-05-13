@@ -1156,7 +1156,15 @@ class _EmptyStateCard extends StatelessWidget {
               'عند توفرها.';
       }
     }
-    return 'ستظهر هنا رسائل الدعم، الحساب، المزامنة وحالة التطبيق.';
+    // v44 audit polish: explicitly redirect the user to the Energy tab
+    // for sun / weather / loads / battery notifications. Real-user
+    // testing showed people expected those alerts to appear in the App
+    // tab and didn't realise they live in the Energy tab. The single
+    // updated subtitle stays Arabic-only and avoids implying that
+    // anything has disappeared.
+    return 'ستظهر هنا رسائل الدعم والحساب والمزامنة. '
+        'تنبيهات الشمس والطقس والأحمال والبطارية تظهر '
+        'في تبويب «الطاقة والأحمال».';
   }
 
   /// Additional honest line appended only when the read-state filter
@@ -1422,6 +1430,12 @@ class _DetailSheet extends StatelessWidget {
                           ),
                         ),
                       ],
+                      // v44 phase 2: polished Arabic summary block for
+                      // the backend-supported scheduled energy events.
+                      // Renders nothing (zero-height) when the payload
+                      // is missing or the event_type is unsupported, so
+                      // legacy notifications keep their original layout.
+                      _PayloadSummary(notification: n),
                       const SizedBox(height: 14),
                       _DetailKvBlock(
                         notification: n,
@@ -1493,6 +1507,196 @@ class _StatusPill extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
+    );
+  }
+}
+
+/// v44 phase 2: polished Arabic detail block for scheduled energy
+/// events whose backend payload is supported in phase 1a.
+///
+/// Renders **nothing** (zero-height `SizedBox.shrink`) when:
+///   * the notification has no `payload` (legacy rows, support /
+///     account / app notifications, live events without a structured
+///     echo), or
+///   * the `event_type` is not on the phase 1a whitelist
+///     (`periodic_day`, `periodic_night`, `pre_sunset`, `daily_report`).
+///
+/// Every cell goes through [NotificationLabels.format…] so empty or
+/// malformed payload values render the friendly Arabic placeholder
+/// `غير متوفر` instead of leaking raw English slugs to the user.
+class _PayloadSummary extends StatelessWidget {
+  const _PayloadSummary({required this.notification});
+
+  final AppNotification notification;
+
+  /// Whitelist of `event_type` values the v44 phase 1a backend mirror
+  /// actually populates. Anything outside this set is treated as
+  /// "no summary to render" — the technical section still shows the
+  /// raw event_type for support tracing.
+  static const Set<String> _supportedEventTypes = {
+    'periodic_day',
+    'periodic_night',
+    'pre_sunset',
+    'daily_report',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = notification.payload;
+    final ev = notification.eventType.trim().toLowerCase();
+    if (payload == null || !_supportedEventTypes.contains(ev)) {
+      return const SizedBox.shrink();
+    }
+
+    final rows = <_PayloadRow>[];
+    switch (ev) {
+      case 'periodic_day':
+      case 'periodic_night':
+        rows.addAll([
+          _PayloadRow('نسبة البطارية',
+              NotificationLabels.formatSocPercent(payload['soc'])),
+          _PayloadRow('الإنتاج الشمسي الحالي',
+              NotificationLabels.formatWatts(payload['solar_w'])),
+          _PayloadRow('استهلاك المنزل الحالي',
+              NotificationLabels.formatWatts(payload['home_w'])),
+        ]);
+        final weather = payload['weather_summary'];
+        if (weather != null &&
+            weather.toString().trim().isNotEmpty) {
+          rows.add(_PayloadRow('ملخص الطقس',
+              NotificationLabels.formatFreeText(weather)));
+        }
+        break;
+      case 'pre_sunset':
+        rows.addAll([
+          _PayloadRow('الوقت المتبقي للغروب',
+              NotificationLabels.formatMinutes(payload['minutes_to_sunset'])),
+          _PayloadRow('نسبة البطارية الآن',
+              NotificationLabels.formatSocPercent(payload['soc_now'])),
+          _PayloadRow(
+            'اكتمال الشحن قبل الغروب',
+            NotificationLabels.formatWillFullBeforeSunset(
+              payload['will_full_before_sunset'],
+            ),
+          ),
+          _PayloadRow(
+            'الوقت المتوقع للشحن الكامل',
+            NotificationLabels.formatHours(payload['time_to_full_hours']),
+          ),
+        ]);
+        break;
+      case 'daily_report':
+        rows.addAll([
+          _PayloadRow('إنتاج اليوم السابق',
+              NotificationLabels.formatKwh(payload['yesterday_kwh'])),
+          _PayloadRow('إنتاج الشهر',
+              NotificationLabels.formatKwh(payload['month_kwh'])),
+          _PayloadRow('الإجمالي التراكمي',
+              NotificationLabels.formatKwh(payload['lifetime_kwh'])),
+        ]);
+        break;
+    }
+
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.emerald.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppTheme.emerald.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppTheme.emerald.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.insights_outlined,
+                    size: 14,
+                    color: AppTheme.emerald,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'ملخص التنبيه',
+                    style: TextStyle(
+                      color: AppTheme.emerald,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) const SizedBox(height: 4),
+              _PayloadRowWidget(row: rows[i]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PayloadRow {
+  const _PayloadRow(this.label, this.value);
+  final String label;
+  final String value;
+}
+
+class _PayloadRowWidget extends StatelessWidget {
+  const _PayloadRowWidget({required this.row});
+  final _PayloadRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 3,
+          child: Text(
+            row.label,
+            style: const TextStyle(
+              color: AppTheme.softInk,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              height: 1.5,
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 2,
+          child: SelectableText(
+            row.value,
+            textAlign: TextAlign.start,
+            style: const TextStyle(
+              color: AppTheme.ink,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w900,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1657,46 +1861,102 @@ class _TechDetailsToggle extends StatelessWidget {
   }
 }
 
-/// v97: raw English slug panel. Renders the backend's identifiers
-/// verbatim — including the notification's primary key — so support
-/// agents have everything they need to trace a row. Only visible after
-/// the user taps [_TechDetailsToggle].
+/// Collapsed-by-default diagnostics panel for support agents tracing a
+/// notification back to its backend payload. Only visible after the
+/// user taps [_TechDetailsToggle].
+///
+/// v44 audit polish:
+///   * Row labels are now fully Arabic (via
+///     [NotificationLabels.technicalRowLabel]) so the panel no longer
+///     leaks English identifiers as labels in an Arabic-first surface.
+///     The **values** stay raw — that is the diagnostic payload.
+///   * The previous forced-LTR wrapper around the rows is gone:
+///     Arabic labels follow the parent screen's natural RTL flow, and
+///     Latin values inside an RTL cell are bidi-isolated by Flutter
+///     automatically, so the row reads cleanly without it.
+///   * Empty values render as the calm Arabic placeholder
+///     `لا يوجد` instead of a bare em-dash that reads as foreign
+///     punctuation inside an Arabic-first surface.
 class _TechDetailsPanel extends StatelessWidget {
   const _TechDetailsPanel({required this.notification});
   final AppNotification notification;
+
+  /// Calm Arabic placeholder for missing raw values. Distinct from
+  /// [NotificationLabels.payloadEmpty] (`غير متوفر`, payload summary)
+  /// and [NotificationLabels.emptyFieldLabel] (`غير محدد`, primary
+  /// metadata) so each surface has a tonally appropriate fallback.
+  static const String _missing = 'لا يوجد';
 
   @override
   Widget build(BuildContext context) {
     final n = notification;
     return Container(
       padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppTheme.line),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _RawKvRow(label: 'id', value: '${n.id}'),
+          // Arabic intro — keeps the panel clearly secondary and
+          // signals to the user that what follows is technical, not
+          // for normal reading.
+          Row(
+            children: [
+              Container(
+                width: 18,
+                height: 18,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppTheme.faintMuted.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.code,
+                  size: 11,
+                  color: AppTheme.faintMuted,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'حقول للتشخيص الفني فقط',
+                  style: TextStyle(
+                    color: AppTheme.faintMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           _RawKvRow(
-            label: 'event_type',
-            value: n.eventType.isEmpty ? '—' : n.eventType,
+            label: NotificationLabels.technicalRowLabel('id'),
+            value: '#${n.id}',
           ),
           _RawKvRow(
-            label: 'source_type',
-            value: n.sourceType.isEmpty ? '—' : n.sourceType,
+            label: NotificationLabels.technicalRowLabel('event_type'),
+            value: n.eventType.isEmpty ? _missing : n.eventType,
           ),
           _RawKvRow(
-            label: 'source_id',
-            value: n.sourceId == null ? '—' : '${n.sourceId}',
+            label: NotificationLabels.technicalRowLabel('source_type'),
+            value: n.sourceType.isEmpty ? _missing : n.sourceType,
           ),
           _RawKvRow(
-            label: 'status',
-            value: n.status.isEmpty ? '—' : n.status,
+            label: NotificationLabels.technicalRowLabel('source_id'),
+            value: n.sourceId == null ? _missing : '#${n.sourceId}',
           ),
           _RawKvRow(
-            label: 'is_read',
+            label: NotificationLabels.technicalRowLabel('status'),
+            value: n.status.isEmpty ? _missing : n.status,
+          ),
+          _RawKvRow(
+            label: NotificationLabels.technicalRowLabel('is_read'),
             value: NotificationLabels.boolLabel(n.isRead),
           ),
         ],
@@ -1705,10 +1965,14 @@ class _TechDetailsPanel extends StatelessWidget {
   }
 }
 
-/// Monospace-styled raw KV row for [_TechDetailsPanel]. Same shape as
-/// [_KvRow] but with the label in latin slug-style on the start side
-/// and the value rendered slightly muted — visually signals "this is
-/// raw data, not a localised label".
+/// Raw KV row for [_TechDetailsPanel].
+///
+/// v44 audit polish: the row now displays an Arabic label (resolved
+/// by [NotificationLabels.technicalRowLabel]) on the leading side
+/// and the raw backend value on the trailing side. The label keeps
+/// its visual subordination (lighter tone, smaller font, w500
+/// weight) so it doesn't compete with the Arabic primary metadata
+/// rendered immediately above the panel.
 class _RawKvRow extends StatelessWidget {
   const _RawKvRow({required this.label, required this.value});
   final String label;
@@ -1725,11 +1989,10 @@ class _RawKvRow extends StatelessWidget {
             flex: 2,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.faintMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
+              style: TextStyle(
+                color: AppTheme.faintMuted.withValues(alpha: 0.85),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -1740,7 +2003,7 @@ class _RawKvRow extends StatelessWidget {
               style: const TextStyle(
                 color: AppTheme.softInk,
                 fontSize: 11.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

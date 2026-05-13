@@ -183,4 +183,154 @@ class NotificationLabels {
     if (sourceType.trim().isNotEmpty) return sourceTypeLabel(sourceType);
     return '';
   }
+
+  // ── v44 phase 2 — Arabic payload formatters ──────────────────────
+  //
+  // These small helpers turn raw backend payload values (kWh / W /
+  // percent / minutes / booleans) into polished Arabic display strings
+  // for the v44 phase 2 detail-sheet summary block. Every helper
+  // gracefully degrades to [emptyFieldLabel] when the input is missing
+  // or malformed — the UI never crashes on a partial payload.
+
+  /// Placeholder for any payload row whose value is missing or
+  /// untranslatable. Calmer than an em-dash for full Arabic readability.
+  static const String payloadEmpty = 'غير متوفر';
+
+  /// Battery state-of-charge as "78%". Returns [payloadEmpty] when the
+  /// value isn't a number.
+  static String formatSocPercent(Object? raw) {
+    final n = _coerceNum(raw);
+    if (n == null) return payloadEmpty;
+    return '${n.round()}%';
+  }
+
+  /// Power in watts, e.g. "1,230 واط". Rounded to the nearest integer
+  /// since instantaneous watt values are reported to mobile as ints
+  /// already on the backend.
+  static String formatWatts(Object? raw) {
+    final n = _coerceNum(raw);
+    if (n == null) return payloadEmpty;
+    return '${_formatThousands(n.round())} واط';
+  }
+
+  /// Energy in kWh. "12.5 كيلوواط·ساعة" (one decimal, comma thousands).
+  static String formatKwh(Object? raw) {
+    final n = _coerceNum(raw);
+    if (n == null) return payloadEmpty;
+    final intPart = n.truncate();
+    final formatted = n.abs() < 100
+        ? n.toStringAsFixed(1)
+        : _formatThousands(intPart.abs())
+            + (n - intPart >= 0.05 ? '.${((n - intPart) * 10).round().clamp(0, 9)}' : '');
+    final signed = n < 0 ? '-${formatted.replaceFirst('-', '')}' : formatted;
+    return '$signed كيلوواط·ساعة';
+  }
+
+  /// Convert a minutes-to-event value into a calm Arabic remaining
+  /// label, e.g. 47.0 → "٤٧ دقيقة". Falls back to [payloadEmpty]
+  /// when the input is non-numeric.
+  ///
+  /// We deliberately keep Western-Arabic digits (0-9) because mixing
+  /// Eastern Arabic digits with the rest of the app (every other place
+  /// uses Western digits) would feel inconsistent. If the value is
+  /// >= 60 we still render in minutes — the backend only emits this
+  /// field for the pre-sunset window where 90 minutes is the practical
+  /// ceiling, so an "hour-and-minutes" split is overkill here.
+  static String formatMinutes(Object? raw) {
+    final n = _coerceNum(raw);
+    if (n == null) return payloadEmpty;
+    final rounded = n.round();
+    return '$rounded دقيقة';
+  }
+
+  /// Convert a fractional-hours value (e.g. `time_to_full_hours: 2.1`)
+  /// into a calm Arabic remaining label. Sub-hour values render in
+  /// minutes; whole hours render with up to one decimal.
+  static String formatHours(Object? raw) {
+    final n = _coerceNum(raw);
+    if (n == null) return payloadEmpty;
+    if (n.isNegative) return payloadEmpty;
+    if (n < 1) {
+      return '${(n * 60).round()} دقيقة';
+    }
+    final asMinutes = (n * 60).round();
+    final hours = asMinutes ~/ 60;
+    final minutes = asMinutes % 60;
+    if (minutes == 0) return '$hours ساعة';
+    return '$hours ساعة و$minutes دقيقة';
+  }
+
+  /// Whether a charge cycle is expected to top up before sunset.
+  /// Polished Arabic product wording instead of a bare yes/no.
+  static String formatWillFullBeforeSunset(Object? raw) {
+    if (raw is bool) return raw ? 'متوقع' : 'غير متوقع';
+    return payloadEmpty;
+  }
+
+  /// Free-form short Arabic summary string (e.g.
+  /// `weather_summary: "غيوم خفيفة"`). Falls back to [payloadEmpty]
+  /// when the value is missing or empty.
+  static String formatFreeText(Object? raw) {
+    if (raw == null) return payloadEmpty;
+    final s = raw.toString().trim();
+    return s.isEmpty ? payloadEmpty : s;
+  }
+
+  // ── Technical-panel row labels (v44 audit polish) ──────────────────
+  //
+  // The detail sheet's collapsed "تفاصيل تقنية" panel used to label
+  // its rows with raw English keys (`id`, `event_type`, `source_type`,
+  // …). Per real-user feedback, those labels still read too
+  // prominently inside an Arabic-first surface. Phase 2b made them
+  // visually subordinate; this audit pass replaces them with Arabic
+  // labels while keeping the **values** raw (intentional — the panel
+  // is for support tracing). Each label is phrased to make clear it
+  // describes the underlying code, not a polished user concept:
+  // "رمز…" (code), "علامة…" (flag), "الخام" (raw).
+  //
+  // Unknown keys fall through to the original raw key so a future
+  // backend addition doesn't disappear from the panel silently.
+  static const Map<String, String> _technicalRowLabels = {
+    'id': 'رقم الإشعار',
+    'event_type': 'رمز نوع الحدث',
+    'source_type': 'رمز المصدر',
+    'source_id': 'مرجع الجهاز',
+    'status': 'الحالة الخام',
+    'is_read': 'علامة القراءة',
+  };
+
+  /// Arabic label for a technical-panel row keyed by its backend field
+  /// name. Returns the raw `key` unchanged when no mapping exists, so
+  /// new fields never silently vanish from the diagnostics panel.
+  static String technicalRowLabel(String key) {
+    final n = key.trim().toLowerCase();
+    if (n.isEmpty) return key;
+    return _technicalRowLabels[n] ?? key;
+  }
+}
+
+// ── private helpers (file-scope) ──────────────────────────────────────
+
+num? _coerceNum(Object? raw) {
+  if (raw is num) return raw;
+  if (raw is String) {
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    return num.tryParse(t);
+  }
+  return null;
+}
+
+/// "1,234" / "12" — comma thousands for integer Arabic display. Kept
+/// inline because the app intentionally does not depend on the `intl`
+/// package.
+String _formatThousands(int v) {
+  final s = v.abs().toString();
+  final buf = StringBuffer();
+  final n = s.length;
+  for (var i = 0; i < n; i++) {
+    if (i > 0 && (n - i) % 3 == 0) buf.write(',');
+    buf.write(s[i]);
+  }
+  return v < 0 ? '-$buf' : buf.toString();
 }

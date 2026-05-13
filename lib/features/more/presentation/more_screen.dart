@@ -166,6 +166,37 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               subtitle: 'الباقة، الدور، حدود الأجهزة، والقدرات.',
               onTap: () => context.push(AppRoutes.account),
             ),
+            const SizedBox(height: 10),
+            // v63: Support moved here from the bottom nav. The bottom
+            // nav's fifth slot now hosts the Weather tab; Support is
+            // less frequently used and reads cleanly as a tile under
+            // the account group.
+            _NavTile(
+              icon: Icons.support_agent_outlined,
+              label: 'الدعم',
+              subtitle: 'فتح تذكرة جديدة أو متابعة المحادثات الحالية.',
+              onTap: () => context.push(AppRoutes.support),
+            ),
+            const SizedBox(height: 16),
+            // v57: analytics section — anchors the statistics + reports
+            // surfaces in the app structure even though reports is
+            // still a placeholder. Both tiles route outside the
+            // bottom-nav shell so a back arrow returns to More.
+            const _GroupHeader(label: 'التحليلات'),
+            const SizedBox(height: 8),
+            _NavTile(
+              icon: Icons.bar_chart_outlined,
+              label: 'الإحصاءات',
+              subtitle: 'ملخّصات الإنتاج والاستهلاك يومياً وشهرياً.',
+              onTap: () => context.push(AppRoutes.statistics),
+            ),
+            const SizedBox(height: 10),
+            _NavTile(
+              icon: Icons.description_outlined,
+              label: 'التقارير',
+              subtitle: 'تقارير قابلة للتنزيل — قيد التطوير على الجوال.',
+              onTap: () => context.push(AppRoutes.reports),
+            ),
             const SizedBox(height: 16),
             // v69: التطبيق section — settings tile + about card.
             const _GroupHeader(label: 'التطبيق'),

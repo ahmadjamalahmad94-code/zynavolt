@@ -7,6 +7,7 @@ import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../data/support_repository.dart';
+import 'attachment_draft_strip.dart';
 
 /// طلب دعم جديد (v88).
 ///
@@ -33,6 +34,10 @@ class _SupportCreateCaseScreenState
   String _priority = 'normal';
   bool _submitting = false;
   String? _error;
+  // v72: draft attachments picked via `file_picker`. Stays `[]` for
+  // the JSON-only path; non-empty switches the repository call to
+  // the multipart route added in v71.
+  List<AttachmentDraft> _attachments = const [];
 
   @override
   void dispose() {
@@ -50,22 +55,34 @@ class _SupportCreateCaseScreenState
     });
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final detail = await ref.read(supportRepositoryProvider).createCase(
+      final result = await ref.read(supportRepositoryProvider).createCase(
             kind: _kind,
             priority: _priority,
             subject: _subject.text.trim(),
             body: _body.text.trim(),
+            attachments: _attachments.map((d) => d.toSpec()).toList(),
           );
       ref.invalidate(supportCasesProvider);
       if (!mounted) return;
+      // v72: surface the backend's rejected_attachments[] honestly.
+      // The case itself was created — never block navigation just
+      // because one upload was rejected.
+      final summary = buildRejectionSummary(
+        result.rejectedAttachments,
+        savedCount: result.savedAttachments.length,
+      );
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(
-          duration: Duration(seconds: 2),
-          content: Text('تم إنشاء طلب الدعم.'),
+        ..showSnackBar(SnackBar(
+          duration:
+              summary != null ? const Duration(seconds: 5) : const Duration(seconds: 2),
+          content: Text(summary ?? 'تم إنشاء طلب الدعم.'),
         ));
       context.pushReplacement(
-        AppRoutes.supportCase(detail.summary.type, detail.summary.id),
+        AppRoutes.supportCase(
+          result.caseDetail.summary.type,
+          result.caseDetail.summary.id,
+        ),
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -134,6 +151,13 @@ class _SupportCreateCaseScreenState
                   _PriorityPicker(
                     value: _priority,
                     onChanged: (v) => setState(() => _priority = v),
+                  ),
+                  const SizedBox(height: 12),
+                  AttachmentDraftStrip(
+                    drafts: _attachments,
+                    enabled: !_submitting,
+                    onChanged: (next) =>
+                        setState(() => _attachments = next),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),

@@ -9,15 +9,19 @@ class HomeShell extends StatelessWidget {
 
   final Widget child;
 
+  // v63: bottom nav now hosts Weather instead of Support. Support is
+  // reached from the المزيد tab via `context.push(/support)` so the
+  // user gets a back-arrow AppBar — the v61 audit recommended this
+  // swap to avoid crowding the bar with a sixth destination.
   static const List<_Tab> _tabs = [
     _Tab(label: 'الرئيسية', icon: Icons.dashboard_outlined, route: AppRoutes.home),
     _Tab(label: 'الأجهزة', icon: Icons.solar_power_outlined, route: AppRoutes.devices),
+    _Tab(label: 'الطقس', icon: Icons.cloud_outlined, route: AppRoutes.weather),
     _Tab(
       label: 'الإشعارات',
       icon: Icons.notifications_none_outlined,
       route: AppRoutes.notifications,
     ),
-    _Tab(label: 'الدعم', icon: Icons.support_agent_outlined, route: AppRoutes.support),
     _Tab(label: 'المزيد', icon: Icons.more_horiz, route: AppRoutes.more),
   ];
 

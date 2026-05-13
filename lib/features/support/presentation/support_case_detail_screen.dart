@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
@@ -14,6 +17,7 @@ import '../../../core/widgets/app_refresh_button.dart';
 import '../data/support_labels.dart';
 import '../data/support_models.dart';
 import '../data/support_repository.dart';
+import 'attachment_draft_strip.dart';
 
 /// Support case thread (v88 + v90b).
 ///
@@ -337,6 +341,9 @@ class _ReplyComposer extends ConsumerStatefulWidget {
 class _ReplyComposerState extends ConsumerState<_ReplyComposer> {
   final _controller = TextEditingController();
   bool _sending = false;
+  // v72: drafted attachments for THIS reply. Cleared on success so
+  // the strip is empty for the next reply on the same thread.
+  List<AttachmentDraft> _drafts = const [];
 
   @override
   void dispose() {
@@ -350,19 +357,28 @@ class _ReplyComposerState extends ConsumerState<_ReplyComposer> {
     setState(() => _sending = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(supportRepositoryProvider).reply(
+      final result = await ref.read(supportRepositoryProvider).reply(
             kind: widget.kind,
             id: widget.id,
             body: body,
+            attachments: _drafts.map((d) => d.toSpec()).toList(),
           );
       if (!mounted) return;
       _controller.clear();
+      // v72: surface backend rejections honestly. The reply itself
+      // posted — we never block the thread refresh on rejected files.
+      final summary = buildRejectionSummary(
+        result.rejectedAttachments,
+        savedCount: result.savedAttachments.length,
+      );
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(
-          duration: Duration(seconds: 2),
-          content: Text('تم إرسال الرد.'),
+        ..showSnackBar(SnackBar(
+          duration:
+              summary != null ? const Duration(seconds: 5) : const Duration(seconds: 2),
+          content: Text(summary ?? 'تم إرسال الرد.'),
         ));
+      setState(() => _drafts = const []);
       // Trigger the screen's local refresh + auto-scroll-to-bottom.
       await widget.onSent();
     } on ApiException catch (e) {
@@ -432,6 +448,15 @@ class _ReplyComposerState extends ConsumerState<_ReplyComposer> {
             decoration: const InputDecoration(
               hintText: 'اكتب رسالتك هنا...',
             ),
+          ),
+          const SizedBox(height: 10),
+          // v72: optional attachments for this reply. The picker
+          // strip is hidden mid-send so a second pick doesn't
+          // race with the in-flight upload.
+          AttachmentDraftStrip(
+            drafts: _drafts,
+            enabled: !_sending,
+            onChanged: (next) => setState(() => _drafts = next),
           ),
           const SizedBox(height: 10),
           SizedBox(
@@ -585,10 +610,271 @@ class _MessageBubble extends StatelessWidget {
               ),
             ),
           ],
+          // v69: read-only attachment chips. Tap → download via the
+          // existing bearer-auth Dio client into the app cache, then
+          // hand off to the OS viewer. We never launch the bearer-
+          // gated URL externally — the OS browser doesn't carry the
+          // mobile session.
+          if (message.attachments.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final attachment in message.attachments) ...[
+                  _AttachmentRow(attachment: attachment),
+                  if (attachment != message.attachments.last)
+                    const SizedBox(height: 6),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+/// v69: one attachment row inside a message bubble. Tap triggers a
+/// download (bearer-auth Dio) → write to the app cache → OS open.
+/// All three steps surface honest errors; storage_missing (HTTP 410)
+/// gets a dedicated calm Arabic message.
+class _AttachmentRow extends ConsumerStatefulWidget {
+  const _AttachmentRow({required this.attachment});
+  final SupportAttachment attachment;
+
+  @override
+  ConsumerState<_AttachmentRow> createState() => _AttachmentRowState();
+}
+
+class _AttachmentRowState extends ConsumerState<_AttachmentRow> {
+  bool _busy = false;
+
+  Future<void> _onTap() async {
+    if (_busy) return;
+    final attachment = widget.attachment;
+    final download = attachment.downloadUrl.trim();
+    if (download.isEmpty) return;
+
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await ref
+          .read(supportRepositoryProvider)
+          .downloadAttachment(download);
+
+      // Write to a per-attachment temp file inside the app's cache
+      // directory. Including the attachment id in the filename keeps
+      // a stable on-disk key (re-opening the same attachment hits
+      // the same path) while a sanitized original_filename preserves
+      // the extension so the OS viewer routes correctly.
+      final cache = await getTemporaryDirectory();
+      final safeName = _safeFilename(attachment);
+      final file = File('${cache.path}/support_${attachment.id}_$safeName');
+      await file.writeAsBytes(bytes, flush: true);
+
+      // Hand off to the OS. `open_filex` returns a result that
+      // distinguishes "no viewer installed" from a permission error,
+      // so we can surface a more helpful message in those cases.
+      final result = await OpenFilex.open(file.path);
+      if (!mounted) return;
+      switch (result.type) {
+        case ResultType.done:
+          // Success — the OS viewer is now showing the file. No snackbar.
+          break;
+        case ResultType.noAppToOpen:
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(const SnackBar(
+              duration: Duration(seconds: 3),
+              content: Text(
+                'لا يوجد تطبيق على الجهاز قادر على فتح هذا النوع من الملفات.',
+              ),
+            ));
+          break;
+        case ResultType.fileNotFound:
+        case ResultType.permissionDenied:
+        case ResultType.error:
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              duration: const Duration(seconds: 3),
+              content: Text(
+                result.message.isNotEmpty
+                    ? 'تعذّر فتح الملف: ${result.message}'
+                    : 'تعذّر فتح الملف.',
+              ),
+            ));
+          break;
+      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          duration: const Duration(seconds: 4),
+          content: Text(_arabicMessageForError(e)),
+        ));
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          duration: const Duration(seconds: 3),
+          content: Text('تعذّر تنزيل الملف: $e'),
+        ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final attachment = widget.attachment;
+    final icon = _iconForAttachment(attachment);
+    final sizeLabel = attachment.humanSize;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: _busy ? null : _onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppTheme.line),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppTheme.indigoSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: AppTheme.indigoPrimary, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      attachment.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.ink,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (sizeLabel.isNotEmpty) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        sizeLabel,
+                        style: const TextStyle(
+                          color: AppTheme.faintMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_busy)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                )
+              else
+                const Icon(
+                  Icons.download_outlined,
+                  size: 18,
+                  color: AppTheme.faintMuted,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Map the backend's stable `code` onto calm Arabic copy. The v68
+/// download endpoint can return:
+///   * 410 `attachment_storage_missing` — file gone after redeploy.
+///   * 404 `support_case_not_found` / `attachment_not_found` — either
+///     the case isn't on this user or the attachment doesn't belong
+///     to this case. We surface a single calm message either way.
+///   * 401 — auth, surfaced verbatim from `ApiException.message`
+///     (the api_client's Arabic default is already user-friendly).
+String _arabicMessageForError(ApiException e) {
+  switch (e.code) {
+    case 'attachment_storage_missing':
+      return 'تم رفع هذا الملف قبل تحديث الخادم ولم يعد متاحًا. اطلب '
+          'من الدعم إعادة رفعه داخل المحادثة.';
+    case 'attachment_not_found':
+    case 'support_case_not_found':
+      return 'لم يعد هذا المرفق متاحًا.';
+    default:
+      return e.message;
+  }
+}
+
+/// Best-effort generic icon based on the attachment's mime type or
+/// filename extension. Falls back to `insert_drive_file_outlined`
+/// for anything unknown — we never claim a preview the UI doesn't
+/// actually render.
+IconData _iconForAttachment(SupportAttachment a) {
+  final mime = a.contentType.toLowerCase();
+  if (mime.startsWith('image/')) return Icons.image_outlined;
+  if (mime == 'application/pdf') return Icons.picture_as_pdf_outlined;
+  if (mime.contains('zip') || mime.contains('compressed')) {
+    return Icons.folder_zip_outlined;
+  }
+  if (mime.contains('sheet') || mime.contains('excel') ||
+      mime.contains('csv')) {
+    return Icons.table_chart_outlined;
+  }
+  if (mime.contains('word') || mime.contains('document')) {
+    return Icons.description_outlined;
+  }
+  // Fall back on the filename extension for content_type='' edge cases.
+  final lower = a.originalFilename.toLowerCase();
+  if (lower.endsWith('.pdf')) return Icons.picture_as_pdf_outlined;
+  if (lower.endsWith('.zip')) return Icons.folder_zip_outlined;
+  if (lower.endsWith('.png') || lower.endsWith('.jpg') ||
+      lower.endsWith('.jpeg') || lower.endsWith('.gif')) {
+    return Icons.image_outlined;
+  }
+  if (lower.endsWith('.csv') || lower.endsWith('.xls') ||
+      lower.endsWith('.xlsx')) {
+    return Icons.table_chart_outlined;
+  }
+  if (lower.endsWith('.doc') || lower.endsWith('.docx')) {
+    return Icons.description_outlined;
+  }
+  return Icons.insert_drive_file_outlined;
+}
+
+/// Sanitize the original_filename for the on-disk path. We replace
+/// path separators + control characters but preserve the extension
+/// so the OS viewer routes based on it.
+String _safeFilename(SupportAttachment a) {
+  final raw = a.originalFilename.trim();
+  final fallback = 'attachment_${a.id}';
+  if (raw.isEmpty) return fallback;
+  final cleaned = raw.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1f]'), '_');
+  if (cleaned.isEmpty) return fallback;
+  // Cap at a reasonable length so Windows / iOS filesystems are happy.
+  return cleaned.length > 80 ? cleaned.substring(cleaned.length - 80) : cleaned;
 }
 
 class _SectionHeader extends StatelessWidget {

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/app_config.dart';
+import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/state/app_session.dart';
@@ -218,6 +220,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 14),
+                        // v54: link to the new register screen. Kept
+                        // as a subtle TextButton row so the existing
+                        // login surface isn't redesigned.
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'ليس لديك حساب؟ ',
+                              style: TextStyle(
+                                color: AppTheme.faintMuted,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  context.go(AppRoutes.register),
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(0, 32),
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'إنشاء حساب جديد',
+                                style: TextStyle(
+                                  color: AppTheme.indigoPrimary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
                         Center(
                           child: Text(
                             'الواجهة الخلفية: ${AppConfig.apiBaseUrl}',

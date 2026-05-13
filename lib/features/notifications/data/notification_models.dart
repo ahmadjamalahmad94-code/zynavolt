@@ -4,6 +4,8 @@
 // (`_mobile_notification_event_payload` in `app/blueprints/mobile_api.py`).
 // Optional fields default to safe values so a partial payload never throws.
 
+import 'dart:convert';
+
 class AppNotification {
   AppNotification({
     required this.id,
@@ -17,6 +19,7 @@ class AppNotification {
     required this.isRead,
     required this.createdAt,
     required this.readAt,
+    this.payload,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) =>
@@ -32,6 +35,7 @@ class AppNotification {
         isRead: json['is_read'] == true,
         createdAt: json['created_at']?.toString(),
         readAt: json['read_at']?.toString(),
+        payload: _parsePayload(json['payload']),
       );
 
   final int id;
@@ -45,6 +49,17 @@ class AppNotification {
   final bool isRead;
   final String? createdAt;
   final String? readAt;
+
+  /// Structured echo of the backend event added in v44 phase 1a. The
+  /// backend returns a parsed JSON object (already a `Map`) for the
+  /// supported scheduled energy events; for every other notification
+  /// (legacy rows, live energy events, support/account messages) the
+  /// field is missing or `null` and we keep this property as `null`.
+  ///
+  /// The mobile UI must never render raw English keys from this map —
+  /// it goes through [notification_labels] / detail-sheet formatters
+  /// to produce Arabic presentation.
+  final Map<String, dynamic>? payload;
 
   /// Returns a copy with selected fields overridden — used after `mark-read`
   /// so the new server payload becomes the displayed item without rebuilding
@@ -66,7 +81,37 @@ class AppNotification {
         isRead: isRead ?? this.isRead,
         createdAt: createdAt,
         readAt: readAt ?? this.readAt,
+        payload: payload,
       );
+}
+
+/// Defensive parser for the v44 phase 1a `payload` envelope.
+///
+/// Accepts:
+///   * a `Map<String, dynamic>` from a JSON object → return a fresh
+///     copy with stringified keys so downstream code can rely on the
+///     map shape regardless of which `dart:convert` flavour produced it
+///   * a raw JSON-encoded `String` (defensive: legacy / proxy layers
+///     that might forward `result` as a literal string)
+///   * anything else (null / list / number / bool) → `null` so the UI
+///     falls back to its no-payload code path
+Map<String, dynamic>? _parsePayload(Object? raw) {
+  if (raw is Map) {
+    return raw.map((k, v) => MapEntry(k.toString(), v));
+  }
+  // Some intermediate proxies may serialise the column as a JSON string
+  // rather than parsing it back into a map. Try once, swallow failures.
+  if (raw is String && raw.trim().isNotEmpty) {
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is Map) {
+        return decoded.map((k, v) => MapEntry(k.toString(), v));
+      }
+    } catch (_) {
+      // fall through to null
+    }
+  }
+  return null;
 }
 
 class NotificationPageMeta {

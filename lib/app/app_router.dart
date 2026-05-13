@@ -6,6 +6,7 @@ import '../core/state/app_session.dart';
 import '../features/account/presentation/account_screen.dart';
 import '../features/account/presentation/change_password_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/register_screen.dart';
 import '../features/devices/presentation/device_detail_screen.dart';
 import '../features/devices/presentation/devices_screen.dart';
 import '../features/loads/presentation/loads_screen.dart';
@@ -14,19 +15,27 @@ import '../features/home/presentation/home_shell.dart';
 import '../features/more/presentation/more_screen.dart';
 import '../features/notifications/presentation/notification_settings_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
+import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/reports/presentation/reports_screen.dart';
 import '../features/settings/presentation/app_settings_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
+import '../features/statistics/presentation/statistics_screen.dart';
 import '../features/support/presentation/support_case_detail_screen.dart';
 import '../features/support/presentation/support_create_case_screen.dart';
 import '../features/support/presentation/support_screen.dart';
+import '../features/weather/presentation/weather_screen.dart';
 
 class AppRoutes {
   const AppRoutes._();
   static const String splash = '/splash';
   static const String login = '/login';
+  static const String register = '/register';
+  static const String onboarding = '/onboarding';
   static const String home = '/home';
   static const String devices = '/devices';
+  // v63: weather promoted into the bottom nav (replaces support).
+  static const String weather = '/weather';
   static const String notifications = '/notifications';
   static const String support = '/support';
   static const String more = '/more';
@@ -34,6 +43,11 @@ class AppRoutes {
   static const String loads = '/loads';
   static const String account = '/account';
   static const String settings = '/settings';
+  // v57: subscriber statistics + reports surfaces. Statistics consumes
+  // the v56 `/api/v1/devices/<id>/statistics` endpoint; reports is an
+  // honest placeholder until a mobile-side reports API arrives.
+  static const String statistics = '/statistics';
+  static const String reports = '/reports';
   static const String notificationSettings = '/notifications/settings';
   static const String supportCreate = '/support/new';
   static const String changePassword = '/account/change-password';
@@ -66,10 +80,42 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == AppRoutes.splash ? null : AppRoutes.splash;
       }
       if (phase == AppSessionPhase.unauthenticated) {
-        return loc == AppRoutes.login ? null : AppRoutes.login;
+        // v54: allow /register alongside /login while unauthenticated
+        // so a new user can self-register without being bounced back
+        // to the login screen.
+        if (loc == AppRoutes.login || loc == AppRoutes.register) {
+          return null;
+        }
+        return AppRoutes.login;
       }
-      // authenticated
-      if (loc == AppRoutes.splash || loc == AppRoutes.login) {
+      // authenticated — v53: first-run subscribers (whose backend
+      // onboarding state is still incomplete) are routed into
+      // /onboarding instead of /home. Subscribers who already
+      // completed onboarding never see this redirect because their
+      // AuthUser.onboardingCompleted flag is true.
+      final user = session.user;
+      final needsOnboarding =
+          user != null && !user.isAdmin && !user.onboardingCompleted;
+
+      if (needsOnboarding) {
+        // Allow profile + change-password mid-flow so the user can
+        // satisfy the "complete profile" stage without being bounced
+        // back to the onboarding root immediately.
+        final allowedDuringOnboarding = <String>{
+          AppRoutes.onboarding,
+          AppRoutes.profile,
+          AppRoutes.changePassword,
+        };
+        if (!allowedDuringOnboarding.contains(loc)) {
+          return AppRoutes.onboarding;
+        }
+        return null;
+      }
+
+      if (loc == AppRoutes.splash ||
+          loc == AppRoutes.login ||
+          loc == AppRoutes.register ||
+          loc == AppRoutes.onboarding) {
         return AppRoutes.home;
       }
       return null;
@@ -82,6 +128,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.login,
         builder: (_, _) => const LoginScreen(),
+      ),
+      // v54: subscriber self-registration. Reachable only while the
+      // session is unauthenticated — the redirect above bounces an
+      // already-signed-in user back to /home if they hit /register
+      // directly (e.g. from a deep link).
+      GoRoute(
+        path: AppRoutes.register,
+        builder: (_, _) => const RegisterScreen(),
+      ),
+      // v53: first-run onboarding for subscriber users. The redirect
+      // above gates entry — this route is only reachable when the
+      // session is authenticated and onboarding is not yet complete.
+      GoRoute(
+        path: AppRoutes.onboarding,
+        builder: (_, _) => const OnboardingScreen(),
       ),
       // Profile is a focused detail screen — kept outside the bottom-nav
       // shell so it has full screen real estate during edit.
@@ -119,6 +180,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settings,
         builder: (_, _) => const AppSettingsScreen(),
       ),
+      // v57: subscriber statistics — minimal screen consuming the v56
+      // backend endpoint. Outside the bottom-nav shell so the user
+      // gets a normal back arrow to wherever they came from (More tab,
+      // device detail, etc.).
+      GoRoute(
+        path: AppRoutes.statistics,
+        builder: (_, _) => const StatisticsScreen(),
+      ),
+      // v57: subscriber reports — honest placeholder. PDF / CSV
+      // export and self-sufficiency / share derivations live on the
+      // web today; this screen is the mobile section anchor so the
+      // navigation feels complete.
+      GoRoute(
+        path: AppRoutes.reports,
+        builder: (_, _) => const ReportsScreen(),
+      ),
       // v87: notification settings editor (master + channels + per-section
       // toggles). Opened from the Notifications screen AppBar.
       GoRoute(
@@ -141,6 +218,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.supportCreate,
         builder: (_, _) => const SupportCreateCaseScreen(),
       ),
+      // v63: support list — moved out of the bottom-nav shell. Reached
+      // from the "الدعم" tile in More via `context.push(...)`, which
+      // gives the screen a back-arrow AppBar instead of the bottom-nav
+      // shell. The bottom-nav slot it used to occupy now hosts Weather.
+      GoRoute(
+        path: AppRoutes.support,
+        builder: (_, _) => const SupportScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
         routes: [
@@ -153,15 +238,17 @@ final routerProvider = Provider<GoRouter>((ref) {
             pageBuilder: (_, _) =>
                 const NoTransitionPage(child: DevicesScreen()),
           ),
+          // v63: Weather tab — backed by the v62
+          // `/api/v1/devices/<id>/weather` endpoint.
+          GoRoute(
+            path: AppRoutes.weather,
+            pageBuilder: (_, _) =>
+                const NoTransitionPage(child: WeatherScreen()),
+          ),
           GoRoute(
             path: AppRoutes.notifications,
             pageBuilder: (_, _) =>
                 const NoTransitionPage(child: NotificationsScreen()),
-          ),
-          GoRoute(
-            path: AppRoutes.support,
-            pageBuilder: (_, _) =>
-                const NoTransitionPage(child: SupportScreen()),
           ),
           GoRoute(
             path: AppRoutes.more,

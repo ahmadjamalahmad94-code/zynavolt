@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -6,6 +8,7 @@ import '../../app/app_config.dart';
 import '../storage/secure_token_storage.dart';
 import 'api_exception.dart';
 import 'api_response.dart';
+import 'multipart_file_spec.dart';
 
 /// Single Dio-backed HTTP client.
 ///
@@ -83,6 +86,97 @@ class ApiClient {
   }) =>
       _send(() => _dio.delete<dynamic>(path,
           data: body, queryParameters: query, options: options));
+
+  /// v72: POST that sends a `multipart/form-data` body. `fields` are
+  /// the non-file form keys (sent as `request.form` strings). `files`
+  /// is the list of file specs — each becomes a `MultipartFile`
+  /// entry under the same `multiFileField` key (defaults to
+  /// `attachments` to match the v71 backend's
+  /// `request.files.getlist('attachments')` reader).
+  ///
+  /// Goes through the same `_AuthInterceptor` so bearer + 401-refresh
+  /// behaviour is identical to JSON POSTs. Errors map through the
+  /// existing `_mapDio` path so structured backend codes (e.g.
+  /// `support_case_closed`) surface as `ApiException`.
+  Future<ApiResponse<Map<String, dynamic>>> postMultipart(
+    String path, {
+    Map<String, Object?> fields = const {},
+    List<MultipartFileSpec> files = const [],
+    String multiFileField = 'attachments',
+  }) {
+    return _send(() {
+      // Build the FormData payload. Stringify every field value so
+      // werkzeug's `request.form` reads them cleanly (multipart form
+      // values are always strings on the wire).
+      final formMap = <String, dynamic>{};
+      fields.forEach((key, value) {
+        if (value == null) return;
+        formMap[key] = value is bool ? (value ? 'true' : 'false') : '$value';
+      });
+      // The same field name maps to a list of files; Dio accepts a
+      // list of MultipartFile under one key.
+      formMap[multiFileField] = files.map((f) => f.toMultipartFile()).toList();
+      final formData = FormData.fromMap(formMap);
+      return _dio.post<dynamic>(path, data: formData);
+    });
+  }
+
+  /// v69: GET that returns the raw response body as bytes. Used for
+  /// support attachment downloads where the route streams an inline
+  /// binary blob rather than the standard JSON envelope.
+  ///
+  /// The same auth interceptor attaches the bearer token + handles
+  /// 401 refresh as on JSON calls. On non-2xx responses Dio raises
+  /// a `DioException`; we first try to decode the body as a JSON
+  /// envelope (e.g. `{ok: false, code: 'attachment_storage_missing'}`)
+  /// so callers get a structured `ApiException` they can map onto
+  /// stable Arabic copy. Otherwise we fall back to the standard
+  /// status-based mapping.
+  Future<Uint8List> getBytes(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    try {
+      final response = await _dio.get<List<int>>(
+        path,
+        queryParameters: query,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final body = response.data;
+      if (body == null || body.isEmpty) {
+        throw ApiException(
+          message: 'تعذّر تنزيل الملف.',
+          kind: ApiErrorKind.unknown,
+        );
+      }
+      return Uint8List.fromList(body);
+    } on DioException catch (e) {
+      // Error responses on a bytes request still contain a JSON
+      // body when the backend uses `api_error`/`api_ok` (see
+      // `web/app/services/api_responses.py`). Decode that body and
+      // re-route through `_mapDio` so the caller sees a structured
+      // `ApiException` with the stable `code`.
+      final raw = e.response?.data;
+      if (raw is List<int> && raw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(utf8.decode(raw));
+          if (decoded is Map<String, dynamic>) {
+            e.response!.data = decoded;
+          }
+        } catch (_) {
+          // Not JSON — fall through to status-based mapping.
+        }
+      }
+      throw _mapDio(e);
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      throw ApiException(
+        message: 'تعذّر تنزيل الملف: $e',
+        kind: ApiErrorKind.unknown,
+      );
+    }
+  }
 
   Future<ApiResponse<Map<String, dynamic>>> _send(
     Future<Response<dynamic>> Function() send,

@@ -203,4 +203,154 @@ void main() {
       expect(label, NotificationLabels.unknownEventLabel);
     });
   });
+
+  // ── v44 phase 2 — Arabic payload formatters ──────────────────────
+  group('formatSocPercent', () {
+    test('renders integer percent for valid numbers', () {
+      expect(NotificationLabels.formatSocPercent(78), '78%');
+      expect(NotificationLabels.formatSocPercent(78.5), '79%'); // rounded
+      expect(NotificationLabels.formatSocPercent(0), '0%');
+      expect(NotificationLabels.formatSocPercent(100), '100%');
+    });
+    test('accepts numeric strings (defensive parse)', () {
+      expect(NotificationLabels.formatSocPercent('80'), '80%');
+    });
+    test('falls back to "غير متوفر" for nulls / garbage', () {
+      expect(NotificationLabels.formatSocPercent(null),
+          NotificationLabels.payloadEmpty);
+      expect(NotificationLabels.formatSocPercent('not-a-number'),
+          NotificationLabels.payloadEmpty);
+    });
+  });
+
+  group('formatWatts', () {
+    test('comma-thousands integer + Arabic unit', () {
+      expect(NotificationLabels.formatWatts(1230), '1,230 واط');
+      expect(NotificationLabels.formatWatts(0), '0 واط');
+      expect(NotificationLabels.formatWatts(1230.7), '1,231 واط');
+    });
+    test('null / garbage → غير متوفر', () {
+      expect(NotificationLabels.formatWatts(null),
+          NotificationLabels.payloadEmpty);
+      expect(NotificationLabels.formatWatts(const Object()),
+          NotificationLabels.payloadEmpty);
+    });
+  });
+
+  group('formatKwh', () {
+    test('keeps one decimal for values < 100', () {
+      expect(NotificationLabels.formatKwh(12.5), '12.5 كيلوواط·ساعة');
+      expect(NotificationLabels.formatKwh(0.0), '0.0 كيلوواط·ساعة');
+    });
+    test('larger values render with comma thousands', () {
+      final out = NotificationLabels.formatKwh(9876.5);
+      expect(out.startsWith('9,876'), isTrue);
+      expect(out.endsWith('كيلوواط·ساعة'), isTrue);
+    });
+    test('null → غير متوفر', () {
+      expect(NotificationLabels.formatKwh(null),
+          NotificationLabels.payloadEmpty);
+    });
+  });
+
+  group('formatMinutes', () {
+    test('rounds and appends Arabic unit', () {
+      expect(NotificationLabels.formatMinutes(47), '47 دقيقة');
+      expect(NotificationLabels.formatMinutes(47.4), '47 دقيقة');
+      expect(NotificationLabels.formatMinutes(0), '0 دقيقة');
+    });
+    test('null → غير متوفر', () {
+      expect(NotificationLabels.formatMinutes(null),
+          NotificationLabels.payloadEmpty);
+    });
+  });
+
+  group('formatHours', () {
+    test('sub-hour values fall back to minutes', () {
+      expect(NotificationLabels.formatHours(0.5), '30 دقيقة');
+    });
+    test('whole-hour values render in hours only', () {
+      expect(NotificationLabels.formatHours(2.0), '2 ساعة');
+    });
+    test('mixed hour/minute values', () {
+      expect(NotificationLabels.formatHours(2.1), '2 ساعة و6 دقيقة');
+    });
+    test('null + negative + garbage → غير متوفر', () {
+      expect(NotificationLabels.formatHours(null),
+          NotificationLabels.payloadEmpty);
+      expect(NotificationLabels.formatHours(-1.0),
+          NotificationLabels.payloadEmpty);
+      expect(NotificationLabels.formatHours('mystery'),
+          NotificationLabels.payloadEmpty);
+    });
+  });
+
+  group('formatWillFullBeforeSunset', () {
+    test('booleans → "متوقع" / "غير متوقع"', () {
+      expect(NotificationLabels.formatWillFullBeforeSunset(true), 'متوقع');
+      expect(
+          NotificationLabels.formatWillFullBeforeSunset(false), 'غير متوقع');
+    });
+    test('non-bool inputs render as غير متوفر, never as raw value', () {
+      expect(NotificationLabels.formatWillFullBeforeSunset(null),
+          NotificationLabels.payloadEmpty);
+      expect(NotificationLabels.formatWillFullBeforeSunset('true'),
+          NotificationLabels.payloadEmpty);
+      expect(NotificationLabels.formatWillFullBeforeSunset(1),
+          NotificationLabels.payloadEmpty);
+    });
+  });
+
+  group('formatFreeText', () {
+    test('trims and returns Arabic strings unchanged', () {
+      expect(NotificationLabels.formatFreeText('  غيوم خفيفة 30%  '),
+          'غيوم خفيفة 30%');
+    });
+    test('empty / null / whitespace → غير متوفر', () {
+      expect(NotificationLabels.formatFreeText(''),
+          NotificationLabels.payloadEmpty);
+      expect(NotificationLabels.formatFreeText(null),
+          NotificationLabels.payloadEmpty);
+      expect(NotificationLabels.formatFreeText('   '),
+          NotificationLabels.payloadEmpty);
+    });
+  });
+
+  // ── v44 audit polish — Arabic technical-panel labels ──────────────
+  group('technicalRowLabel', () {
+    const cases = {
+      'id': 'رقم الإشعار',
+      'event_type': 'رمز نوع الحدث',
+      'source_type': 'رمز المصدر',
+      'source_id': 'مرجع الجهاز',
+      'status': 'الحالة الخام',
+      'is_read': 'علامة القراءة',
+    };
+    cases.forEach((key, arabic) {
+      test('$key → $arabic', () {
+        expect(NotificationLabels.technicalRowLabel(key), arabic);
+      });
+    });
+
+    test('case-insensitive + whitespace tolerant', () {
+      expect(NotificationLabels.technicalRowLabel('EVENT_TYPE'),
+          'رمز نوع الحدث');
+      expect(NotificationLabels.technicalRowLabel('  source_id  '),
+          'مرجع الجهاز');
+    });
+
+    test('unknown key falls through to the raw key (no silent loss)', () {
+      // The technical panel is for support tracing — if a future
+      // backend addition surfaces a new key, falling back to the raw
+      // key keeps it visible until a polished Arabic label is added.
+      expect(
+        NotificationLabels.technicalRowLabel('future_field'),
+        'future_field',
+      );
+    });
+
+    test('empty key returns empty string unchanged', () {
+      expect(NotificationLabels.technicalRowLabel(''), '');
+    });
+  });
 }

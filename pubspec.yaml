@@ -32,6 +32,46 @@ dependencies:
   # later without rewriting the navigator.
   go_router: ^14.6.1
 
+  # v69: support attachments. The mobile-side flow is:
+  #   1. Fetch the attachment bytes through the existing Dio client
+  #      (bearer-token route — cannot be hit by a plain external
+  #      browser without the Authorization header).
+  #   2. Write the bytes into a per-app temporary file.
+  #   3. Hand off to the OS viewer so PDFs / images / Office docs
+  #      open in their native app instead of the user being stuck
+  #      with a downloaded blob.
+  # `path_provider` gives us the app-cache directory cross-platform.
+  # `open_filex` is the maintained successor to `open_file`/`open_file_plus`.
+  path_provider: ^2.1.4
+  open_filex: ^4.5.0
+
+  # v72: support attachment upload. The mobile-side flow opens the
+  # OS picker (documents + images), captures `PlatformFile.path` /
+  # `name` / `size`, then hands the files to a new
+  # `ApiClient.postMultipart(...)` helper for the v71 upload routes.
+  # `file_picker` is the standard maintained picker and supports
+  # multi-file selection in one tap — required by the backend's
+  # multi-file `attachments` field. Camera capture is intentionally
+  # NOT in phase-1 (would add `image_picker` + permission plumbing).
+  file_picker: ^8.1.4
+
+  # v77: line/area charts for the Home advanced energy visualization
+  # section. `fl_chart` is the de-facto Flutter charting package — well
+  # maintained, premium visual quality, native CustomPainter (no JS /
+  # web view), supports overlaid line series, smooth Bezier curves,
+  # area fills, custom tooltips, and RTL-friendly axis labeling. We
+  # use it only inside the new `features/charts/...` module; no other
+  # screen pulls it in, so the dependency stays scoped.
+  fl_chart: ^0.69.2
+
+  # v91 — open Stripe-hosted Checkout URLs in the OS browser.
+  # The mobile plan-change flow returns a `url` from
+  # `/api/mobile/account/plan-change/checkout`; this package launches
+  # it in Chrome / Safari / the system browser and brings the user
+  # back to the app on completion (success / cancel deep-link or
+  # plain "return to app" gesture).
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -158,4 +158,51 @@ void main() {
       expect(l.statusText, '');
     });
   });
+
+  // ── v45 — provider support tier ──────────────────────────────────
+  group('DeviceDetail.providerSupportTier (v45)', () {
+    test('parses backend-provided tier fields', () {
+      final snapshot = DeviceDetailSnapshot.fromJson(const {
+        'device': {
+          'id': 1,
+          'device_type': 'deye',
+          'api_provider': 'deye',
+          'is_active': true,
+          'provider_support_tier': 'live-supported',
+          'provider_support_tier_label': 'مدعوم',
+        },
+        'latest': null,
+      });
+      expect(snapshot.device.providerSupportTier, 'live-supported');
+      expect(snapshot.device.providerSupportTierLabel, 'مدعوم');
+    });
+
+    test('legacy backend without tier fields → null (UI hides badge)', () {
+      final snapshot = DeviceDetailSnapshot.fromJson(const {
+        'device': {
+          'id': 1,
+          'device_type': 'deye',
+          'is_active': true,
+        },
+        'latest': null,
+      });
+      expect(snapshot.device.providerSupportTier, isNull);
+      expect(snapshot.device.providerSupportTierLabel, isNull);
+    });
+
+    test('empty / whitespace tier fields → null', () {
+      final snapshot = DeviceDetailSnapshot.fromJson(const {
+        'device': {
+          'id': 1,
+          'device_type': 'deye',
+          'is_active': true,
+          'provider_support_tier': '',
+          'provider_support_tier_label': '   ',
+        },
+        'latest': null,
+      });
+      expect(snapshot.device.providerSupportTier, isNull);
+      expect(snapshot.device.providerSupportTierLabel, isNull);
+    });
+  });
 }

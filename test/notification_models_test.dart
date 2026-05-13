@@ -181,4 +181,90 @@ void main() {
       expect(result.unreadCount, 0);
     });
   });
+
+  // ── v44 phase 2 — optional `payload` envelope ──────────────────────
+  group('AppNotification.payload (v44 phase 2)', () {
+    test('parses a JSON object payload into a Map<String, dynamic>', () {
+      final n = AppNotification.fromJson(const {
+        'id': 101,
+        'event_type': 'periodic_day',
+        'source_type': 'energy',
+        'is_read': false,
+        'payload': {
+          'v': 1,
+          'device_id': 42,
+          'ts_utc': '2026-05-11T10:00:00+00:00',
+          'soc': 78.5,
+          'solar_w': 1230,
+          'home_w': 410,
+          'weather_summary': 'غيوم خفيفة 30%',
+        },
+      });
+      expect(n.payload, isNotNull);
+      expect(n.payload!['v'], 1);
+      expect(n.payload!['device_id'], 42);
+      expect(n.payload!['soc'], 78.5);
+      expect(n.payload!['weather_summary'], 'غيوم خفيفة 30%');
+    });
+
+    test('missing payload key → payload is null (legacy back-compat)', () {
+      final n = AppNotification.fromJson(const {
+        'id': 1,
+        'event_type': 'support',
+        'is_read': true,
+      });
+      expect(n.payload, isNull);
+    });
+
+    test('explicit null payload → payload is null', () {
+      final n = AppNotification.fromJson(const {
+        'id': 1,
+        'is_read': false,
+        'payload': null,
+      });
+      expect(n.payload, isNull);
+    });
+
+    test('non-object payload (list / number / string-garbage) → null', () {
+      expect(
+        AppNotification.fromJson(const {'id': 1, 'payload': [1, 2, 3]})
+            .payload,
+        isNull,
+      );
+      expect(
+        AppNotification.fromJson(const {'id': 1, 'payload': 42}).payload,
+        isNull,
+      );
+      expect(
+        AppNotification.fromJson(const {'id': 1, 'payload': 'oops'})
+            .payload,
+        isNull,
+      );
+    });
+
+    test('JSON-encoded string payload is defensively decoded', () {
+      // Defensive: some intermediate proxies forward the raw `result`
+      // column as a literal JSON string instead of a parsed map.
+      final n = AppNotification.fromJson(const {
+        'id': 1,
+        'is_read': false,
+        'payload': '{"v": 1, "soc": 78.5}',
+      });
+      expect(n.payload, isNotNull);
+      expect(n.payload!['v'], 1);
+      expect(n.payload!['soc'], 78.5);
+    });
+
+    test('copyWith preserves the payload field', () {
+      final n = AppNotification.fromJson(const {
+        'id': 1,
+        'is_read': false,
+        'payload': {'v': 1, 'soc': 80},
+      });
+      final marked = n.copyWith(isRead: true, status: 'read');
+      expect(marked.payload, isNotNull);
+      expect(marked.payload!['soc'], 80);
+      expect(marked.isRead, isTrue);
+    });
+  });
 }

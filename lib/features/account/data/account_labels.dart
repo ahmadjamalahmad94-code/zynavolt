@@ -61,6 +61,40 @@ class AccountLabels {
     'user': 'مستخدم',
   };
 
+  /// v76: quota reset-period codes returned in
+  /// `account.quotas[].reset_period`. Empty string is treated as
+  /// "never resets" and shown as a calm dash — not "غير معروف".
+  static const Map<String, String> _quotaResetPeriods = {
+    'daily': 'يومي',
+    'weekly': 'أسبوعي',
+    'monthly': 'شهري',
+    'yearly': 'سنوي',
+    'annual': 'سنوي',
+    'never': 'بدون إعادة تعيين',
+  };
+
+  /// v76: quota status codes returned in `account.quotas[].status`.
+  static const Map<String, String> _quotaStatuses = {
+    'active': 'نشطة',
+    'inactive': 'غير نشطة',
+    'paused': 'موقوفة',
+  };
+
+  /// Convert a quota reset-period slug to its Arabic label. Falls back
+  /// to the raw value so unknown future periods still render readable.
+  static String quotaResetPeriodLabel(String code) {
+    final normalized = code.trim().toLowerCase();
+    if (normalized.isEmpty) return '—';
+    return _quotaResetPeriods[normalized] ?? code;
+  }
+
+  /// Convert a quota status code to its Arabic label.
+  static String quotaStatusLabel(String code) {
+    final normalized = code.trim().toLowerCase();
+    if (normalized.isEmpty) return '—';
+    return _quotaStatuses[normalized] ?? code;
+  }
+
   /// Convert a plan-feature slug to its Arabic label. Falls back to the
   /// raw slug so unknown future keys still render *something* readable,
   /// not an empty chip.
