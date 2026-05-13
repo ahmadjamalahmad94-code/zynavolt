@@ -240,7 +240,9 @@ class _HomeHero extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                // v99c — shrink vertical padding to take ~30 % height
+                // out of the hero. Top 10 (was 16), bottom 12 (was 18).
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -256,8 +258,9 @@ class _HomeHero extends StatelessWidget {
                         const _BrandWordmark(),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    // Greeting (centred, white, large) with a wave emoji.
+                    const SizedBox(height: 10),
+                    // Greeting (centred, white) — slightly smaller than
+                    // before so the hero stays compact.
                     Center(
                       child: Text(
                         greetingName.isNotEmpty
@@ -265,40 +268,41 @@ class _HomeHero extends StatelessWidget {
                             : 'مرحبًا بعودتك 👋',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 18.5,
+                          fontSize: 16.5,
                           fontWeight: FontWeight.w900,
-                          height: 1.25,
+                          height: 1.2,
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    // Three stacked pills, right-aligned so the sun
-                    // illustration on the left has breathing room.
+                    const SizedBox(height: 8),
+                    // v99c — pills now wrap horizontally instead of
+                    // stacking vertically. Saves ~70 px of card height.
+                    // Right-aligned so they don't crowd the sun
+                    // illustration on the left.
                     Align(
                       alignment: Alignment.centerRight,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
                           if (dailyText != null)
                             _HeroPill(
                               icon: Icons.wb_sunny_outlined,
                               text: dailyText,
                             ),
-                          if (dailyText != null) const SizedBox(height: 6),
                           _HeroPill(
                             icon: Icons.person_outline,
                             text: deviceName ?? 'لم يتم اختيار جهاز',
                           ),
-                          if (lastReading != null) ...[
-                            const SizedBox(height: 6),
+                          if (lastReading != null)
                             _HeroPill(
                               icon: Icons.schedule_outlined,
                               text: 'آخر قراءة $lastReading',
                             ),
-                          ],
                         ],
                       ),
                     ),
@@ -2063,10 +2067,11 @@ String _formatKwh(double k) {
 
 String _formatIsoUtc(String? iso) {
   if (iso == null || iso.isEmpty) return '—';
-  // No client-side timezone math — render as the server gave it, just
-  // trimmed to seconds for compactness.
-  final dot = iso.indexOf('.');
-  return dot > 0 ? iso.substring(0, dot) : iso;
+  // v99c — route through the canonical 12-hour Arabic formatter so
+  // the footer's "آخر قراءة" / "وقت الاستجابة" rows match the rest
+  // of the app's time format. Falls back to the raw input on parse
+  // failure (legacy contract).
+  return formatBackendExact(iso) ?? iso;
 }
 
 /// v97: the local `_formatHm` was replaced by [formatBackendHm] from

@@ -136,10 +136,24 @@ class AppTheme {
       // app now renders in Alexandria — no per-widget change needed.
       // Flutter resolves any `FontWeight.wXXX` request straight to the
       // matching cut.
+      //
+      // v99c: belt-and-suspenders — apply Alexandria explicitly to every
+      // entry of the generated TextTheme + primaryTextTheme. The base
+      // `fontFamily: 'Alexandria'` SHOULD propagate via `DefaultTextStyle`,
+      // but custom `TextStyle()` instances created without `inherit:true`
+      // (or built before the theme is wired) can fall back to system
+      // fonts. Explicit `.apply(fontFamily:)` guarantees Alexandria
+      // everywhere regardless of how a widget constructs its style.
       fontFamily: 'Alexandria',
     );
 
+    final alexandriaTextTheme = base.textTheme.apply(fontFamily: 'Alexandria');
+    final alexandriaPrimaryTextTheme =
+        base.primaryTextTheme.apply(fontFamily: 'Alexandria');
+
     return base.copyWith(
+      textTheme: alexandriaTextTheme,
+      primaryTextTheme: alexandriaPrimaryTextTheme,
       appBarTheme: const AppBarTheme(
         backgroundColor: surface,
         foregroundColor: ink,

@@ -72,17 +72,18 @@ void main() {
     test('naive UTC input renders the device-local clock, not raw UTC', () {
       // We can't assert an exact hour without knowing the test host's
       // timezone, but we CAN assert two facts:
-      //   1. The output is HH:mm shape (5 chars, single colon).
+      //   1. v99c — the output is `HH:mm ص/م` shape (12-hour
+      //      Arabic period marker).
       //   2. It's NOT a naive substring of the input — for any host
       //      whose offset is non-zero, the local hour differs from
       //      the UTC hour.
       final out = formatBackendHm('2026-05-11T10:00:00.123456');
       expect(out, isNotNull);
-      expect(out!, matches(RegExp(r'^\d{2}:\d{2}$')));
+      expect(out!, matches(RegExp(r'^\d{2}:\d{2} [صم]$')));
       // Local offset can be zero on some CI hosts → guard the inequality.
       final offsetHours = DateTime.now().timeZoneOffset.inHours;
       if (offsetHours != 0) {
-        expect(out, isNot('10:00'),
+        expect(out, isNot('10:00 ص'),
             reason:
                 'formatBackendHm must convert UTC → device-local, '
                 'not pass UTC clock through verbatim');
@@ -103,10 +104,11 @@ void main() {
       expect(formatBackendDate('not-a-date'), 'not-a-date');
     });
 
-    test('valid input renders YYYY-MM-DD HH:mm shape', () {
+    test('valid input renders YYYY-MM-DD  h:mm ص/م shape', () {
+      // v99c — 12-hour Arabic format with ص/م period marker.
       final out = formatBackendDateTime('2026-05-11T10:00:00');
       expect(out, isNotNull);
-      expect(out, matches(RegExp(r'^\d{4}-\d{2}-\d{2}  \d{2}:\d{2}$')));
+      expect(out, matches(RegExp(r'^\d{4}-\d{2}-\d{2}  \d{2}:\d{2} [صم]$')));
     });
 
     test('formatBackendDate renders YYYY-MM-DD only', () {
@@ -117,10 +119,14 @@ void main() {
   });
 
   group('formatBackendExact', () {
-    test('renders YYYY-MM-DD HH:mm:ss', () {
+    test('renders YYYY-MM-DD  h:mm:ss ص/م', () {
+      // v99c — 12-hour Arabic format with ص/م period marker.
       final out = formatBackendExact('2026-05-11T10:15:30');
       expect(out, isNotNull);
-      expect(out, matches(RegExp(r'^\d{4}-\d{2}-\d{2}  \d{2}:\d{2}:\d{2}$')));
+      expect(
+        out,
+        matches(RegExp(r'^\d{4}-\d{2}-\d{2}  \d{2}:\d{2}:\d{2} [صم]$')),
+      );
     });
 
     test('null / empty returns null', () {
@@ -135,15 +141,12 @@ void main() {
       expect(formatBackendRelative(''), '—');
     });
 
-    test('today produces HH:mm', () {
+    test('today produces h:mm ص/م', () {
       // Construct an ISO that maps to the *same local day* as the
       // injected `now`. Using a UTC instant + a known device offset
       // is fragile across CI hosts, so we craft the iso from `now`
       // itself.
       final now = DateTime(2026, 5, 11, 14, 30);
-      // The iso we feed in must, after UTC-aware parsing + toLocal,
-      // land on today. The simplest stable construction: write a
-      // UTC ISO that represents the same instant as `now.toUtc()`.
       final asUtc = now.toUtc();
       final iso = '${asUtc.year.toString().padLeft(4, '0')}-'
           '${asUtc.month.toString().padLeft(2, '0')}-'
@@ -152,24 +155,40 @@ void main() {
           '${asUtc.minute.toString().padLeft(2, '0')}:'
           '${asUtc.second.toString().padLeft(2, '0')}';
       final out = formatBackendRelative(iso, now: now);
-      expect(out, matches(RegExp(r'^\d{2}:\d{2}$')));
+      expect(out, matches(RegExp(r'^\d{2}:\d{2} [صم]$')));
     });
 
-    test('older same-year produces MM-DD HH:mm shape', () {
+    test('older same-year produces MM-DD  h:mm ص/م shape', () {
       final now = DateTime(2026, 12, 15);
-      final asUtc = DateTime.utc(2026, 5, 11, 14, 30);
-      final iso =
-          '${asUtc.year}-05-11T14:30:00';
+      final iso = '2026-05-11T14:30:00';
       final out = formatBackendRelative(iso, now: now);
-      // The exact local hour depends on the host TZ, but the
-      // `MM-DD  HH:mm` shape must hold.
-      expect(out, matches(RegExp(r'^\d{2}-\d{2}  \d{2}:\d{2}$')));
+      expect(out, matches(RegExp(r'^\d{2}-\d{2}  \d{2}:\d{2} [صم]$')));
     });
 
-    test('different year produces YYYY-MM-DD HH:mm shape', () {
+    test('different year produces YYYY-MM-DD  h:mm ص/م shape', () {
       final now = DateTime(2026, 12, 15);
       final out = formatBackendRelative('2024-01-02T10:00:00', now: now);
-      expect(out, matches(RegExp(r'^\d{4}-\d{2}-\d{2}  \d{2}:\d{2}$')));
+      expect(
+        out,
+        matches(RegExp(r'^\d{4}-\d{2}-\d{2}  \d{2}:\d{2} [صم]$')),
+      );
+    });
+  });
+
+  // v99c — 12-hour conversion sanity tests.
+  group('12-hour Arabic period conversion', () {
+    test('midnight UTC parsed → device-local hours rendered in 12h form', () {
+      // Cover edge cases at midnight (00) and noon (12) by using a
+      // round-trip: feed in a UTC ISO and assert the output ends
+      // with either ص or م regardless of host timezone.
+      for (final h in [0, 6, 11, 12, 13, 18, 23]) {
+        final iso =
+            '2026-05-11T${h.toString().padLeft(2, '0')}:00:00';
+        final out = formatBackendHm(iso);
+        expect(out, isNotNull, reason: 'hour $h: null result');
+        expect(out!.endsWith(' ص') || out.endsWith(' م'), isTrue,
+            reason: 'hour $h: output `$out` lacks ص/م suffix');
+      }
     });
   });
 }

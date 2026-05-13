@@ -61,10 +61,24 @@ DateTime? parseBackendIso(String? iso) {
   return DateTime.tryParse(normalised);
 }
 
-/// `YYYY-MM-DD  HH:mm` (24-hour clock) in device-local time. Returns
-/// `null` for null/empty input, and the raw input string when parsing
-/// fails — that preserves the old `formatDateTime` contract used by
-/// device / support / account screens.
+/// v99c — Convert a 24-hour `hour` into 12-hour wall-clock + an
+/// Arabic period marker (`ص` morning / `م` afternoon-evening).
+///   * 00 → 12 ص   (midnight)
+///   * 01–11 → 1..11 ص
+///   * 12 → 12 م   (noon)
+///   * 13–23 → 1..11 م
+({int hour12, String marker}) _to12h(int hour24) {
+  final marker = hour24 < 12 ? 'ص' : 'م';
+  var h = hour24 % 12;
+  if (h == 0) h = 12;
+  return (hour12: h, marker: marker);
+}
+
+/// `YYYY-MM-DD  h:mm ص/م` (12-hour clock with Arabic period) in
+/// device-local time. Returns `null` for null/empty input, and the
+/// raw input string when parsing fails — that preserves the old
+/// `formatDateTime` contract used by device / support / account
+/// screens.
 String? formatBackendDateTime(String? iso) {
   final parsed = parseBackendIso(iso);
   if (parsed == null) {
@@ -74,9 +88,10 @@ String? formatBackendDateTime(String? iso) {
   final y = local.year.toString().padLeft(4, '0');
   final m = local.month.toString().padLeft(2, '0');
   final d = local.day.toString().padLeft(2, '0');
-  final hh = local.hour.toString().padLeft(2, '0');
+  final t = _to12h(local.hour);
+  final hh = t.hour12.toString().padLeft(2, '0');
   final mm = local.minute.toString().padLeft(2, '0');
-  return '$y-$m-$d  $hh:$mm';
+  return '$y-$m-$d  $hh:$mm ${t.marker}';
 }
 
 /// `YYYY-MM-DD` in device-local time. Used for fields where the
@@ -94,21 +109,23 @@ String? formatBackendDate(String? iso) {
   return '$y-$m-$d';
 }
 
-/// Compact `HH:mm` (24-hour clock) in device-local time. Used by the
-/// Home hero's "آخر قراءة HH:mm" pill.
+/// Compact `h:mm ص/م` (12-hour clock with Arabic period) in
+/// device-local time. Used by the Home hero's "آخر قراءة" pill.
 String? formatBackendHm(String? iso) {
   final parsed = parseBackendIso(iso);
   if (parsed == null) {
     return _passThrough(iso);
   }
   final local = parsed.toLocal();
-  final hh = local.hour.toString().padLeft(2, '0');
+  final t = _to12h(local.hour);
+  final hh = t.hour12.toString().padLeft(2, '0');
   final mm = local.minute.toString().padLeft(2, '0');
-  return '$hh:$mm';
+  return '$hh:$mm ${t.marker}';
 }
 
-/// Full `YYYY-MM-DD  HH:mm:ss` in device-local time. Used by the
-/// Notifications detail sheet's "وقت الإنشاء" / "وقت القراءة" rows.
+/// Full `YYYY-MM-DD  h:mm:ss ص/م` in device-local time. Used by
+/// the Notifications detail sheet's "وقت الإنشاء" / "وقت القراءة"
+/// rows.
 String? formatBackendExact(String? iso) {
   final parsed = parseBackendIso(iso);
   if (parsed == null) {
@@ -118,17 +135,18 @@ String? formatBackendExact(String? iso) {
   final y = local.year.toString().padLeft(4, '0');
   final mo = local.month.toString().padLeft(2, '0');
   final d = local.day.toString().padLeft(2, '0');
-  final hh = local.hour.toString().padLeft(2, '0');
+  final t = _to12h(local.hour);
+  final hh = t.hour12.toString().padLeft(2, '0');
   final mm = local.minute.toString().padLeft(2, '0');
   final ss = local.second.toString().padLeft(2, '0');
-  return '$y-$mo-$d  $hh:$mm:$ss';
+  return '$y-$mo-$d  $hh:$mm:$ss ${t.marker}';
 }
 
 /// Arabic-friendly "humanised" relative timestamp:
-///   * Today               → `HH:mm`
-///   * Yesterday           → `أمس HH:mm`
-///   * Older (same year)   → `MM-DD  HH:mm`
-///   * Older (other year)  → `YYYY-MM-DD  HH:mm`
+///   * Today               → `h:mm ص/م`
+///   * Yesterday           → `أمس h:mm ص/م`
+///   * Older (same year)   → `MM-DD  h:mm ص/م`
+///   * Older (other year)  → `YYYY-MM-DD  h:mm ص/م`
 ///
 /// `now` defaults to [DateTime.now] but can be injected for tests.
 /// Returns `—` for null/empty input, and the raw input (truncated at
@@ -148,14 +166,16 @@ String formatBackendRelative(String? iso, {DateTime? now}) {
   final today = DateTime(nowVal.year, nowVal.month, nowVal.day);
   final dayOf = DateTime(local.year, local.month, local.day);
   final daysAgo = today.difference(dayOf).inDays;
-  final hh = local.hour.toString().padLeft(2, '0');
+  final t12 = _to12h(local.hour);
+  final hh = t12.hour12.toString().padLeft(2, '0');
   final mm = local.minute.toString().padLeft(2, '0');
-  if (daysAgo == 0) return '$hh:$mm';
-  if (daysAgo == 1) return 'أمس $hh:$mm';
+  final timeText = '$hh:$mm ${t12.marker}';
+  if (daysAgo == 0) return timeText;
+  if (daysAgo == 1) return 'أمس $timeText';
   final mo = local.month.toString().padLeft(2, '0');
   final d = local.day.toString().padLeft(2, '0');
-  if (local.year == nowVal.year) return '$mo-$d  $hh:$mm';
-  return '${local.year}-$mo-$d  $hh:$mm';
+  if (local.year == nowVal.year) return '$mo-$d  $timeText';
+  return '${local.year}-$mo-$d  $timeText';
 }
 
 /// Used when `parseBackendIso` returns null — return the original raw
