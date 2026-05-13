@@ -182,12 +182,15 @@ class AppTheme {
       fontFamily: 'Alexandria',
     );
 
-    final alexandriaTextTheme = base.textTheme.apply(fontFamily: 'Alexandria');
+    // v99c — apply Alexandria explicitly to primaryTextTheme; the
+    // textTheme override at the bottom of copyWith (below) already
+    // applies Alexandria via `.apply(bodyColor:, displayColor:)`
+    // because `fontFamily` was set on `base` at the top, but the
+    // primary variant doesn't get that flow, so we wire it here.
     final alexandriaPrimaryTextTheme =
         base.primaryTextTheme.apply(fontFamily: 'Alexandria');
 
     return base.copyWith(
-      textTheme: alexandriaTextTheme,
       primaryTextTheme: alexandriaPrimaryTextTheme,
       appBarTheme: const AppBarTheme(
         backgroundColor: surface,
@@ -300,11 +303,15 @@ class AppTheme {
         elevation: 6,
       ),
       dividerTheme: const DividerThemeData(color: line, thickness: 1, space: 1),
+      // v99c — chain Alexandria explicitly on top of the existing
+      // bodyColor / displayColor ink-mapping so the text theme
+      // honours both the colour spec AND the Arabic typography
+      // baseline.
       textTheme: base.textTheme
-          .apply(bodyColor: ink, displayColor: ink)
+          .apply(bodyColor: ink, displayColor: ink, fontFamily: 'Alexandria')
           .copyWith(
-            bodySmall: const TextStyle(color: faintMuted, fontSize: 12),
-            labelSmall: const TextStyle(color: muted, fontSize: 12),
+            bodySmall: const TextStyle(color: faintMuted, fontSize: 12, fontFamily: 'Alexandria'),
+            labelSmall: const TextStyle(color: muted, fontSize: 12, fontFamily: 'Alexandria'),
           ),
     );
   }

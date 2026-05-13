@@ -2343,26 +2343,53 @@ class _CardHeader extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
+    this.accent,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
 
+  /// v99d — optional accent colour. When provided, the icon square
+  /// inherits a gradient tinted with the accent so each card has a
+  /// distinct colour identity (battery = success, production =
+  /// warning, etc.). Callers that don't pass an accent fall back
+  /// to the original flat indigo soft square so existing usages
+  /// stay byte-compatible.
+  final Color? accent;
+
   @override
   Widget build(BuildContext context) {
+    final tint = accent ?? AppTheme.indigoPrimary;
+    final hasAccent = accent != null;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 30,
-          height: 30,
+          width: hasAccent ? 34 : 30,
+          height: hasAccent ? 34 : 30,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppTheme.indigoSoft,
-            borderRadius: BorderRadius.circular(9),
+            gradient: hasAccent
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      tint.withValues(alpha: 0.18),
+                      tint.withValues(alpha: 0.08),
+                    ],
+                  )
+                : null,
+            color: hasAccent ? null : AppTheme.indigoSoft,
+            borderRadius: BorderRadius.circular(hasAccent ? 11 : 9),
+            border: hasAccent
+                ? Border.all(
+                    color: tint.withValues(alpha: 0.22),
+                    width: 0.8,
+                  )
+                : null,
           ),
-          child: Icon(icon, color: AppTheme.indigoPrimary, size: 16),
+          child: Icon(icon, color: tint, size: hasAccent ? 17 : 16),
         ),
         const SizedBox(width: 10),
         Expanded(
