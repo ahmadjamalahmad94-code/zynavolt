@@ -22,81 +22,109 @@ class DevicesScreen extends ConsumerWidget {
     final devices = ref.watch(devicesListProvider);
     final activeId = ref.watch(effectiveDeviceIdProvider);
 
+    // v100 — Devices on the design system: gradient backdrop +
+    // glossy device tiles + branded FAB.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
-      appBar: AppBar(title: const Text('الأجهزة')),
-      // v48: subscriber-facing entry point to the add-device flow.
-      // Uses Navigator.push (not go_router) because the brief's
-      // allow-list does not include `lib/app/app_router.dart` —
-      // adding a named route entry is out-of-scope for v48.
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openAddDeviceFlow(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('إضافة جهاز'),
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text('الأجهزة'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(devicesListProvider),
-          child: devices.when(
-            // v71: scrollable loading wrapper for consistent
-            // RefreshIndicator behaviour across all states.
-            loading: () => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              children: const [
-                AppLoading(message: 'جارٍ تحميل أجهزتك...'),
-              ],
+      extendBody: true,
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.indigoPrimary.withValues(alpha: 0.45),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
-            error: (err, _) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              children: [
-                AppErrorState(
-                  error: err is ApiException
-                      ? err
-                      : ApiException(
-                          message: 'تعذّر تحميل الأجهزة.',
-                          kind: ApiErrorKind.unknown,
-                        ),
-                  onRetry: () => ref.invalidate(devicesListProvider),
-                ),
-              ],
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: () => _openAddDeviceFlow(context, ref),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: const Text(
+            'إضافة جهاز',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
             ),
-            data: (items) {
-              if (items.isEmpty) {
-                return ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  children: const [
-                    // v48: copy updated to point users at the new
-                    // in-app add-device FAB instead of asking them
-                    // to fall back to the web portal.
-                    AppEmptyState(
-                      icon: Icons.solar_power_outlined,
-                      title: 'لا توجد أجهزة بعد',
-                      subtitle:
-                          'اضغط زر «إضافة جهاز» في الأسفل لربط جهازك الأول.',
-                    ),
-                  ],
-                );
-              }
-              return ListView.separated(
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+          extendedPadding: const EdgeInsets.symmetric(horizontal: 22),
+          // Direct background gradient via a foreground decoration trick:
+          // we wrap the FAB in a Container with shadow above and let the
+          // FAB's own gradient come through the foreground.
+        ),
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
+          child: RefreshIndicator(
+            color: AppTheme.indigoPrimary,
+            onRefresh: () async => ref.invalidate(devicesListProvider),
+            child: devices.when(
+              loading: () => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                children: const [
+                  AppLoading(message: 'جارٍ تحميل أجهزتك...'),
+                ],
+              ),
+              error: (err, _) => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (_, i) {
-                  final d = items[i];
-                  final isSelected = activeId == d.id;
-                  return _DeviceTile(
-                    device: d,
-                    isSelected: isSelected,
-                    // v47: tap opens the read-only Device Details screen.
-                    // The set-active action now lives there.
-                    onTap: () => context.push(AppRoutes.deviceDetail(d.id)),
+                children: [
+                  AppErrorState(
+                    error: err is ApiException
+                        ? err
+                        : ApiException(
+                            message: 'تعذّر تحميل الأجهزة.',
+                            kind: ApiErrorKind.unknown,
+                          ),
+                    onRetry: () => ref.invalidate(devicesListProvider),
+                  ),
+                ],
+              ),
+              data: (items) {
+                if (items.isEmpty) {
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    children: const [
+                      AppEmptyState(
+                        icon: Icons.solar_power_outlined,
+                        title: 'لا توجد أجهزة بعد',
+                        subtitle:
+                            'اضغط زر «إضافة جهاز» في الأسفل لربط جهازك الأول.',
+                      ),
+                    ],
                   );
-                },
-              );
-            },
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) {
+                    final d = items[i];
+                    final isSelected = activeId == d.id;
+                    return _DeviceTile(
+                      device: d,
+                      isSelected: isSelected,
+                      onTap: () => context.push(AppRoutes.deviceDetail(d.id)),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -130,76 +158,121 @@ class _DeviceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v100 — glossy gradient tile with a filled gradient icon glyph.
+    final accent =
+        isSelected ? AppTheme.indigoPrimary : AppTheme.indigoBright;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        child: AppCard(
-          borderColor: isSelected ? AppTheme.indigoBright : AppTheme.line,
-          background: isSelected ? AppTheme.indigoSoft : AppTheme.surface,
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.surface
-                      : AppTheme.indigoSoft,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.solar_power_outlined,
-                  color: AppTheme.indigoPrimary,
-                  size: 20,
-                ),
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white,
+                accent.withValues(alpha: isSelected ? 0.10 : 0.05),
+              ],
+            ),
+            border: Border.all(
+              color: isSelected
+                  ? accent.withValues(alpha: 0.45)
+                  : AppTheme.line,
+              width: isSelected ? 1.4 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: isSelected ? 0.20 : 0.10),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            device.name.isNotEmpty ? device.name : '—',
-                            style: const TextStyle(
-                              color: AppTheme.ink,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isSelected) ...[
-                          const SizedBox(width: 8),
-                          const _ActivePill(),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      device.deviceType.toUpperCase(),
-                      style: const TextStyle(
-                        color: AppTheme.faintMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ],
-                ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
               ),
-              const SizedBox(width: 8),
-              _StatusPill(
-                  active: device.isActive,
-                  status: device.connectionStatus),
             ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              children: [
+                // Gradient icon glyph
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [accent, accent.withValues(alpha: 0.78)],
+                    ),
+                    borderRadius: BorderRadius.circular(13),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.42),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.solar_power_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              device.name.isNotEmpty ? device.name : '—',
+                              style: const TextStyle(
+                                color: AppTheme.ink,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.1,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isSelected) ...[
+                            const SizedBox(width: 8),
+                            const _ActivePill(),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        device.deviceType.toUpperCase(),
+                        style: const TextStyle(
+                          color: AppTheme.faintMuted,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _StatusPill(
+                  active: device.isActive,
+                  status: device.connectionStatus,
+                ),
+              ],
+            ),
           ),
         ),
       ),
