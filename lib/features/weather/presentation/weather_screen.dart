@@ -35,10 +35,17 @@ class WeatherScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final snap = ref.watch(weatherProvider);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
-      appBar: AppBar(title: const Text('الطقس')),
-      body: SafeArea(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text('الطقس'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(weatherProvider);
@@ -79,6 +86,7 @@ class WeatherScreen extends ConsumerWidget {
             },
           ),
         ),
+        ),  // close DecoratedBox child SafeArea
       ),
     );
   }

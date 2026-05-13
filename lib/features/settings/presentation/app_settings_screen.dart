@@ -59,10 +59,17 @@ class _AppSettingsScreenState extends ConsumerState<AppSettingsScreen> {
     final activeDevice = ref.watch(effectiveDeviceProvider);
     final activeId = ref.watch(effectiveDeviceIdProvider);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
-      appBar: AppBar(title: const Text('إعدادات التطبيق')),
-      body: SafeArea(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text('إعدادات التطبيق'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -89,6 +96,7 @@ class _AppSettingsScreenState extends ConsumerState<AppSettingsScreen> {
             const SizedBox(height: 24),
           ],
         ),
+      ),  // close DecoratedBox child SafeArea (v100)
       ),
     );
   }

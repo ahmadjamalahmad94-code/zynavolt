@@ -158,17 +158,22 @@ class _NotificationSettingsScreenState
   Widget build(BuildContext context) {
     final settings = ref.watch(notificationSettingsProvider);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('إعدادات الإشعارات'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           AppRefreshButton(
             onPressed: () => ref.invalidate(notificationSettingsProvider),
           ),
         ],
       ),
-      body: SafeArea(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async =>
               ref.invalidate(notificationSettingsProvider),
@@ -208,6 +213,7 @@ class _NotificationSettingsScreenState
             },
           ),
         ),
+        ),  // close DecoratedBox child SafeArea (v100)
       ),
     );
   }

@@ -47,29 +47,51 @@ class _LoadsScreenState extends ConsumerState<LoadsScreen> {
     final filter = ref.watch(loadsScopeFilterProvider);
     final activeId = ref.watch(effectiveDeviceIdProvider);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('الأحمال'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           AppRefreshButton(
             onPressed: () => ref.invalidate(loadsListProvider),
           ),
         ],
       ),
-      // v93: real "add load" FAB. The form sheet does the POST; on
-      // success the sheet returns `true` and we invalidate the list.
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppTheme.indigoPrimary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('إضافة حمل'),
-        onPressed: () async {
-          final ok = await showLoadFormSheet(context);
-          if (ok == true) ref.invalidate(loadsListProvider);
-        },
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.indigoPrimary.withValues(alpha: 0.45),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          backgroundColor: AppTheme.indigoPrimary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text(
+            'إضافة حمل',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+          onPressed: () async {
+            final ok = await showLoadFormSheet(context);
+            if (ok == true) ref.invalidate(loadsListProvider);
+          },
+        ),
       ),
-      body: SafeArea(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: Column(
           children: [
             _Toolbar(
@@ -119,6 +141,7 @@ class _LoadsScreenState extends ConsumerState<LoadsScreen> {
           ],
         ),
       ),
+      ),  // close DecoratedBox (v100)
     );
   }
 }

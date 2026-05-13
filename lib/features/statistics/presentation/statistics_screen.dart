@@ -71,10 +71,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   Widget build(BuildContext context) {
     final deviceId = ref.watch(effectiveDeviceIdProvider);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('الإحصاءات'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           IconButton(
             tooltip: 'العودة لليوم',
@@ -83,10 +86,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: deviceId == null
-            ? const _NoDeviceState()
-            : _buildBody(deviceId),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
+          child: deviceId == null
+              ? const _NoDeviceState()
+              : _buildBody(deviceId),
+        ),
       ),
     );
   }

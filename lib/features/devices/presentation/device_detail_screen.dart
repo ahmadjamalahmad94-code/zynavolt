@@ -37,13 +37,20 @@ class DeviceDetailScreen extends ConsumerWidget {
     // honest error instead of firing a doomed `/devices/0` fetch.
     if (deviceId <= 0) {
       return Scaffold(
-        backgroundColor: AppTheme.softBg,
-        appBar: AppBar(title: const Text('تفاصيل الجهاز')),
-        body: SafeArea(
-          child: AppErrorState(
-            error: ApiException(
-              message: 'معرّف الجهاز غير صالح.',
-              kind: ApiErrorKind.notFound,
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('تفاصيل الجهاز'),
+          backgroundColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+        ),
+        body: DecoratedBox(
+          decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+          child: SafeArea(
+            child: AppErrorState(
+              error: ApiException(
+                message: 'معرّف الجهاز غير صالح.',
+                kind: ApiErrorKind.notFound,
+              ),
             ),
           ),
         ),
@@ -53,10 +60,13 @@ class DeviceDetailScreen extends ConsumerWidget {
     final detail = ref.watch(deviceDetailProvider(deviceId));
     final activeId = ref.watch(effectiveDeviceIdProvider);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('تفاصيل الجهاز'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           AppRefreshButton(
             // v52: also refresh the diagnostics providers so the
@@ -96,7 +106,9 @@ class DeviceDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SafeArea(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: RefreshIndicator(
           // v52: pull-to-refresh also invalidates the new history +
           // alerts providers so a single gesture refreshes every
@@ -179,6 +191,7 @@ class DeviceDetailScreen extends ConsumerWidget {
             },
           ),
         ),
+        ),  // close DecoratedBox child SafeArea (v100)
       ),
     );
   }

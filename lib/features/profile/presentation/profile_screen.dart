@@ -24,16 +24,17 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileControllerProvider);
 
+    // v100 — gradient backdrop for visual continuity with Home/More.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('الملف الشخصي'),
-        // v68: drop the manual `Icons.arrow_back` leading and let Flutter
-        // auto-imply the standard BackButton. The default handles RTL
-        // direction correctly (arrow flips with the active text
-        // direction), whereas the hard-coded icon does not.
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
       ),
-      body: SafeArea(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: profile.when(
           loading: () => const AppLoading(message: 'جارٍ تحميل الملف...'),
           error: (err, _) => AppErrorState(
@@ -49,6 +50,7 @@ class ProfileScreen extends ConsumerWidget {
           data: (data) => _ProfileForm(initial: data),
         ),
       ),
+      ),  // close DecoratedBox
     );
   }
 }

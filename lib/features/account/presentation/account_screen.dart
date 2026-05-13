@@ -30,17 +30,22 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshot = ref.watch(accountSnapshotProvider);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('الحساب والاشتراك'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           AppRefreshButton(
             onPressed: () => ref.invalidate(accountSnapshotProvider),
           ),
         ],
       ),
-      body: SafeArea(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async => ref.invalidate(accountSnapshotProvider),
           child: snapshot.when(
@@ -72,6 +77,7 @@ class AccountScreen extends ConsumerWidget {
             data: (account) => _AccountBody(account: account),
           ),
         ),
+        ),  // close DecoratedBox child SafeArea
       ),
     );
   }

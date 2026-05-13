@@ -28,26 +28,48 @@ class SupportScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final page = ref.watch(supportCasesProvider);
 
+    // v100 — gradient backdrop + lifted FAB shadow for consistency.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('الدعم'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           AppRefreshButton(
             onPressed: () => ref.invalidate(supportCasesProvider),
           ),
         ],
       ),
-      // v88: FAB opens the create-case form. Backend supports posting a
-      // new message/ticket via `POST /api/v1/support/cases`.
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(AppRoutes.supportCreate),
-        backgroundColor: AppTheme.indigoPrimary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('طلب جديد'),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.indigoPrimary.withValues(alpha: 0.45),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: () => context.push(AppRoutes.supportCreate),
+          backgroundColor: AppTheme.indigoPrimary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text(
+            'طلب جديد',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
       ),
-      body: SafeArea(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async => ref.invalidate(supportCasesProvider),
           child: page.when(
@@ -106,6 +128,7 @@ class SupportScreen extends ConsumerWidget {
             },
           ),
         ),
+        ),  // close DecoratedBox child SafeArea (v100)
       ),
     );
   }

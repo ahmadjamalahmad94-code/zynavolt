@@ -172,10 +172,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     final state = ref.watch(onboardingStateProvider);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('البدء مع Zynavolt'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           TextButton(
             onPressed: _finishing ? null : _finish,
@@ -183,7 +186,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
         ],
       ),
-      body: SafeArea(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: state.when(
           loading: () => const AppLoading(message: 'جارٍ تحضير شاشة البدء...'),
           error: (err, _) => Padding(
@@ -200,6 +205,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
           data: (snap) => _buildBody(snap, firstName),
         ),
+      ),  // close DecoratedBox child SafeArea (v100)
       ),
     );
   }

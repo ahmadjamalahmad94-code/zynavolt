@@ -231,10 +231,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         _unreadOnly || (_scope == NotificationScope.energy &&
             _energyCategory != EnergyCategory.all);
 
+    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('الإشعارات'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           IconButton(
             tooltip: 'تصفية',
@@ -276,7 +279,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           ),
         ],
       ),
-      body: SafeArea(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
         child: RefreshIndicator(
           onRefresh: () =>
               ref.read(notificationsControllerProvider.notifier).refresh(),
@@ -313,6 +318,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             },
           ),
         ),
+        ),  // close DecoratedBox child SafeArea (v100)
       ),
     );
   }

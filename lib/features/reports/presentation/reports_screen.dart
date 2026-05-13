@@ -74,10 +74,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final deviceId = ref.watch(effectiveDeviceIdProvider);
+    // v100 — wrapped in the gradient backdrop so Reports visually
+    // continues the rest of the redesigned app.
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('التقارير'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         actions: [
           IconButton(
             tooltip: 'العودة لليوم',
@@ -86,10 +90,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: deviceId == null
-            ? const _NoDeviceState()
-            : _buildBody(deviceId),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        child: SafeArea(
+          child: deviceId == null
+              ? const _NoDeviceState()
+              : _buildBody(deviceId),
+        ),
       ),
     );
   }
