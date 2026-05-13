@@ -74,11 +74,63 @@ DateTime? parseBackendIso(String? iso) {
   return (hour12: h, marker: marker);
 }
 
-/// `YYYY-MM-DD  h:mm ص/م` (12-hour clock with Arabic period) in
-/// device-local time. Returns `null` for null/empty input, and the
-/// raw input string when parsing fails — that preserves the old
-/// `formatDateTime` contract used by device / support / account
-/// screens.
+/// v99d — App-wide time-format preference. Either the formatters
+/// in this file emit a 12-hour clock with the Arabic ص/م period
+/// marker (default), or they emit a plain 24-hour clock — the
+/// settings screen toggles this via [TimeFormatPref.set]. Persisted
+/// across launches by `SecureTokenStorage` (read on app boot in
+/// `main.dart` → `app_session`).
+enum TimeFormatPref {
+  h12,
+  h24;
+
+  static TimeFormatPref _current = TimeFormatPref.h12;
+
+  /// Currently-active preference. Pure-function callers don't need
+  /// to thread it through every call — the formatters read this
+  /// value internally so all timestamps refresh atomically when the
+  /// preference changes.
+  static TimeFormatPref get current => _current;
+
+  /// Setter used by the settings screen + the boot-time hydrator.
+  /// Persistence is the caller's responsibility — this only flips
+  /// the in-memory flag.
+  static void set(TimeFormatPref next) {
+    _current = next;
+  }
+}
+
+/// Returns either `HH:mm` (24-hour) or `h:mm ص/م` (12-hour) for the
+/// given local-time hour/minute, honouring [TimeFormatPref.current].
+String _renderTime(int hour24, int minute) {
+  final mm = minute.toString().padLeft(2, '0');
+  if (TimeFormatPref.current == TimeFormatPref.h24) {
+    final hh = hour24.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+  final t = _to12h(hour24);
+  final hh = t.hour12.toString().padLeft(2, '0');
+  return '$hh:$mm ${t.marker}';
+}
+
+/// Same as [_renderTime] but with seconds appended.
+String _renderTimeWithSeconds(int hour24, int minute, int second) {
+  final mm = minute.toString().padLeft(2, '0');
+  final ss = second.toString().padLeft(2, '0');
+  if (TimeFormatPref.current == TimeFormatPref.h24) {
+    final hh = hour24.toString().padLeft(2, '0');
+    return '$hh:$mm:$ss';
+  }
+  final t = _to12h(hour24);
+  final hh = t.hour12.toString().padLeft(2, '0');
+  return '$hh:$mm:$ss ${t.marker}';
+}
+
+/// `YYYY-MM-DD  h:mm ص/م` (12-hour) or `YYYY-MM-DD  HH:mm` (24-hour),
+/// depending on [TimeFormatPref.current]. Device-local time.
+/// Returns `null` for null/empty input, and the raw input string
+/// when parsing fails — that preserves the old `formatDateTime`
+/// contract used by device / support / account screens.
 String? formatBackendDateTime(String? iso) {
   final parsed = parseBackendIso(iso);
   if (parsed == null) {
@@ -88,10 +140,7 @@ String? formatBackendDateTime(String? iso) {
   final y = local.year.toString().padLeft(4, '0');
   final m = local.month.toString().padLeft(2, '0');
   final d = local.day.toString().padLeft(2, '0');
-  final t = _to12h(local.hour);
-  final hh = t.hour12.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  return '$y-$m-$d  $hh:$mm ${t.marker}';
+  return '$y-$m-$d  ${_renderTime(local.hour, local.minute)}';
 }
 
 /// `YYYY-MM-DD` in device-local time. Used for fields where the
@@ -109,23 +158,20 @@ String? formatBackendDate(String? iso) {
   return '$y-$m-$d';
 }
 
-/// Compact `h:mm ص/م` (12-hour clock with Arabic period) in
-/// device-local time. Used by the Home hero's "آخر قراءة" pill.
+/// Compact time-only string honouring [TimeFormatPref.current]:
+/// `h:mm ص/م` in 12-hour mode or `HH:mm` in 24-hour mode. Used by
+/// the Home hero's "آخر قراءة" pill.
 String? formatBackendHm(String? iso) {
   final parsed = parseBackendIso(iso);
   if (parsed == null) {
     return _passThrough(iso);
   }
   final local = parsed.toLocal();
-  final t = _to12h(local.hour);
-  final hh = t.hour12.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  return '$hh:$mm ${t.marker}';
+  return _renderTime(local.hour, local.minute);
 }
 
-/// Full `YYYY-MM-DD  h:mm:ss ص/م` in device-local time. Used by
-/// the Notifications detail sheet's "وقت الإنشاء" / "وقت القراءة"
-/// rows.
+/// Full `YYYY-MM-DD  <time>` in device-local time, with seconds
+/// in the time portion. Time format follows [TimeFormatPref.current].
 String? formatBackendExact(String? iso) {
   final parsed = parseBackendIso(iso);
   if (parsed == null) {
@@ -135,11 +181,8 @@ String? formatBackendExact(String? iso) {
   final y = local.year.toString().padLeft(4, '0');
   final mo = local.month.toString().padLeft(2, '0');
   final d = local.day.toString().padLeft(2, '0');
-  final t = _to12h(local.hour);
-  final hh = t.hour12.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  final ss = local.second.toString().padLeft(2, '0');
-  return '$y-$mo-$d  $hh:$mm:$ss ${t.marker}';
+  final timeText = _renderTimeWithSeconds(local.hour, local.minute, local.second);
+  return '$y-$mo-$d  $timeText';
 }
 
 /// Arabic-friendly "humanised" relative timestamp:
@@ -166,10 +209,7 @@ String formatBackendRelative(String? iso, {DateTime? now}) {
   final today = DateTime(nowVal.year, nowVal.month, nowVal.day);
   final dayOf = DateTime(local.year, local.month, local.day);
   final daysAgo = today.difference(dayOf).inDays;
-  final t12 = _to12h(local.hour);
-  final hh = t12.hour12.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  final timeText = '$hh:$mm ${t12.marker}';
+  final timeText = _renderTime(local.hour, local.minute);
   if (daysAgo == 0) return timeText;
   if (daysAgo == 1) return 'أمس $timeText';
   final mo = local.month.toString().padLeft(2, '0');

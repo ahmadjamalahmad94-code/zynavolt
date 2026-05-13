@@ -398,48 +398,78 @@ class _HeroStatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v99d — distinct glossy card with crisp border, multi-layer
+    // shadow + a gradient surface so each tile reads as its own
+    // surface and never blends into a neighbour. The icon is now
+    // a filled gradient glyph (instead of an outlined one in a
+    // soft square) so the tone token reads on the icon itself.
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
-        color: tone.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: tone.border.withValues(alpha: 0.75)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            tone.surface,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: tone.border, width: 1.1),
+        boxShadow: [
+          BoxShadow(
+            color: tone.icon.withValues(alpha: 0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Top row — label on leading edge, floating glyph badge on
-          // trailing edge. Mirrors the notifications-screen hero cards
-          // where the icon sits visually in the corner.
+          // trailing edge.
           Row(
             children: [
               Expanded(
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: AppTheme.softInk.withValues(alpha: 0.85),
+                    color: tone.icon,
                     fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0.1,
                   ),
                 ),
               ),
               Container(
-                width: 28,
-                height: 28,
+                width: 32,
+                height: 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(9),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      tone.icon,
+                      tone.icon.withValues(alpha: 0.75),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
                   boxShadow: [
                     BoxShadow(
-                      color: tone.icon.withValues(alpha: 0.12),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+                      color: tone.icon.withValues(alpha: 0.42),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
-                child: Icon(icon, color: tone.icon, size: 15),
+                child: Icon(icon, color: Colors.white, size: 17),
               ),
             ],
           ),

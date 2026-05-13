@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/app_config.dart';
 import '../../../app/app_theme.dart';
 import '../../../app/build_info.dart';
+import '../../../core/state/time_format_provider.dart';
+import '../../../core/utils/backend_time.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../bootstrap/data/bootstrap_repository.dart';
 import '../../devices/state/selected_device_provider.dart';
@@ -81,9 +83,189 @@ class _AppSettingsScreenState extends ConsumerState<AppSettingsScreen> {
               status: activeDevice?.connectionStatus ?? '',
             ),
             const SizedBox(height: 12),
+            const _TimeFormatCard(),
+            const SizedBox(height: 12),
             const _LanguageCard(),
             const SizedBox(height: 24),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// v99d — Settings card that lets the user toggle between 12-hour
+/// (h:mm ص/م) and 24-hour (HH:mm) time everywhere in the app. The
+/// preference is persisted via `timeFormatPrefProvider` and read on
+/// app boot so the choice survives a restart.
+class _TimeFormatCard extends ConsumerWidget {
+  const _TimeFormatCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pref = ref.watch(timeFormatPrefProvider);
+    final controller = ref.read(timeFormatPrefProvider.notifier);
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF6366F1), Color(0xFF4338CA)],
+                  ),
+                  borderRadius: BorderRadius.circular(11),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.indigoPrimary.withValues(alpha: 0.30),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.schedule_rounded,
+                    color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'تنسيق الوقت',
+                      style: TextStyle(
+                        color: AppTheme.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'كيف تظهر أوقات القراءات والإشعارات في التطبيق.',
+                      style: TextStyle(
+                        color: AppTheme.faintMuted,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Two pill-buttons inline. Active option carries the
+          // indigo gradient; the other stays neutral.
+          Row(
+            children: [
+              Expanded(
+                child: _TimeFormatOption(
+                  active: pref == TimeFormatPref.h12,
+                  title: '12 ساعة',
+                  sample: '06:30 ص',
+                  onTap: () => controller.setPref(TimeFormatPref.h12),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TimeFormatOption(
+                  active: pref == TimeFormatPref.h24,
+                  title: '24 ساعة',
+                  sample: '18:30',
+                  onTap: () => controller.setPref(TimeFormatPref.h24),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimeFormatOption extends StatelessWidget {
+  const _TimeFormatOption({
+    required this.active,
+    required this.title,
+    required this.sample,
+    required this.onTap,
+  });
+
+  final bool active;
+  final String title;
+  final String sample;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: active
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF6366F1), Color(0xFF4338CA)],
+                  )
+                : null,
+            color: active ? null : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: active
+                  ? AppTheme.indigoPrimary
+                  : AppTheme.line,
+              width: 1,
+            ),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: AppTheme.indigoPrimary.withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+            child: Column(
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: active ? Colors.white : AppTheme.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  sample,
+                  style: TextStyle(
+                    color: active
+                        ? Colors.white.withValues(alpha: 0.85)
+                        : AppTheme.faintMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

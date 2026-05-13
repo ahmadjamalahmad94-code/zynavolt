@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/state/time_format_provider.dart';
 import 'app_config.dart';
 import 'app_router.dart';
 import 'app_theme.dart';
@@ -12,6 +13,12 @@ class SolarDeyeApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    // v99d — instantiate the time-format provider early so its
+    // controller hydrates `TimeFormatPref.current` from secure
+    // storage during the first frame. Any timestamp formatted
+    // before this watch returns will use the default (12-hour),
+    // then re-rendering after hydration picks up the saved value.
+    ref.watch(timeFormatPrefProvider);
 
     return MaterialApp.router(
       title: 'Zynavolt',

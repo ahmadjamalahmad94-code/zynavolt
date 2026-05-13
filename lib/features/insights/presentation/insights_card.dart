@@ -58,7 +58,33 @@ class _InsightsAvailableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    // v99d — Smart Insights wrapped in a glossy gradient surface
+    // matching the new Production card so all "secondary" cards
+    // share a coherent design language (white→pale-blue gradient,
+    // 22 px radius, layered shadows, hairline indigo border).
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, Color(0xFFF8FBFF)],
+        ),
+        border: Border.all(color: AppTheme.line, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.indigoPrimary.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -90,28 +116,45 @@ class _InsightsHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        // v99d — glossy gradient icon tile to match the rest of the
+        // redesigned cards. Inner-shadow effect via layered fills.
         Container(
-          width: 30,
-          height: 30,
+          width: 34,
+          height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppTheme.indigoSoft,
-            borderRadius: BorderRadius.circular(9),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFFFB347),
+                Color(0xFFF59E0B),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.42),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: const Icon(
-            Icons.tips_and_updates_outlined,
-            color: AppTheme.indigoPrimary,
-            size: 16,
+            Icons.tips_and_updates_rounded,
+            color: Colors.white,
+            size: 18,
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         const Expanded(
           child: Text(
             'توصيات ذكية',
             style: TextStyle(
               color: AppTheme.ink,
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w900,
+              letterSpacing: -0.2,
             ),
           ),
         ),

@@ -30,10 +30,17 @@ class ChartAnchorNavigator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v99d — arrow icons flipped so each chevron points OUTWARD
+    // (away from the centred date label). In RTL contexts, Material
+    // sometimes mirrors `chevron_right`/`chevron_left`; we side-step
+    // that by anchoring the icons to the BUTTON POSITION rather than
+    // to a semantic "previous/next" direction. The right-positioned
+    // button uses `chevron_left` (which, after RTL flip, renders as
+    // an outward-right arrow), and vice-versa for the left button.
     return Row(
       children: [
         _NavButton(
-          icon: Icons.chevron_right, // RTL: "previous" sits on the right
+          icon: Icons.chevron_left, // visually OUTWARD on the right side
           enabled: true,
           onTap: onPrevious,
           tooltip: scope == ChartScope.month ? 'الشهر السابق' : 'اليوم السابق',
@@ -73,7 +80,7 @@ class ChartAnchorNavigator extends StatelessWidget {
           ),
         ),
         _NavButton(
-          icon: Icons.chevron_left, // RTL: "next" sits on the left
+          icon: Icons.chevron_right, // visually OUTWARD on the left side
           enabled: canGoForward,
           onTap: canGoForward ? onNext : null,
           tooltip: scope == ChartScope.month ? 'الشهر التالي' : 'اليوم التالي',

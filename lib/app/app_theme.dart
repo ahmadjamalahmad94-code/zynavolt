@@ -89,6 +89,41 @@ class AppTheme {
     ),
   ];
 
+  /// v99d — glossy "premium" shadow stack used by the Home screen's
+  /// redesigned cards (battery / production / insights / split tiles).
+  /// Two layers: a close shadow that defines the card edge, plus a
+  /// soft diffuse that gives the floating-glass feel.
+  static List<BoxShadow> glossShadow({Color? tint}) {
+    final base = tint ?? indigoPrimary;
+    return [
+      BoxShadow(
+        color: base.withValues(alpha: 0.10),
+        blurRadius: 8,
+        offset: const Offset(0, 3),
+      ),
+      BoxShadow(
+        color: base.withValues(alpha: 0.18),
+        blurRadius: 22,
+        offset: const Offset(0, 10),
+      ),
+    ];
+  }
+
+  /// v99d — vertical white→tinted gradient used on the new "glass
+  /// card" surfaces so the cards have subtle depth instead of being
+  /// flat white sheets.
+  static LinearGradient glossSurface({Color? tint, double tintAlpha = 0.04}) {
+    final base = tint ?? indigoPrimary;
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Colors.white,
+        base.withValues(alpha: tintAlpha),
+      ],
+    );
+  }
+
   // Brand gradients. The full-saturation `brandGradient` is for hero /
   // accent surfaces; the pale variant matches Home/Splash backdrop.
   static const LinearGradient brandGradient = LinearGradient(
