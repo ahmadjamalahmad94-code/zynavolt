@@ -191,75 +191,235 @@ class _HomeHero extends StatelessWidget {
     final daily = snapshot?.cards.dailyProductionKwh ?? 0;
     final dailyText = daily > 0 ? '${_fmtKwh(daily)} kWh اليوم' : null;
 
+    // v99b — exact-replica hero per the owner's reference design:
+    //   * deep night-sky gradient (#0E1A2E → #1B2C4A) instead of
+    //     the previous indigo gradient
+    //   * sun + tilted solar-panel illustration anchored on the LEFT
+    //     drawn via CustomPaint so we don't need an image asset
+    //   * top row: refresh circle button on the LEFT, "ZYNAVOLT" mark
+    //     on the RIGHT (mirrors the design, which is RTL-aware)
+    //   * centred greeting with a wave 👋 emoji, three pills stacked
+    //     in the right column (kWh today / device / last reading)
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppTheme.radiusGlass),
-        gradient: const LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [AppTheme.indigoPrimary, AppTheme.indigoBright],
-        ),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.22),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
+            color: const Color(0xFF0E1A2E).withValues(alpha: 0.35),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _BrandWordmark(),
-              const Spacer(),
-              _HeroIconButton(
-                icon: Icons.refresh,
-                tooltip: 'تحديث',
-                onPressed: onRefresh,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            greetingName.isNotEmpty
-                ? 'مرحباً بعودتك، $greetingName'
-                : 'مرحباً بعودتك',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              height: 1.2,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF0E1A2E),
+                Color(0xFF152340),
+                Color(0xFF1B2C4A),
+              ],
+              stops: [0.0, 0.55, 1.0],
             ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          child: Stack(
             children: [
-              _HeroPill(
-                icon: Icons.solar_power_outlined,
-                text: deviceName ?? 'لم يتم اختيار جهاز',
+              // Sun + solar-panel illustration anchored on the LEFT.
+              // Drawn programmatically so no asset is required.
+              const Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 170,
+                child: CustomPaint(
+                  painter: _SunPanelsPainter(),
+                ),
               ),
-              if (dailyText != null)
-                _HeroPill(
-                  icon: Icons.wb_sunny_outlined,
-                  text: dailyText,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Top chrome: refresh on the LEFT, brand on the RIGHT.
+                    Row(
+                      children: [
+                        _HeroIconButton(
+                          icon: Icons.refresh,
+                          tooltip: 'تحديث',
+                          onPressed: onRefresh,
+                        ),
+                        const Spacer(),
+                        const _BrandWordmark(),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Greeting (centred, white, large) with a wave emoji.
+                    Center(
+                      child: Text(
+                        greetingName.isNotEmpty
+                            ? 'مرحبًا بعودتك، $greetingName 👋'
+                            : 'مرحبًا بعودتك 👋',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18.5,
+                          fontWeight: FontWeight.w900,
+                          height: 1.25,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    // Three stacked pills, right-aligned so the sun
+                    // illustration on the left has breathing room.
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (dailyText != null)
+                            _HeroPill(
+                              icon: Icons.wb_sunny_outlined,
+                              text: dailyText,
+                            ),
+                          if (dailyText != null) const SizedBox(height: 6),
+                          _HeroPill(
+                            icon: Icons.person_outline,
+                            text: deviceName ?? 'لم يتم اختيار جهاز',
+                          ),
+                          if (lastReading != null) ...[
+                            const SizedBox(height: 6),
+                            _HeroPill(
+                              icon: Icons.schedule_outlined,
+                              text: 'آخر قراءة $lastReading',
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              if (lastReading != null)
-                _HeroPill(
-                  icon: Icons.schedule,
-                  text: 'آخر قراءة $lastReading',
-                ),
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+/// v99b — Hand-painted sun + solar panels for the hero illustration.
+/// Drawn with `CustomPaint` so the home screen doesn't depend on a
+/// raster asset and the colours track the dark hero gradient.
+class _SunPanelsPainter extends CustomPainter {
+  const _SunPanelsPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // Sun — soft glow + warm core in the upper-right of the painter
+    // box, so it sits visually between the panels and the rising
+    // brand wordmark.
+    final sunCenter = Offset(w * 0.78, h * 0.36);
+    final sunRadius = h * 0.18;
+
+    // Outer halo
+    final halo = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFFFC766).withValues(alpha: 0.45),
+          const Color(0xFFFFC766).withValues(alpha: 0.00),
+        ],
+      ).createShader(
+        Rect.fromCircle(center: sunCenter, radius: sunRadius * 2.4),
+      );
+    canvas.drawCircle(sunCenter, sunRadius * 2.4, halo);
+
+    // Sun core (warm yellow / amber gradient)
+    final sun = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFFFE5A6),
+          const Color(0xFFFFB347),
+        ],
+      ).createShader(
+        Rect.fromCircle(center: sunCenter, radius: sunRadius),
+      );
+    canvas.drawCircle(sunCenter, sunRadius, sun);
+
+    // Solar panels — two tilted rounded rectangles in the lower half,
+    // tinted with subtle grid lines. We draw with a transform to
+    // achieve the perspective tilt without trigonometry headaches.
+    canvas.save();
+    canvas.translate(w * 0.30, h * 0.62);
+    canvas.transform(_skewMatrix(skewX: -0.35, skewY: 0.18).storage);
+
+    final panelBase = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF3B5A8C),
+          Color(0xFF24385F),
+        ],
+      ).createShader(const Rect.fromLTWH(0, 0, 130, 60));
+    final panelBorder = Paint()
+      ..color = const Color(0xFF6B86B5).withValues(alpha: 0.65)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final cellLine = Paint()
+      ..color = const Color(0xFF6B86B5).withValues(alpha: 0.45)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8;
+
+    // First (rear) panel
+    final p1 = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(-10, -36, 130, 60),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(p1, panelBase);
+    canvas.drawRRect(p1, panelBorder);
+    // Cell grid for p1
+    for (var i = 1; i < 4; i++) {
+      final x = -10 + (130.0 * i / 4);
+      canvas.drawLine(Offset(x, -36), Offset(x, 24), cellLine);
+    }
+    canvas.drawLine(const Offset(-10, -6), const Offset(120, -6), cellLine);
+
+    // Second (front) panel slightly lower
+    final p2 = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(-22, 14, 138, 56),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(p2, panelBase);
+    canvas.drawRRect(p2, panelBorder);
+    for (var i = 1; i < 4; i++) {
+      final x = -22 + (138.0 * i / 4);
+      canvas.drawLine(Offset(x, 14), Offset(x, 70), cellLine);
+    }
+    canvas.drawLine(const Offset(-22, 42), const Offset(116, 42), cellLine);
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _SunPanelsPainter oldDelegate) => false;
+}
+
+/// Helper for `Canvas.transform` — Flutter's API wants a flat
+/// `Float64List` of 16 doubles representing a 4×4 column-major
+/// matrix. This builds an X/Y skew transform.
+Matrix4 _skewMatrix({required double skewX, required double skewY}) {
+  return Matrix4.identity()
+    ..setEntry(0, 1, skewX)
+    ..setEntry(1, 0, skewY);
 }
 
 class _BrandWordmark extends StatelessWidget {
@@ -459,10 +619,10 @@ class _DashboardBody extends StatelessWidget {
       );
     }
 
-    if (snapshot.latest.statusText.isNotEmpty) {
-      children.add(_StatusBanner(text: snapshot.latest.statusText));
-      children.add(const SizedBox(height: 12));
-    }
+    // v99b — the standalone _StatusBanner is gone; its content
+    // ("حالة النظام · متصل بالشبكة") now lives in the header of
+    // _EnergyFlowCard per the reference design. The card receives
+    // the status text directly via `snapshot.latest.statusText`.
 
     children.addAll([
       _EnergyFlowCard(snapshot: snapshot),
@@ -495,71 +655,10 @@ class _DashboardBody extends StatelessWidget {
   }
 }
 
-class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFC7D2FE)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppTheme.indigoSoft,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.insights_outlined,
-                color: AppTheme.indigoPrimary, size: 15),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'حالة النظام',
-                  style: TextStyle(
-                    color: AppTheme.muted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  text,
-                  style: const TextStyle(
-                    color: AppTheme.ink,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// v99b — `_StatusBanner` deleted. Its content ("حالة النظام · متصل
+// بالشبكة") is now part of `_FlowCardHeader` inside `_EnergyFlowCard`,
+// matching the reference design where the status indicator sits at
+// the top of the same card as the flow graph itself.
 
 class _ScopeNotice extends StatelessWidget {
   const _ScopeNotice({required this.text});
@@ -649,6 +748,11 @@ class _EnergyFlowCardState extends State<_EnergyFlowCard>
     // the backend payload).
     final motion = _FlowMotion.fromCards(cards);
 
+    // v99b — header now matches the reference design: the system
+    // status text + green dot live on the right of the card,
+    // a small chart-style icon on the left. The "تدفق الطاقة الآن"
+    // subtitle is gone — the visual flow speaks for itself.
+    final statusText = widget.snapshot.latest.statusText;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
       decoration: BoxDecoration(
@@ -666,16 +770,10 @@ class _EnergyFlowCardState extends State<_EnergyFlowCard>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _CardHeader(
-            icon: Icons.bolt_outlined,
-            title: 'تدفق الطاقة الآن',
-            subtitle: 'بيانات لحظية من الخادم.',
-          ),
+          _FlowCardHeader(statusText: statusText),
           const SizedBox(height: 10),
           // _FlowDiagram self-sizes from the virtual canvas aspect
           // (1000 × 840), so no explicit AspectRatio wrapper is needed.
-          // The server status text lives in `_StatusBanner` *above* this
-          // card, never inside the hub — keeps the hub from overflowing.
           _FlowDiagram(
             cards: cards,
             flags: flags,
@@ -684,6 +782,94 @@ class _EnergyFlowCardState extends State<_EnergyFlowCard>
           ),
         ],
       ),
+    );
+  }
+}
+
+/// v99b — flow-card header matching the reference design.
+/// Right side carries the "حالة النظام" title with the status text
+/// + a breathing green dot underneath; left side renders a small
+/// chart-style glyph in an indigo-tinted square.
+class _FlowCardHeader extends StatelessWidget {
+  const _FlowCardHeader({required this.statusText});
+  final String statusText;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasStatus = statusText.isNotEmpty;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Left: small line-chart icon in a tinted square.
+        Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppTheme.indigoSoft,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: AppTheme.indigoPrimary.withValues(alpha: 0.18),
+              width: 0.8,
+            ),
+          ),
+          child: const Icon(
+            Icons.timeline_outlined,
+            color: AppTheme.indigoPrimary,
+            size: 17,
+          ),
+        ),
+        const Spacer(),
+        // Right: stacked "حالة النظام" + status text with dot.
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Text(
+              'حالة النظام',
+              style: TextStyle(
+                color: AppTheme.faintMuted,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  hasStatus ? statusText : 'لا توجد قراءة',
+                  style: const TextStyle(
+                    color: AppTheme.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: hasStatus
+                        ? AppTheme.success
+                        : AppTheme.faintMuted,
+                    boxShadow: hasStatus
+                        ? [
+                            BoxShadow(
+                              color: AppTheme.success.withValues(alpha: 0.45),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1667,8 +1853,11 @@ class _ProductionCard extends StatelessWidget {
               Expanded(
                 child: _ProductionCol(
                   label: 'الإجمالي',
+                  // v99b — switched the "الإجمالي" tone from violet to
+                  // success green, matching the reference design's
+                  // colour coding for the cumulative total dot.
                   valueText: _formatKwh(cards.totalProductionKwh),
-                  tone: AppTheme.violet,
+                  tone: AppTheme.success,
                 ),
               ),
             ],
