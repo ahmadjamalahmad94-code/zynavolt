@@ -131,6 +131,7 @@ class _StripBody extends StatelessWidget {
               icon: Icons.check_circle_outline_rounded,
               title: 'مسموح الآن',
               items: allowed,
+              powerSubtitle: _formatPower(snap.totals.allowedPowerW),
               onTap: () => _openSheet(context, allowed, allowed: true),
             ),
           ),
@@ -142,12 +143,26 @@ class _StripBody extends StatelessWidget {
               icon: Icons.do_not_disturb_alt_rounded,
               title: 'غير مسموح الآن',
               items: denied,
+              powerSubtitle: _formatPower(snap.totals.deniedPowerW),
               onTap: () => _openSheet(context, denied, allowed: false),
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// Format a power total in watts to a compact label. Owner asked
+  /// the cards to "show totals briefly" — we render a single
+  /// metric per bucket alongside the count badge: "≈ 1.3 kW" when
+  /// over 1 kW, "≈ 750 W" otherwise. Empty buckets get an empty
+  /// string so the card layout doesn't reserve a useless line.
+  String _formatPower(double watts) {
+    if (watts <= 0) return '';
+    if (watts >= 1000) {
+      return '≈ ${(watts / 1000).toStringAsFixed(1)} ك.و';
+    }
+    return '≈ ${watts.toStringAsFixed(0)} و';
   }
 
   void _openSheet(BuildContext context, List<LoadItem> items,
@@ -170,6 +185,7 @@ class _BucketCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.items,
+    required this.powerSubtitle,
     required this.onTap,
   });
 
@@ -178,6 +194,12 @@ class _BucketCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final List<LoadItem> items;
+
+  /// Compact totals string for this bucket — e.g. "≈ 1.3 ك.و" or
+  /// "≈ 700 و". Empty when the bucket has zero items (the card
+  /// already says "لا أحمال…" so the subtitle would be redundant).
+  final String powerSubtitle;
+
   final VoidCallback onTap;
 
   static const int _previewCount = 3;
@@ -222,16 +244,37 @@ class _BucketCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          color: ZynColors.ink,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: ZynColors.ink,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              height: 1.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (powerSubtitle.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1),
+                              child: Text(
+                                powerSubtitle,
+                                style: TextStyle(
+                                  color: tone,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.2,
+                                  fontFeatures:
+                                      const [FontFeature.tabularFigures()],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     Container(
