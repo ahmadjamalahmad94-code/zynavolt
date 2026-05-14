@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../api/api_exception.dart';
+import '../state/app_session.dart';
 
 /// v101 — FCM lifecycle controller for the foreground app.
 ///
@@ -24,10 +28,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 ///     in by tapping the system permission prompt; we always try to
 ///     register on launch.
 ///
-/// Backend contract (Phase A.8):
-///   `POST /api/mobile/account/push-token` with JSON body
-///   `{ "token": "<fcm>", "platform": "android" }`. The endpoint
-///   stores / refreshes the row keyed on `(user_id, token)`.
+/// Backend contract (already shipped on the backend):
+///   `POST   /api/v1/notifications/push-tokens`  → register / refresh.
+///   `DELETE /api/v1/notifications/push-tokens`  → revoke.
+/// Body for both: `{ "token": "[fcm]", "platform": "android",
+/// "device_label"?: str, "app_version"?: str }`. The endpoint stores
+/// / refreshes the row keyed on (user_id, sha256(token)).
+///
+/// Note: an earlier draft of this file referenced
+/// `/api/mobile/account/push-token`. The backend already exposed
+/// the equivalent endpoints under `/api/v1/notifications/...`, so
+/// we use those instead of duplicating.
 class PushService {
   PushService(this._ref);
 
@@ -93,21 +104,57 @@ class PushService {
     });
   }
 
-  /// Phase A.8 will wire this to a real Dio call once the backend
-  /// endpoint exists. Logged-only for now so the v101 mobile commit
-  /// stands on its own — pushing the token before the endpoint
-  /// exists would just produce spurious 404s.
+  /// POSTs the FCM token to the backend so server-side rule
+  /// processing can dispatch FCM sends to this device.
+  ///
+  /// Failures are logged but never thrown — push registration is a
+  /// best-effort side concern; the user opening the app should not
+  /// be blocked by a transient backend hiccup. The next cold start
+  /// (or token-refresh event) will retry naturally.
   Future<void> _sendToBackend(String token) async {
-    if (kDebugMode) {
-      debugPrint(
-        '[push] would POST /api/mobile/account/push-token '
-        '(deferred until backend endpoint lands in Phase A.8)',
+    try {
+      final api = _ref.read(apiClientProvider);
+      await api.post(
+        '/api/v1/notifications/push-tokens',
+        body: {
+          'token': token,
+          'platform': Platform.isIOS ? 'ios' : 'android',
+        },
       );
+      if (kDebugMode) {
+        debugPrint('[push] token registered with backend');
+      }
+    } on ApiException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[push] backend register failed: ${e.kind.name}');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[push] backend register failed: ${e.runtimeType}');
+      }
     }
-    // Touch _ref so the analyzer doesn't flag it as unused while
-    // we're between phases. The reference IS used as soon as the
-    // Dio call lands.
-    _ref.toString();
+  }
+
+  /// Revokes the current device's token on the backend. Called from
+  /// the logout flow so notifications stop reaching a logged-out
+  /// install. Best-effort — failure is non-fatal.
+  Future<void> revokeOnBackend() async {
+    final token = _currentToken;
+    if (token == null) return;
+    try {
+      final api = _ref.read(apiClientProvider);
+      await api.delete(
+        '/api/v1/notifications/push-tokens',
+        body: {'token': token},
+      );
+      if (kDebugMode) {
+        debugPrint('[push] token revoked on backend');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[push] backend revoke failed: ${e.runtimeType}');
+      }
+    }
   }
 
   Future<void> dispose() async {
