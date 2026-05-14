@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,15 +12,23 @@ import 'push_service.dart';
 /// v101 Phase D — wraps the app's `MaterialApp.router` `builder:` so
 /// every screen automatically gets:
 ///
-///   1. A SnackBar that appears when a push arrives in the foreground
-///      (Android FCM does not draw the system tray for foreground
-///      messages by default; this fills the gap).
+///   1. An in-app banner overlay that appears when a push arrives in
+///      the foreground (Android FCM does not draw the system tray
+///      for foreground messages by default; this fills the gap).
 ///   2. A side-effect listener that consumes
 ///      [pushTapStreamProvider] events and routes the user to the
 ///      screen named in the push's `data.route` payload.
 ///
 /// Both behaviours are passive — they sit between `MaterialApp.router`
 /// and the actual page tree without affecting layout.
+///
+/// Implementation note: an earlier draft used `ScaffoldMessenger` +
+/// `SnackBar`. That was unreliable inside the nested-messenger setup
+/// (`MaterialApp.router` already creates one; ours wrapping it on top
+/// caused the `duration` to be ignored and the snackbar to stay on
+/// screen until the app was killed). The current implementation
+/// drives an [OverlayEntry] with an explicit [Timer] so the dismiss
+/// is fully deterministic regardless of any messenger nesting.
 class PushOverlay extends ConsumerStatefulWidget {
   const PushOverlay({super.key, required this.child});
 
@@ -29,21 +39,31 @@ class PushOverlay extends ConsumerStatefulWidget {
 }
 
 class _PushOverlayState extends ConsumerState<PushOverlay> {
-  /// Used to show the SnackBar without a BuildContext that descends
-  /// from a Scaffold — every routed screen has its own Scaffold so
-  /// `ScaffoldMessenger.of(context)` resolves to the closest one.
-  final GlobalKey<ScaffoldMessengerState> _messengerKey =
-      GlobalKey<ScaffoldMessengerState>();
+  /// Used to find the nearest Overlay above us so the banner floats
+  /// above the routed page tree without depending on a Scaffold.
+  final GlobalKey _overlayHostKey = GlobalKey();
+
+  OverlayEntry? _entry;
+  Timer? _autoDismiss;
+
+  @override
+  void dispose() {
+    _autoDismiss?.cancel();
+    _autoDismiss = null;
+    _entry?.remove();
+    _entry = null;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Banner: surface foreground messages as a tappable SnackBar.
+    // Banner: surface foreground messages as a tappable overlay.
     // Also nudges the Notifications inbox controller so the new
     // event appears in the list immediately instead of waiting up
     // to 60 s for the next silent poll.
     ref.listen<AsyncValue<PushBanner>>(pushBannerStreamProvider, (prev, next) {
       next.whenOrNull(data: (banner) {
-        _showBannerSnack(banner);
+        _showBanner(banner);
         _refreshNotificationsInbox();
       });
     });
@@ -63,10 +83,9 @@ class _PushOverlayState extends ConsumerState<PushOverlay> {
       },
     );
 
-    return ScaffoldMessenger(
-      key: _messengerKey,
-      child: widget.child,
-    );
+    // KeyedSubtree gives us a stable ancestor for the Overlay lookup
+    // so the banner's OverlayEntry has somewhere to render.
+    return KeyedSubtree(key: _overlayHostKey, child: widget.child);
   }
 
   /// Tells the notifications inbox controller to silent-refresh from
@@ -83,58 +102,44 @@ class _PushOverlayState extends ConsumerState<PushOverlay> {
     }
   }
 
-  void _showBannerSnack(PushBanner banner) {
-    final messenger = _messengerKey.currentState;
-    if (messenger == null) return;
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        backgroundColor: AppTheme.indigoPrimary,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        ),
-        duration: const Duration(seconds: 5),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (banner.title.isNotEmpty)
-              Text(
-                banner.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            if (banner.body.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                banner.body,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ],
-        ),
-        action: SnackBarAction(
-          label: 'فتح',
-          textColor: Colors.white,
-          onPressed: () => _routeForTap(banner.data),
-        ),
+  void _showBanner(PushBanner banner) {
+    final ctx = _overlayHostKey.currentContext;
+    if (ctx == null || !mounted) return;
+    final overlay = Overlay.maybeOf(ctx, rootOverlay: true);
+    if (overlay == null) return;
+
+    // Tear down any banner currently on screen so a new push always
+    // wins, instead of stacking on top of the previous one.
+    _autoDismiss?.cancel();
+    _entry?.remove();
+    _entry = null;
+
+    final entry = OverlayEntry(
+      builder: (_) => _BannerWidget(
+        banner: banner,
+        onTap: () {
+          _dismissBanner();
+          _routeForTap(banner.data);
+        },
+        onClose: _dismissBanner,
       ),
     );
+    overlay.insert(entry);
+    _entry = entry;
+    _autoDismiss = Timer(const Duration(seconds: 5), _dismissBanner);
+  }
+
+  void _dismissBanner() {
+    _autoDismiss?.cancel();
+    _autoDismiss = null;
+    _entry?.remove();
+    _entry = null;
   }
 
   void _routeForTap(Map<String, String> data) {
     final route = _resolveRoute(data);
     if (route == null) return;
-    final navContext = _messengerKey.currentContext;
+    final navContext = _overlayHostKey.currentContext;
     if (navContext == null || !mounted) return;
     // Use go() rather than push(): from a tap we want the destination
     // to *replace* whatever ephemeral screen the user was on (e.g.,
@@ -167,5 +172,144 @@ class _PushOverlayState extends ConsumerState<PushOverlay> {
       default:
         return AppRoutes.notifications;
     }
+  }
+}
+
+/// The visible banner widget. Slides down from the top, dismissable
+/// by tap, by the explicit close button, or automatically after the
+/// parent's 5-second timer.
+class _BannerWidget extends StatefulWidget {
+  const _BannerWidget({
+    required this.banner,
+    required this.onTap,
+    required this.onClose,
+  });
+
+  final PushBanner banner;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
+
+  @override
+  State<_BannerWidget> createState() => _BannerWidgetState();
+}
+
+class _BannerWidgetState extends State<_BannerWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ac = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+  );
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(0, -1.2),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
+  late final Animation<double> _fade =
+      CurvedAnimation(parent: _ac, curve: Curves.easeOut);
+
+  @override
+  void initState() {
+    super.initState();
+    _ac.forward();
+  }
+
+  @override
+  void dispose() {
+    _ac.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    return Positioned(
+      top: mq.padding.top + 8,
+      left: 12,
+      right: 12,
+      child: SlideTransition(
+        position: _slide,
+        child: FadeTransition(
+          opacity: _fade,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onTap,
+              borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [AppTheme.indigoPrimary, AppTheme.indigoBright],
+                  ),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+                  boxShadow: AppTheme.liftedShadow,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(
+                        Icons.notifications_active,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (widget.banner.title.isNotEmpty)
+                            Text(
+                              widget.banner.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          if (widget.banner.body.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.banner.body,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: widget.onClose,
+                      icon: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      tooltip: 'إغلاق',
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
