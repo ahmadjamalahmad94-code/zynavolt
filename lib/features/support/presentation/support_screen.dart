@@ -39,12 +39,6 @@ class SupportScreen extends ConsumerWidget {
       floatingActionButton: _NewCaseFab(
         onTap: () => context.push(AppRoutes.supportCreate),
       ),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        96,
-      ),
       child: page.when(
         loading: () => const Padding(
           padding: EdgeInsets.symmetric(vertical: 48),

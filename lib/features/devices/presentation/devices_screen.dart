@@ -39,12 +39,6 @@ class DevicesScreen extends ConsumerWidget {
           showBackButton: false,
         ),
         extendBody: true,
-        padding: const EdgeInsets.fromLTRB(
-          ZynSpacing.lg,
-          ZynSpacing.lg,
-          ZynSpacing.lg,
-          96,
-        ),
         floatingActionButton: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(ZynRadii.pill),

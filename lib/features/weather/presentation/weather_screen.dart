@@ -57,12 +57,6 @@ class WeatherScreen extends ConsumerWidget {
         subtitle: 'متابعة الطقس وتأثيره على إنتاج الطاقة الشمسية.',
         showBackButton: false,
       ),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        ZynSpacing.xxl,
-      ),
       child: snap.when(
         loading: () => const Padding(
           padding: EdgeInsets.symmetric(vertical: 48),

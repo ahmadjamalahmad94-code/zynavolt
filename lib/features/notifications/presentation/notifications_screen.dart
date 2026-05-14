@@ -255,12 +255,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         showBackButton: false,
       ),
       scrollController: _scrollCtrl,
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        ZynSpacing.xxxl,
-      ),
       child: feed.when(
         loading: () => const Padding(
           padding: EdgeInsets.symmetric(vertical: 48),

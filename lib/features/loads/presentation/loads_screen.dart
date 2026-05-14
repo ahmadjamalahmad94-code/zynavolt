@@ -51,12 +51,6 @@ class _LoadsScreenState extends ConsumerState<LoadsScreen> {
           onPressed: () => ref.invalidate(loadsListProvider),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        96,
-      ),
       floatingActionButton: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(ZynRadii.pill),

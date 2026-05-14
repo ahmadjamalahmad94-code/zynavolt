@@ -6,7 +6,10 @@
 /// surface treatment cascades across the app.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'zyn_tokens.dart';
 
@@ -817,70 +820,211 @@ class ZynPageHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top;
-    // v102b — compact hero. Trimmed top + bottom padding and the
-    // gaps between rows so the first content card lands higher
-    // on the screen on small phones. Typography unchanged.
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(gradient: ZynColors.navyHero),
-      padding: EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        topInset + 2,
-        ZynSpacing.lg,
-        ZynSpacing.md,
+    // v102c — Stack-based layout so the title + subtitle sit in
+    // the visual middle of the hero strip while the back button
+    // (and optional trailing action) overlay at the top edge.
+    // Adds an `AnnotatedRegion` so the OS status-bar icons render
+    // in light tone over the dark navy gradient, and a quiet
+    // watermark (sun + solar panels + bolt) for energy identity.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 36,
-            child: Row(
-              children: [
-                if (showBackButton)
-                  const _HeroBackButton()
-                else
-                  const SizedBox(width: 36),
-                const Spacer(),
-                ?trailing,
-              ],
-            ),
-          ),
-          const SizedBox(height: ZynSpacing.sm),
-          Center(
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
-                height: 1.2,
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(gradient: ZynColors.navyHero),
+        padding: EdgeInsets.only(top: topInset),
+        child: SizedBox(
+          height: 112,
+          child: Stack(
+            children: [
+              // Subtle energy watermark — sun, solar panels, bolt.
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(painter: _HeroWatermark()),
+                ),
               ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Center(
-            child: Text(
-              subtitle,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-                height: 1.35,
+              // Centred title + subtitle block.
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: ZynSpacing.xxl,
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          height: 1.2,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.74),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+              // Top action row — back on the start side (right in
+              // RTL), trailing on the end side. Positioned so the
+              // centred text underneath isn't pushed downward.
+              Positioned(
+                top: 6,
+                left: ZynSpacing.md,
+                right: ZynSpacing.md,
+                child: Row(
+                  children: [
+                    if (showBackButton)
+                      const _HeroBackButton()
+                    else
+                      const SizedBox(width: 36),
+                    const Spacer(),
+                    ?trailing,
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+/// v102c — quiet "energy" watermark painted behind the hero text.
+/// Sun disc + radial rays in one corner, tilted solar-panel strip
+/// in the opposite corner, and a small lightning bolt. Painted at
+/// low alpha so the title + subtitle always read clearly.
+class _HeroWatermark extends CustomPainter {
+  const _HeroWatermark();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // Sun + rays — top-leading corner (right in RTL, left in LTR;
+    // we paint at a fixed canvas position since RTL flipping is
+    // handled by the parent Directionality).
+    final sunCx = w * 0.86;
+    final sunCy = h * 0.42;
+    final sunR = h * 0.22;
+
+    final haloPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white.withValues(alpha: 0.10),
+          Colors.white.withValues(alpha: 0.0),
+        ],
+      ).createShader(
+        Rect.fromCircle(center: Offset(sunCx, sunCy), radius: sunR * 2.4),
+      );
+    canvas.drawCircle(Offset(sunCx, sunCy), sunR * 2.4, haloPaint);
+
+    final sunPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.14);
+    canvas.drawCircle(Offset(sunCx, sunCy), sunR, sunPaint);
+
+    final rayPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.12)
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 8; i++) {
+      final angle = (i / 8) * 2 * math.pi;
+      final start = Offset(
+        sunCx + math.cos(angle) * sunR * 1.30,
+        sunCy + math.sin(angle) * sunR * 1.30,
+      );
+      final end = Offset(
+        sunCx + math.cos(angle) * sunR * 1.65,
+        sunCy + math.sin(angle) * sunR * 1.65,
+      );
+      canvas.drawLine(start, end, rayPaint);
+    }
+
+    // Solar panel strip — bottom-trailing corner. A pair of tilted
+    // rounded rectangles with cell grid lines.
+    canvas.save();
+    canvas.translate(w * 0.06, h * 0.62);
+    canvas.transform(_skew(skewX: -0.32, skewY: 0.16).storage);
+
+    final panelPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.10);
+    final cellPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.16)
+      ..strokeWidth = 0.7
+      ..style = PaintingStyle.stroke;
+
+    final p1 = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(-6, -22, 90, 36),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(p1, panelPaint);
+    for (var i = 1; i < 4; i++) {
+      final x = -6 + (90.0 * i / 4);
+      canvas.drawLine(Offset(x, -22), Offset(x, 14), cellPaint);
+    }
+    canvas.drawLine(const Offset(-6, -4), const Offset(84, -4), cellPaint);
+
+    final p2 = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(-16, 12, 96, 34),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(p2, panelPaint);
+    for (var i = 1; i < 4; i++) {
+      final x = -16 + (96.0 * i / 4);
+      canvas.drawLine(Offset(x, 12), Offset(x, 46), cellPaint);
+    }
+    canvas.drawLine(const Offset(-16, 29), const Offset(80, 29), cellPaint);
+
+    canvas.restore();
+
+    // Lightning bolt — small accent between the sun and the
+    // centred text.
+    final boltPath = Path()
+      ..moveTo(w * 0.40, h * 0.18)
+      ..lineTo(w * 0.34, h * 0.50)
+      ..lineTo(w * 0.40, h * 0.50)
+      ..lineTo(w * 0.34, h * 0.82)
+      ..lineTo(w * 0.44, h * 0.46)
+      ..lineTo(w * 0.38, h * 0.46)
+      ..close();
+    final boltPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.08)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(boltPath, boltPaint);
+  }
+
+  Matrix4 _skew({required double skewX, required double skewY}) {
+    return Matrix4.identity()
+      ..setEntry(0, 1, skewX)
+      ..setEntry(1, 0, skewY);
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeroWatermark oldDelegate) => false;
 }
 
 class _HeroBackButton extends StatelessWidget {
@@ -974,7 +1118,7 @@ class ZynScreen extends StatelessWidget {
     required this.child,
     this.scrollable = true,
     this.padding = const EdgeInsets.fromLTRB(
-      ZynSpacing.lg, ZynSpacing.md, ZynSpacing.lg, ZynSpacing.xxl,
+      ZynSpacing.lg, ZynSpacing.md, ZynSpacing.lg, 110,
     ),
     this.floatingActionButton,
     this.bottomNavigationBar,
@@ -985,6 +1129,12 @@ class ZynScreen extends StatelessWidget {
   final ZynPageHero hero;
   final Widget child;
   final bool scrollable;
+
+  /// Default bottom padding is 110 dp so the scroll body clears
+  /// the floating bottom-nav bubble on tab screens (HomeShell uses
+  /// `extendBody: true`, so the bar overlays whatever sits at the
+  /// bottom of the body). Pushed screens see a bit of extra scroll
+  /// space at the end, which is harmless.
   final EdgeInsetsGeometry padding;
   final Widget? floatingActionButton;
   final Widget? bottomNavigationBar;

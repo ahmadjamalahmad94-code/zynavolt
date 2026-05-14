@@ -170,12 +170,6 @@ class _SupportCaseDetailScreenState
         ),
       ),
       scrollController: _scrollController,
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        ZynSpacing.lg,
-        96,
-      ),
       floatingActionButton: _hasUnseenIncoming
           ? Container(
               decoration: BoxDecoration(
