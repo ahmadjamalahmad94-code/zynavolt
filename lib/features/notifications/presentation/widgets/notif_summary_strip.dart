@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/zyn_tokens.dart';
 
-/// v102 DS v1 — three-up summary strip at the top of the
-/// Notifications screen.
+/// v102 DS v1 — three-up summary strip.
 ///
-/// Each card carries a tone (success / danger / brand), a corner
-/// icon, an optional big number, a short title, and a one-line
-/// subtitle. The summary is purely informational — tapping it does
-/// not (yet) scroll-to-section. Owner can wire that in a follow-up.
+/// Cards are bound to a fixed height so all three feel equal
+/// regardless of content length, and their titles use a calm
+/// short label (`بطارية مستقرة` / `حرجة` / `غير مقروء`) instead
+/// of free-form sentences that would truncate at narrow widths.
 class NotifSummaryStrip extends StatelessWidget {
   const NotifSummaryStrip({
     super.key,
@@ -23,57 +22,54 @@ class NotifSummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // IntrinsicHeight gives all three cards the same height via the
-    // tallest card's intrinsic measurement, but explicitly bounds
-    // vertical for the Row so we don't depend on stretch behaviour
-    // inside an unbounded ListView slot (which was silently
-    // collapsing the rest of the page on real devices).
-    return IntrinsicHeight(
+    return SizedBox(
+      height: 132,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-        Expanded(
-          child: _SummaryCard(
-            tone: batteryStable ? ZynColors.success : ZynColors.warning,
-            toneSoft: batteryStable
-                ? ZynColors.successSoft
-                : ZynColors.warningSoft,
-            icon: batteryStable
-                ? Icons.battery_full_rounded
-                : Icons.battery_alert_rounded,
-            footerIcon: batteryStable
-                ? Icons.check_circle_rounded
-                : Icons.error_outline_rounded,
-            title: batteryStable ? 'بطارية مستقرة' : 'البطارية تحتاج انتباه',
-            value: null,
-            subtitle:
-                batteryStable ? 'الحالة العامة ممتازة' : 'راجع التنبيهات الحرجة',
+          Expanded(
+            child: _SummaryCard(
+              tone: batteryStable ? ZynColors.success : ZynColors.warning,
+              toneSoft: batteryStable
+                  ? ZynColors.successSoft
+                  : ZynColors.warningSoft,
+              icon: batteryStable
+                  ? Icons.battery_full_rounded
+                  : Icons.battery_alert_rounded,
+              footerIcon: batteryStable
+                  ? Icons.check_circle_rounded
+                  : Icons.error_outline_rounded,
+              title: batteryStable ? 'بطارية مستقرة' : 'تنبيه بطارية',
+              value: null,
+              subtitle: batteryStable
+                  ? 'الحالة العامة ممتازة'
+                  : 'راجع التنبيهات الحرجة',
+            ),
           ),
-        ),
-        const SizedBox(width: ZynSpacing.sm),
-        Expanded(
-          child: _SummaryCard(
-            tone: ZynColors.danger,
-            toneSoft: ZynColors.dangerSoft,
-            icon: Icons.priority_high_rounded,
-            footerIcon: null,
-            title: 'حرجة',
-            value: '$criticalCount',
-            subtitle: 'تحتاج انتباهك',
+          const SizedBox(width: ZynSpacing.sm),
+          Expanded(
+            child: _SummaryCard(
+              tone: ZynColors.danger,
+              toneSoft: ZynColors.dangerSoft,
+              icon: Icons.priority_high_rounded,
+              footerIcon: null,
+              title: 'حرجة',
+              value: '$criticalCount',
+              subtitle: 'تحتاج انتباهك',
+            ),
           ),
-        ),
-        const SizedBox(width: ZynSpacing.sm),
-        Expanded(
-          child: _SummaryCard(
-            tone: ZynColors.primary500,
-            toneSoft: ZynColors.primary50,
-            icon: Icons.notifications_active_rounded,
-            footerIcon: null,
-            title: 'غير مقروء',
-            value: '$unreadCount',
-            subtitle: 'إجمالي الإشعارات',
+          const SizedBox(width: ZynSpacing.sm),
+          Expanded(
+            child: _SummaryCard(
+              tone: ZynColors.primary500,
+              toneSoft: ZynColors.primary50,
+              icon: Icons.notifications_active_rounded,
+              footerIcon: null,
+              title: 'غير مقروء',
+              value: '$unreadCount',
+              subtitle: 'إجمالي الإشعارات',
+            ),
           ),
-        ),
         ],
       ),
     );
@@ -102,26 +98,21 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(ZynSpacing.md),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
-        color: toneSoft,
+        color: toneSoft.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(ZynRadii.card),
         border: Border.all(
-          color: tone.withValues(alpha: 0.20),
+          color: tone.withValues(alpha: 0.18),
           width: 1,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          // Top icon — tone-coloured filled circle. Column's
-          // crossAxisAlignment.start places it on the start edge
-          // automatically; the previous Align wrapper was eating
-          // the column's vertical layout in some contexts.
           Container(
-            width: 30,
-            height: 30,
+            width: 32,
+            height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: tone.withValues(alpha: 0.18),
@@ -129,7 +120,7 @@ class _SummaryCard extends StatelessWidget {
             ),
             child: Icon(icon, color: tone, size: 16),
           ),
-          const SizedBox(height: ZynSpacing.sm),
+          const Spacer(),
           if (value != null) ...[
             Text(
               value!,
@@ -142,14 +133,14 @@ class _SummaryCard extends StatelessWidget {
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
           ],
           Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               color: ZynColors.ink,
               fontSize: 13,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               height: 1.2,
             ),
             maxLines: 1,
@@ -169,7 +160,7 @@ class _SummaryCard extends StatelessWidget {
                     color: ZynColors.muted,
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
-                    height: 1.3,
+                    height: 1.35,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,

@@ -5,22 +5,20 @@ import '../../../../core/utils/backend_time.dart';
 import '../../data/notification_bucket.dart';
 import '../../data/notification_models.dart';
 
-/// v102 DS v1 — unified notification tile.
+/// v102 DS v1 — notification tile, calm operational variant.
 ///
-/// Renders one [AppNotification] as a card with:
-///   * a leading-edge tone-coloured accent strip (positioned overlay
-///     so the strip stretches the full tile height without needing
-///     an `IntrinsicHeight` wrapper that was breaking layout on
-///     real devices),
-///   * a tone-tinted square icon chip,
-///   * title (single line),
-///   * one-line/two-line summary,
-///   * a tone-coloured chip label,
-///   * a faint timestamp on the trailing column,
-///   * an unread dot on the title row when relevant.
+/// Matches the 2026-05-14 reference image: a predominantly WHITE
+/// card with a thin tone-coloured border, a soft circular icon
+/// chip on the leading edge, the title + a one-or-two-line
+/// description, a small tone-coloured pill below, and the
+/// timestamp anchored to the trailing column. Unread items get a
+/// very faint tinted background (alpha ~0.06) so the whole screen
+/// doesn't wash in any one tone.
 ///
-/// Tap → [onTap]. Pure presentation; the parent owns the detail
-/// sheet open path. No fixed height — content adapts up to 2 lines.
+/// Earlier drafts wrapped a `Stack` + `PositionedDirectional`
+/// accent strip that bled past the card's rounded corners on
+/// device. Dropped in this pass — the colour signal comes from
+/// border + icon + pill, not from a separate overlay.
 class NotifTile extends StatelessWidget {
   const NotifTile({
     super.key,
@@ -35,149 +33,124 @@ class NotifTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (tone, toneSoft, icon, chipLabel) =
-        _bucketStyle(bucket, notification);
+    final (tone, icon, chipLabel) = _bucketStyle(bucket, notification);
     final time = _formatTimestamp(notification.createdAt);
     final isUnread = !notification.isRead;
 
-    return Stack(
-      children: [
-        // Card body — sized child of the Stack.
-        Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(ZynRadii.card),
-          child: InkWell(
-            onTap: onTap,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(ZynRadii.card),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: isUnread
+                ? tone.withValues(alpha: 0.06)
+                : ZynColors.surface,
             borderRadius: BorderRadius.circular(ZynRadii.card),
-            child: Ink(
-              decoration: BoxDecoration(
-                color: isUnread ? toneSoft : ZynColors.surface,
-                borderRadius: BorderRadius.circular(ZynRadii.card),
-                border: Border.all(
-                  color: isUnread
-                      ? tone.withValues(alpha: 0.30)
-                      : ZynColors.line,
-                  width: 1,
-                ),
-                boxShadow: ZynShadows.soft(tint: tone),
-              ),
-              child: Padding(
-                // Extra start padding accounts for the accent strip
-                // overlay so content doesn't sit on top of it.
-                padding: const EdgeInsetsDirectional.fromSTEB(
-                  ZynSpacing.md + 4,
-                  ZynSpacing.md,
-                  ZynSpacing.md,
-                  ZynSpacing.md,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _IconChip(tone: tone, icon: icon),
-                    const SizedBox(width: ZynSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+            border: Border.all(
+              color: tone.withValues(alpha: isUnread ? 0.30 : 0.16),
+              width: 1,
+            ),
+            boxShadow: ZynShadows.soft(),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              ZynSpacing.md,
+              ZynSpacing.md,
+              ZynSpacing.md,
+              ZynSpacing.md,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _IconChip(tone: tone, icon: icon),
+                const SizedBox(width: ZynSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Row(
-                            children: [
-                              if (isUnread) ...[
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: tone,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  notification.title.isEmpty
-                                      ? '—'
-                                      : notification.title,
-                                  style: const TextStyle(
-                                    color: ZynColors.ink,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.25,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                          if (isUnread) ...[
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: tone,
+                                shape: BoxShape.circle,
                               ),
-                            ],
-                          ),
-                          if (notification.message.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              notification.message,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Expanded(
+                            child: Text(
+                              notification.title.isEmpty
+                                  ? '—'
+                                  : notification.title,
                               style: const TextStyle(
-                                color: ZynColors.inkSoft,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w400,
-                                height: 1.4,
+                                color: ZynColors.ink,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                height: 1.25,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                          if (chipLabel.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            _ChipLabel(tone: tone, text: chipLabel),
-                          ],
+                          ),
                         ],
                       ),
-                    ),
-                    if (time.isNotEmpty) ...[
-                      const SizedBox(width: ZynSpacing.sm),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          time,
+                      if (notification.message.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          notification.message,
                           style: const TextStyle(
-                            color: ZynColors.faint,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            height: 1.2,
-                            fontFeatures: [FontFeature.tabularFigures()],
+                            color: ZynColors.inkSoft,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w400,
+                            height: 1.5,
                           ),
-                          textDirection: TextDirection.ltr,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
+                      ],
+                      if (chipLabel.isNotEmpty) ...[
+                        const SizedBox(height: ZynSpacing.sm),
+                        _ChipLabel(tone: tone, text: chipLabel),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
+                if (time.isNotEmpty) ...[
+                  const SizedBox(width: ZynSpacing.sm),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      time,
+                      style: const TextStyle(
+                        color: ZynColors.faint,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                      textDirection: TextDirection.ltr,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
-        // Accent strip overlay — sized to body via top/bottom.
-        PositionedDirectional(
-          start: 0,
-          top: 0,
-          bottom: 0,
-          width: 4,
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: tone,
-                borderRadius: const BorderRadiusDirectional.only(
-                  topStart: Radius.circular(ZynRadii.card),
-                  bottomStart: Radius.circular(ZynRadii.card),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  /// Returns `(strong tone, soft tone, leading icon, chip label)`.
-  (Color, Color, IconData, String) _bucketStyle(
+  /// Returns `(tone, leading icon, chip label)`.
+  (Color, IconData, String) _bucketStyle(
     NotificationBucket b,
     AppNotification n,
   ) {
@@ -215,12 +188,12 @@ class NotifTile extends StatelessWidget {
       NotificationBucket.update => _chipForUpdate(ev),
     };
 
-    final (tone, toneSoft) = switch (b) {
-      NotificationBucket.critical => (ZynColors.danger, ZynColors.dangerSoft),
-      NotificationBucket.suggestion => (ZynColors.accent, ZynColors.accentSoft),
-      NotificationBucket.update => (ZynColors.info, ZynColors.infoSoft),
+    final tone = switch (b) {
+      NotificationBucket.critical => ZynColors.danger,
+      NotificationBucket.suggestion => ZynColors.accent,
+      NotificationBucket.update => ZynColors.info,
     };
-    return (tone, toneSoft, icon, chipLabel);
+    return (tone, icon, chipLabel);
   }
 
   String _chipForCritical(String ev) {
@@ -254,12 +227,12 @@ class _IconChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 38,
-      height: 38,
+      width: 40,
+      height: 40,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(ZynRadii.tile),
+        color: tone.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
       ),
       child: Icon(icon, color: tone, size: 20),
     );
@@ -275,9 +248,9 @@ class _ChipLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
+        color: tone.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(ZynRadii.pill),
       ),
       child: Text(
