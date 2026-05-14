@@ -107,6 +107,44 @@ class LoadsTotals {
   final double deniedPowerW;
 }
 
+/// Heavy v10.5.37+ — surplus headline metrics, mirrored from the
+/// web dashboard so the mobile UI can show the same numbers the
+/// dashboard shows ("الفائض الفعلي" / "احتياج البطارية" / ...).
+class LoadsSurplus {
+  const LoadsSurplus({
+    required this.safeAvailableW,
+    required this.rawW,
+    required this.batteryNeedW,
+    required this.actualW,
+    required this.phase,
+    required this.nightMaxW,
+  });
+
+  factory LoadsSurplus.fromJson(Map<String, dynamic>? json) {
+    final j = json ?? const <String, dynamic>{};
+    double asDouble(Object? raw) =>
+        raw is num ? raw.toDouble() : 0.0;
+    return LoadsSurplus(
+      safeAvailableW: asDouble(j['safe_available_w']),
+      rawW: asDouble(j['raw_w']),
+      batteryNeedW: asDouble(j['battery_need_w']),
+      actualW: asDouble(j['actual_w']),
+      phase: (j['phase'] ?? 'night').toString(),
+      nightMaxW: asDouble(j['night_max_w']),
+    );
+  }
+
+  final double safeAvailableW;
+  final double rawW;
+  final double batteryNeedW;
+  final double actualW;
+
+  /// `'day'` or `'night'`.
+  final String phase;
+
+  final double nightMaxW;
+}
+
 class LoadsRecommendationsSnapshot {
   const LoadsRecommendationsSnapshot({
     required this.available,
@@ -116,6 +154,7 @@ class LoadsRecommendationsSnapshot {
     required this.decision,
     required this.items,
     required this.totals,
+    required this.surplus,
     required this.generatedAt,
   });
 
@@ -142,6 +181,9 @@ class LoadsRecommendationsSnapshot {
       totals: LoadsTotals.fromJson(
         (json['totals'] as Map?)?.cast<String, dynamic>(),
       ),
+      surplus: LoadsSurplus.fromJson(
+        (json['surplus'] as Map?)?.cast<String, dynamic>(),
+      ),
       generatedAt: (json['generated_at'] ?? '').toString(),
     );
   }
@@ -153,6 +195,7 @@ class LoadsRecommendationsSnapshot {
   final LoadsDecision? decision;
   final List<LoadItem> items;
   final LoadsTotals totals;
+  final LoadsSurplus surplus;
   final String generatedAt;
 
   List<LoadItem> get allowed =>
