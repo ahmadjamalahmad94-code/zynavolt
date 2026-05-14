@@ -1,5 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- v101 — required on Android 13 (API 33) and newer to display
+         FCM notifications. The runtime prompt is fired from the
+         mobile PushService when the user opts in. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Zynavolt"
         android:name="${applicationName}"

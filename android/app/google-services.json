@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "859225004535",
+    "project_id": "zynavolt",
+    "storage_bucket": "zynavolt.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:859225004535:android:f26ca9dd459d24577936f2",
+        "android_client_info": {
+          "package_name": "com.zynavolt.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC11vyJxTri3VqNeJWYZ-7kBuJw4iaifuc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

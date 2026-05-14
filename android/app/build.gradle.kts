@@ -3,6 +3,11 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // v101 — Firebase. Reads `android/app/google-services.json` and
+    // exposes the project / app id / API key to the SDKs at build
+    // time. Without this plugin, `firebase_core` will fail to
+    // initialize.
+    id("com.google.gms.google-services")
 }
 
 android {

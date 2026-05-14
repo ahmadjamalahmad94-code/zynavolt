@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/notifications/push_service.dart';
 import '../core/state/auto_refresh.dart';
 import '../core/state/font_pref.dart';
 import '../core/state/time_format_provider.dart';
@@ -31,6 +32,11 @@ class SolarDeyeApp extends ConsumerWidget {
     // observer would never be added and timers would keep ticking
     // while the app sits in the background.
     ref.watch(appLifecycleObserverProvider);
+    // v101 — kick off the FCM bootstrap (permission prompt, token
+    // fetch, refresh listener). The provider runs `start()` as a
+    // fire-and-forget so the first frame doesn't block on the
+    // permission dialog.
+    ref.watch(pushServiceProvider);
 
     return MaterialApp.router(
       title: 'Zynavolt',
