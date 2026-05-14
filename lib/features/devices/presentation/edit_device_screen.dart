@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
@@ -129,18 +130,17 @@ class _EditDeviceScreenState extends ConsumerState<EditDeviceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ZynColors.bg,
-      appBar: AppBar(title: const Text('تعديل الجهاز')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'تعديل الجهاز',
+        subtitle: 'تحديث الاسم والمحطّة والإعدادات الآمنة للبطارية.',
+      ),
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
                 _HonestNote(deviceName: widget.device.name),
                 const SizedBox(height: 14),
                 AppCard(
@@ -261,12 +261,9 @@ class _EditDeviceScreenState extends ConsumerState<EditDeviceScreen> {
                     label: const Text('حفظ التعديلات'),
                   ),
                 ),
-                const SizedBox(height: 24),
               ],
             ),
           ),
-        ),
-      ),
     );
   }
 }

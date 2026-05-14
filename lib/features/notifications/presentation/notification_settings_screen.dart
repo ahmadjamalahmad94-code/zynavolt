@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
@@ -134,64 +135,39 @@ class _NotificationSettingsScreenState
   Widget build(BuildContext context) {
     final settings = ref.watch(notificationSettingsProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('إعدادات الإشعارات'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded,
-                color: ZynColors.primary700),
-            tooltip: 'تحديث',
-            onPressed: () => ref.invalidate(notificationSettingsProvider),
-          ),
-        ],
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: ZynColors.primary500,
-            onRefresh: () async =>
-                ref.invalidate(notificationSettingsProvider),
-            child: settings.when(
-              loading: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                children: const [
-                  AppLoading(message: 'جارٍ تحميل الإعدادات...'),
-                ],
-              ),
-              error: (err, _) => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(ZynSpacing.lg),
-                children: [
-                  AppErrorState(
-                    error: err is ApiException
-                        ? err
-                        : ApiException(
-                            message: 'تعذّر تحميل الإعدادات.',
-                            kind: ApiErrorKind.unknown,
-                          ),
-                    onRetry: () =>
-                        ref.invalidate(notificationSettingsProvider),
-                  ),
-                ],
-              ),
-              data: (s) {
-                _reconcile(s);
-                return _Body(
-                  snapshot: s,
-                  optimistic: _optimistic,
-                  busy: _busy,
-                  onPatch: _patchOne,
-                );
-              },
-            ),
-          ),
+    return ZynScreen(
+      hero: ZynPageHero(
+        title: 'إعدادات الإشعارات',
+        subtitle: 'قنوات الإشعار وفئاتها للتنبيهات الفورية.',
+        trailing: ZynHeroActionButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'تحديث',
+          onPressed: () => ref.invalidate(notificationSettingsProvider),
         ),
+      ),
+      child: settings.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحميل الإعدادات...'),
+        ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل الإعدادات.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () => ref.invalidate(notificationSettingsProvider),
+        ),
+        data: (s) {
+          _reconcile(s);
+          return _Body(
+            snapshot: s,
+            optimistic: _optimistic,
+            busy: _busy,
+            onPatch: _patchOne,
+          );
+        },
       ),
     );
   }
@@ -215,14 +191,8 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.md,
-        ZynSpacing.lg,
-        ZynSpacing.xxl,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _ScopeBanner(scope: snapshot.scope),
         const SizedBox(height: ZynSpacing.md),

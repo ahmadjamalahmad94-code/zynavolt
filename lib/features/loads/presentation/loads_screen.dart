@@ -41,20 +41,21 @@ class _LoadsScreenState extends ConsumerState<LoadsScreen> {
     final filter = ref.watch(loadsScopeFilterProvider);
     final activeId = ref.watch(effectiveDeviceIdProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('الأحمال'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded,
-                color: ZynColors.primary700),
-            tooltip: 'تحديث',
-            onPressed: () => ref.invalidate(loadsListProvider),
-          ),
-        ],
+    return ZynScreen(
+      hero: ZynPageHero(
+        title: 'الأحمال',
+        subtitle: 'إدارة الأحمال المنزلية وأولوياتها.',
+        trailing: ZynHeroActionButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'تحديث',
+          onPressed: () => ref.invalidate(loadsListProvider),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        96,
       ),
       floatingActionButton: Container(
         decoration: BoxDecoration(
@@ -85,54 +86,36 @@ class _LoadsScreenState extends ConsumerState<LoadsScreen> {
           },
         ),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _Toolbar(
-                query: _query,
-                controller: _searchCtrl,
-                onQueryChanged: (v) => setState(() => _query = v),
-                filter: filter,
-                activeDeviceAvailable: activeId != null,
-                onFilterChanged: (f) =>
-                    ref.read(loadsScopeFilterProvider.notifier).state = f,
-              ),
-              Expanded(
-                child: RefreshIndicator(
-                  color: ZynColors.primary500,
-                  onRefresh: () async => ref.invalidate(loadsListProvider),
-                  child: page.when(
-                    loading: () => ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(vertical: 48),
-                      children: const [
-                        AppLoading(message: 'جارٍ تحميل الأحمال...'),
-                      ],
-                    ),
-                    error: (err, _) => ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(ZynSpacing.lg),
-                      children: [
-                        AppErrorState(
-                          error: err is ApiException
-                              ? err
-                              : ApiException(
-                                  message: 'تعذّر تحميل الأحمال.',
-                                  kind: ApiErrorKind.unknown,
-                                ),
-                          onRetry: () => ref.invalidate(loadsListProvider),
-                        ),
-                      ],
-                    ),
-                    data: (data) => _LoadsBody(data: data, query: _query),
-                  ),
-                ),
-              ),
-            ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Toolbar(
+            query: _query,
+            controller: _searchCtrl,
+            onQueryChanged: (v) => setState(() => _query = v),
+            filter: filter,
+            activeDeviceAvailable: activeId != null,
+            onFilterChanged: (f) =>
+                ref.read(loadsScopeFilterProvider.notifier).state = f,
           ),
-        ),
+          const SizedBox(height: ZynSpacing.md),
+          page.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: AppLoading(message: 'جارٍ تحميل الأحمال...'),
+            ),
+            error: (err, _) => AppErrorState(
+              error: err is ApiException
+                  ? err
+                  : ApiException(
+                      message: 'تعذّر تحميل الأحمال.',
+                      kind: ApiErrorKind.unknown,
+                    ),
+              onRetry: () => ref.invalidate(loadsListProvider),
+            ),
+            data: (data) => _LoadsBody(data: data, query: _query),
+          ),
+        ],
       ),
     );
   }
@@ -309,14 +292,8 @@ class _LoadsBody extends StatelessWidget {
             .toList();
 
     if (data.items.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          ZynSpacing.lg,
-          ZynSpacing.md,
-          ZynSpacing.lg,
-          96,
-        ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _ScopeBanner(scope: data.scope, deviceName: data.deviceName),
           const SizedBox(height: ZynSpacing.md),
@@ -331,14 +308,8 @@ class _LoadsBody extends StatelessWidget {
     }
 
     if (filtered.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          ZynSpacing.lg,
-          ZynSpacing.md,
-          ZynSpacing.lg,
-          96,
-        ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _ScopeBanner(scope: data.scope, deviceName: data.deviceName),
           const SizedBox(height: ZynSpacing.md),
@@ -356,13 +327,9 @@ class _LoadsBody extends StatelessWidget {
     final leadingExtras = hasSearch ? 2 : 1;
 
     return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.md,
-        ZynSpacing.lg,
-        96,
-      ),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
       itemCount: filtered.length + leadingExtras,
       separatorBuilder: (_, _) => const SizedBox(height: ZynSpacing.sm),
       itemBuilder: (_, index) {

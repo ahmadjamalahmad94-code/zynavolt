@@ -2,10 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../app/app_router.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/state/auto_refresh.dart';
 import '../../../core/widgets/app_error_state.dart';
@@ -15,7 +14,6 @@ import '../data/notification_models.dart';
 import '../state/notifications_controller.dart';
 import 'widgets/notif_detail_sheet.dart';
 import 'widgets/notif_filter_sheet.dart';
-import 'widgets/notif_header.dart';
 import 'widgets/notif_mini_empty.dart';
 import 'widgets/notif_search_bar.dart';
 import 'widgets/notif_section_header.dart';
@@ -250,45 +248,36 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final feed = ref.watch(notificationsControllerProvider);
     final filtersActive = _unreadOnly || _buckets.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: ZynColors.primary500,
-            onRefresh: () => ref
-                .read(notificationsControllerProvider.notifier)
-                .refresh(),
-            child: feed.when(
-              loading: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(top: 80),
-                children: const [
-                  AppLoading(message: 'جارٍ تحميل الإشعارات…'),
-                ],
-              ),
-              error: (err, _) => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(ZynSpacing.lg),
-                children: [
-                  AppErrorState(
-                    error: err is ApiException
-                        ? err
-                        : ApiException(
-                            message: 'تعذّر تحميل الإشعارات.',
-                            kind: ApiErrorKind.unknown,
-                          ),
-                    onRetry: () => ref
-                        .read(notificationsControllerProvider.notifier)
-                        .refresh(),
-                  ),
-                ],
-              ),
-              data: (state) => _buildList(state, filtersActive),
-            ),
-          ),
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'الإشعارات',
+        subtitle: 'تنبيهات النظام واقتراحاته الذكية لهذا اليوم.',
+        showBackButton: false,
+      ),
+      scrollController: _scrollCtrl,
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.xxxl,
+      ),
+      child: feed.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحميل الإشعارات…'),
         ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل الإشعارات.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () => ref
+              .read(notificationsControllerProvider.notifier)
+              .refresh(),
+        ),
+        data: (state) => _buildList(state, filtersActive),
       ),
     );
   }
@@ -299,21 +288,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final batteryStable = criticalCount == 0;
     final allEmpty = _isAllEmpty(grouped);
 
-    return ListView(
-      controller: _scrollCtrl,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.md,
-        ZynSpacing.lg,
-        ZynSpacing.xxxl,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        NotifHeader(
-          unreadCount: state.unreadCount,
-          onAvatarTap: () => context.go(AppRoutes.more),
-        ),
-        const SizedBox(height: ZynSpacing.lg),
         NotifSearchBar(
           query: _query,
           onQueryChanged: (q) => setState(() => _query = q),

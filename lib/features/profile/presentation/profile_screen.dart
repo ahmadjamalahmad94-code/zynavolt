@@ -28,11 +28,10 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileControllerProvider);
 
-    return ZynPage(
-      appBar: AppBar(
-        title: const Text('الملف الشخصي'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'الملف الشخصي',
+        subtitle: 'بياناتك الأساسية، الموقع، والمنطقة الزمنية.',
       ),
       child: profile.when(
         loading: () => const AppLoading(message: 'جارٍ تحميل الملف...'),

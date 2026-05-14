@@ -70,38 +70,45 @@ Notion — full description in `zyn_tokens.dart` header)
 
 ### 1.2 Page shell pattern — every new screen `#design` `#addition`
 
-Prefer the canonical helper:
+**Every non-Home screen uses [ZynScreen] + [ZynPageHero]** — a unified
+dark-navy hero strip at the top with title + subtitle, on a dark page
+backdrop so short pages stay framed in navy top-and-bottom (no
+mismatched lavender bands).
 
 ```dart
-return ZynPage(
-  appBar: AppBar(
-    title: const Text('...'),
-    backgroundColor: Colors.transparent,
-    scrolledUnderElevation: 0,
+return ZynScreen(
+  hero: const ZynPageHero(
+    title: 'الإحصاءات',
+    subtitle: 'تفاصيل الإنتاج والاستهلاك يومياً وشهرياً.',
+    // showBackButton defaults to true for pushed routes;
+    // set false on the four bottom-nav tabs (Devices, Weather,
+    // Notifications, More) so there's no back arrow on tabs.
   ),
   child: <body>,
 );
 ```
 
-For non-scrolling or list-based bodies that need a `RefreshIndicator`
-inside, drop down to the long form:
+Optional trailing action on the hero (refresh / today / etc.):
 
 ```dart
-return Scaffold(
-  backgroundColor: Colors.transparent,
-  appBar: AppBar(...),
-  body: DecoratedBox(
-    decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-    child: SafeArea(
-      child: RefreshIndicator(
-        color: ZynColors.primary500,
-        onRefresh: () async => ref.invalidate(myProvider),
-        child: <body>,
-      ),
-    ),
+hero: ZynPageHero(
+  title: '...',
+  subtitle: '...',
+  trailing: ZynHeroActionButton(
+    icon: Icons.refresh_rounded,
+    tooltip: 'تحديث',
+    onPressed: () => ref.invalidate(myProvider),
   ),
-);
+),
 ```
+
+If the body needs scroll-offset listeners (e.g. auto-mark-read in
+Notifications), pass `scrollController:` — `ZynScreen` attaches it to
+the inner `SingleChildScrollView`.
+
+The legacy `ZynPage` helper still exists but is **deprecated** in
+favour of `ZynScreen`. Home is the only screen that opts out of the
+unified hero (it has a bespoke navy "sun + brand" header).
 
 ### 1.3 Card / tile shorthand `#design`
 
@@ -645,3 +652,12 @@ When a rule changes:
   remain only in deprecated alias paths inside `app_theme.dart` for
   build compatibility — new code must import `core/design/zyn_tokens.dart`
   directly. Added §1.7 (popup-dismiss guard pattern).
+* **2026-05-14** — Unified hero header. Added [ZynPageHero] +
+  [ZynScreen] (and [ZynHeroActionButton]) to `zyn_components.dart`.
+  Every screen except `/home` now renders the same dark-navy hero
+  (title + 2-line subtitle, optional back / trailing actions),
+  sitting on a dark page backdrop so short pages keep both top and
+  bottom in navy. `ZynSectionHeader`, `ZynEmptyState`, `AppLoading`,
+  `AppErrorState` now default to `onDark: true` since dark is the
+  norm. §1.2 updated to make `ZynScreen` the default page shell;
+  `ZynPage` is kept as a deprecated shim.

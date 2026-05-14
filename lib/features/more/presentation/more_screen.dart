@@ -105,20 +105,17 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             : '#${activeDevice.id}');
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
-      child: ZynPage(
-        padding: const EdgeInsets.fromLTRB(
-          ZynSpacing.lg,
-          ZynSpacing.lg,
-          ZynSpacing.lg,
-          ZynSpacing.xxl,
+      value: SystemUiOverlayStyle.light,
+      child: ZynScreen(
+        hero: const ZynPageHero(
+          title: 'حسابي',
+          subtitle: 'البروفايل والاشتراك والإعدادات والدعم.',
+          showBackButton: false,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _PageTitle(),
-            const SizedBox(height: ZynSpacing.md),
-            _ProfileHero(
+            _ProfileSummaryCard(
               user: user,
               activeDeviceName: activeDeviceName,
               onEditTap: () => context.push(AppRoutes.profile),
@@ -174,32 +171,10 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
   }
 }
 
-// ─── Page title ─────────────────────────────────────────────────────
+// ─── Profile summary card (sits below the hero) ─────────────────────
 
-class _PageTitle extends StatelessWidget {
-  const _PageTitle();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'حسابي',
-        style: TextStyle(
-          color: ZynColors.ink,
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
-          height: 1.2,
-          letterSpacing: -0.3,
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Profile hero ───────────────────────────────────────────────────
-
-class _ProfileHero extends StatelessWidget {
-  const _ProfileHero({
+class _ProfileSummaryCard extends StatelessWidget {
+  const _ProfileSummaryCard({
     required this.user,
     required this.activeDeviceName,
     required this.onEditTap,
@@ -218,81 +193,84 @@ class _ProfileHero extends StatelessWidget {
     final role = user?.role ?? '—';
     final email = user?.email ?? '';
 
-    return DecoratedBox(
-      decoration: zynNavyHeroDecoration(),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(ZynRadii.hero),
-        child: DecoratedBox(
-          decoration: const BoxDecoration(gradient: ZynColors.navyHero),
-          child: Padding(
-            padding: const EdgeInsets.all(ZynSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.xl),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.med(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _Avatar(initials: initials),
+              const SizedBox(width: ZynSpacing.md),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _Avatar(initials: initials),
-                    const SizedBox(width: ZynSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              height: 1.25,
-                              letterSpacing: -0.2,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (email.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              email,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.74),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                height: 1.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textDirection: TextDirection.ltr,
-                            ),
-                          ],
-                        ],
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: ZynColors.ink,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        height: 1.25,
+                        letterSpacing: -0.2,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    _EditButton(onTap: onEditTap),
+                    if (email.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        email,
+                        style: const TextStyle(
+                          color: ZynColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          height: 1.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textDirection: TextDirection.ltr,
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: ZynSpacing.md),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    ZynChip(
-                      icon: Icons.shield_outlined,
-                      text: role,
-                      onLight: false,
-                    ),
-                    if (activeDeviceName != null)
-                      ZynChip(
-                        icon: Icons.solar_power_outlined,
-                        text: activeDeviceName!,
-                        onLight: false,
-                      ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+              _EditButton(onTap: onEditTap),
+            ],
           ),
-        ),
+          const SizedBox(height: ZynSpacing.md),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ZynChip(
+                icon: Icons.shield_outlined,
+                text: role,
+                tone: ZynColors.primary500,
+              ),
+              if (activeDeviceName != null)
+                ZynChip(
+                  icon: Icons.solar_power_outlined,
+                  text: activeDeviceName!,
+                  tone: ZynColors.success,
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -373,16 +351,16 @@ class _EditButton extends StatelessWidget {
           height: 38,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.14),
+            color: ZynColors.primary50,
             shape: BoxShape.circle,
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.22),
+              color: ZynColors.primary500.withValues(alpha: 0.30),
               width: 0.8,
             ),
           ),
           child: const Icon(
             Icons.edit_outlined,
-            color: Colors.white,
+            color: ZynColors.primary700,
             size: 18,
           ),
         ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
@@ -13,7 +14,6 @@ import 'widgets/day_periods_strip.dart';
 import 'widgets/next_hour_card.dart';
 import 'widgets/sun_times_card.dart';
 import 'widgets/today_chart_strip.dart';
-import 'widgets/weather_header.dart';
 import 'widgets/weather_hero_card.dart';
 
 /// v102 DS v1 — "الطاقة والطقس" subscriber screen.
@@ -22,7 +22,7 @@ import 'widgets/weather_hero_card.dart';
 /// Energy DS. Six honest blocks, each backed by real data from
 /// existing backend endpoints:
 ///
-///   1. [WeatherHeader] — page title + active-device pill.
+///   1. [ZynPageHero] — unified dark navy header with title + subtitle.
 ///   2. [WeatherHeroCard] — `weather.current` + today's kWh from
 ///      `/statistics?view=day` + the next-hour `solar_rating` as a
 ///      production verdict.
@@ -51,57 +51,38 @@ class WeatherScreen extends ConsumerWidget {
     final snap = ref.watch(weatherProvider);
     final deviceId = ref.watch(effectiveDeviceIdProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: ZynColors.primary500,
-            onRefresh: () async {
-              ref.invalidate(weatherProvider);
-              await ref.read(weatherProvider.future);
-            },
-            child: snap.when(
-              loading: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                children: const [
-                  AppLoading(message: 'جارٍ تحميل بيانات الطقس...'),
-                ],
-              ),
-              error: (err, _) => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(ZynSpacing.lg),
-                children: [
-                  AppErrorState(
-                    error: err is ApiException
-                        ? err
-                        : ApiException(
-                            message: 'تعذّر تحميل بيانات الطقس.',
-                            kind: ApiErrorKind.unknown,
-                          ),
-                    onRetry: () => ref.invalidate(weatherProvider),
-                  ),
-                ],
-              ),
-              data: (data) {
-                if (data == null) {
-                  return ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(ZynSpacing.lg),
-                    children: const [
-                      _WeatherHeaderFallback(),
-                      SizedBox(height: ZynSpacing.lg),
-                      _NoDeviceCard(),
-                    ],
-                  );
-                }
-                return _WeatherBody(snapshot: data, deviceId: deviceId);
-              },
-            ),
-          ),
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'الطاقة والطقس',
+        subtitle: 'متابعة الطقس وتأثيره على إنتاج الطاقة الشمسية.',
+        showBackButton: false,
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.xxl,
+      ),
+      child: snap.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحميل بيانات الطقس...'),
         ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل بيانات الطقس.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () => ref.invalidate(weatherProvider),
+        ),
+        data: (data) {
+          if (data == null) {
+            return const _NoDeviceCard();
+          }
+          return _WeatherBody(snapshot: data, deviceId: deviceId);
+        },
       ),
     );
   }
@@ -118,17 +99,13 @@ class _WeatherBody extends ConsumerWidget {
     final deviceName = snapshot.device.name;
 
     if (!snapshot.available) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          ZynSpacing.lg,
-          ZynSpacing.md,
-          ZynSpacing.lg,
-          ZynSpacing.xxl,
-        ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          WeatherHeader(deviceName: deviceName),
-          const SizedBox(height: ZynSpacing.lg),
+          if (deviceName.isNotEmpty) ...[
+            _DevicePill(name: deviceName),
+            const SizedBox(height: ZynSpacing.md),
+          ],
           _UnavailableCard(
             reason: snapshot.reason,
             backendMessage: snapshot.message,
@@ -159,25 +136,18 @@ class _WeatherBody extends ConsumerWidget {
     final dayParts = snapshot.dayParts;
     final timeline = snapshot.timeline;
 
-    // Verdict carried over from next-hour rating so the wording in
-    // the hero stays consistent with the rest of the screen. Empty
-    // string → the inset hides its verdict line.
     final verdict =
         nextHour != null && nextHour.solarRating.isNotEmpty
             ? nextHour.solarRating
             : null;
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.md,
-        ZynSpacing.lg,
-        ZynSpacing.xxl,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        WeatherHeader(deviceName: deviceName),
-        const SizedBox(height: ZynSpacing.lg),
+        if (deviceName.isNotEmpty) ...[
+          _DevicePill(name: deviceName),
+          const SizedBox(height: ZynSpacing.md),
+        ],
         WeatherHeroCard(
           current: current,
           productionKwhToday: kwh,
@@ -229,12 +199,51 @@ class _WeatherBody extends ConsumerWidget {
 
 // ─── Empty / unavailable states ──────────────────────────────────────
 
-class _WeatherHeaderFallback extends StatelessWidget {
-  const _WeatherHeaderFallback();
+class _DevicePill extends StatelessWidget {
+  const _DevicePill({required this.name});
+
+  final String name;
 
   @override
-  Widget build(BuildContext context) =>
-      const WeatherHeader(deviceName: '');
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: ZynSpacing.md,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(ZynRadii.pill),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.20),
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.solar_power_outlined,
+              color: Colors.white.withValues(alpha: 0.85),
+              size: 14,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _UnavailableCard extends StatelessWidget {
@@ -376,12 +385,12 @@ class _GeneratedAtFooter extends StatelessWidget {
     return Center(
       child: Text(
         'آخر تحديث: $label',
-        style: const TextStyle(
-          color: ZynColors.muted,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.60),
           fontSize: 11.5,
           fontWeight: FontWeight.w600,
           height: 1.3,
-          fontFeatures: [FontFeature.tabularFigures()],
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
     );

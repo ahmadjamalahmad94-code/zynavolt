@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/utils/backend_time.dart';
 import '../../../core/utils/timestamp.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
-import '../../../core/widgets/app_refresh_button.dart';
 import '../data/device_detail_models.dart';
 import '../data/device_detail_repository.dart';
 import '../data/device_diagnostics_models.dart';
@@ -36,22 +36,15 @@ class DeviceDetailScreen extends ConsumerWidget {
     // produces id == 0 (parse failure, empty path segment, etc.), render an
     // honest error instead of firing a doomed `/devices/0` fetch.
     if (deviceId <= 0) {
-      return Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('تفاصيل الجهاز'),
-          backgroundColor: Colors.transparent,
-          scrolledUnderElevation: 0,
+      return ZynScreen(
+        hero: const ZynPageHero(
+          title: 'تفاصيل الجهاز',
+          subtitle: 'حالة الجهاز وقراءاته الأخيرة.',
         ),
-        body: DecoratedBox(
-          decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-          child: SafeArea(
-            child: AppErrorState(
-              error: ApiException(
-                message: 'معرّف الجهاز غير صالح.',
-                kind: ApiErrorKind.notFound,
-              ),
-            ),
+        child: AppErrorState(
+          error: ApiException(
+            message: 'معرّف الجهاز غير صالح.',
+            kind: ApiErrorKind.notFound,
           ),
         ),
       );
@@ -60,138 +53,69 @@ class DeviceDetailScreen extends ConsumerWidget {
     final detail = ref.watch(deviceDetailProvider(deviceId));
     final activeId = ref.watch(effectiveDeviceIdProvider);
 
-    // v100 — gradient backdrop for visual continuity.
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('تفاصيل الجهاز'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          AppRefreshButton(
-            // v52: also refresh the diagnostics providers so the
-            // header refresh button mirrors pull-to-refresh.
-            onPressed: () {
-              ref.invalidate(deviceDetailProvider(deviceId));
-              ref.invalidate(deviceHistoryProvider(deviceId));
-              ref.invalidate(deviceAlertsProvider(deviceId));
-            },
-          ),
-          // v51: subscriber-facing edit + deactivate menu. Hidden while
-          // the detail payload is still loading or in an error state
-          // because both actions need the live snapshot to function
-          // honestly (edit form pre-fills from it; deactivate confirm
-          // uses the current name).
-          Consumer(
-            builder: (_, innerRef, _) {
-              final snapshot =
-                  innerRef.watch(deviceDetailProvider(deviceId)).valueOrNull;
-              if (snapshot == null || snapshot.device.id == 0) {
-                return const SizedBox.shrink();
-              }
-              return _DeviceDetailMenu(
-                device: snapshot.device,
-                onChanged: () => innerRef.invalidate(
-                  deviceDetailProvider(deviceId),
-                ),
-                onDeleted: () {
-                  innerRef.invalidate(devicesListProvider);
-                  innerRef.invalidate(
-                    deviceDetailProvider(deviceId),
-                  );
-                  Navigator.of(context).maybePop();
-                },
-              );
-            },
-          ),
-        ],
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-        child: RefreshIndicator(
-          // v52: pull-to-refresh also invalidates the new history +
-          // alerts providers so a single gesture refreshes every
-          // server-derived surface on this screen.
-          onRefresh: () async {
+    return ZynScreen(
+      hero: ZynPageHero(
+        title: 'تفاصيل الجهاز',
+        subtitle: 'حالة الجهاز، آخر قراءة، والإعدادات الآمنة.',
+        trailing: ZynHeroActionButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'تحديث',
+          onPressed: () {
             ref.invalidate(deviceDetailProvider(deviceId));
             ref.invalidate(deviceHistoryProvider(deviceId));
             ref.invalidate(deviceAlertsProvider(deviceId));
           },
-          // v57: wrap every detail-state branch in a ListView so
-          // RefreshIndicator always has a scrollable child to drive (and so
-          // pull-to-refresh works even while loading / on error). This also
-          // makes the body always visible — no more silent blank state.
-          child: detail.when(
-            loading: () => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              children: const [
-                AppLoading(message: 'جارٍ تحميل تفاصيل الجهاز...'),
-              ],
-            ),
-            error: (err, _) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              children: [
-                AppErrorState(
-                  error: err is ApiException
-                      ? err
-                      : ApiException(
-                          message: 'تعذّر تحميل تفاصيل الجهاز.',
-                          kind: ApiErrorKind.unknown,
-                        ),
-                  onRetry: () =>
-                      ref.invalidate(deviceDetailProvider(deviceId)),
-                ),
-              ],
-            ),
-            data: (snapshot) {
-              // v57: if the server returned an empty/zero device payload,
-              // surface that as a calm empty state — never as a blank body.
-              if (snapshot.device.id == 0) {
-                return ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    AppErrorState(
-                      error: ApiException(
-                        message: 'تعذّر العثور على بيانات هذا الجهاز.',
-                        kind: ApiErrorKind.notFound,
-                      ),
-                      onRetry: () =>
-                          ref.invalidate(deviceDetailProvider(deviceId)),
-                    ),
-                  ],
-                );
-              }
-              return _DetailBody(
-                snapshot: snapshot,
-                isActive: activeId == snapshot.device.id,
-                onSetActive: () => ref
-                    .read(selectedDeviceProvider.notifier)
-                    .select(snapshot.device.id),
-                // v49: open the provider setup screen and invalidate
-                // detail on success so the screen reflects the just-
-                // saved credentials immediately (connection_status
-                // stays 'setup_required' until a real sync runs —
-                // honest expectation set in the setup screen body).
-                onOpenSetup: () async {
-                  final saved = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          DeviceSetupScreen(device: snapshot.device),
-                    ),
-                  );
-                  if (saved == true) {
-                    ref.invalidate(deviceDetailProvider(deviceId));
-                  }
-                },
-              );
-            },
-          ),
         ),
-        ),  // close DecoratedBox child SafeArea (v100)
+      ),
+      child: detail.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحميل تفاصيل الجهاز...'),
+        ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل تفاصيل الجهاز.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () => ref.invalidate(deviceDetailProvider(deviceId)),
+        ),
+        data: (snapshot) {
+          if (snapshot.device.id == 0) {
+            return AppErrorState(
+              error: ApiException(
+                message: 'تعذّر العثور على بيانات هذا الجهاز.',
+                kind: ApiErrorKind.notFound,
+              ),
+              onRetry: () => ref.invalidate(deviceDetailProvider(deviceId)),
+            );
+          }
+          return _DetailBody(
+            snapshot: snapshot,
+            isActive: activeId == snapshot.device.id,
+            onSetActive: () => ref
+                .read(selectedDeviceProvider.notifier)
+                .select(snapshot.device.id),
+            onOpenSetup: () async {
+              final saved = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      DeviceSetupScreen(device: snapshot.device),
+                ),
+              );
+              if (saved == true) {
+                ref.invalidate(deviceDetailProvider(deviceId));
+              }
+            },
+            onChanged: () => ref.invalidate(deviceDetailProvider(deviceId)),
+            onDeleted: () {
+              ref.invalidate(devicesListProvider);
+              ref.invalidate(deviceDetailProvider(deviceId));
+              Navigator.of(context).maybePop();
+            },
+          );
+        },
       ),
     );
   }
@@ -203,16 +127,16 @@ class _DetailBody extends StatelessWidget {
     required this.isActive,
     required this.onSetActive,
     required this.onOpenSetup,
+    required this.onChanged,
+    required this.onDeleted,
   });
 
   final DeviceDetailSnapshot snapshot;
   final bool isActive;
   final VoidCallback onSetActive;
-
-  /// v49: opens the provider setup screen. Only surfaced when
-  /// `device.connection_status == 'setup_required'` — otherwise the
-  /// card is hidden and the user never sees this affordance.
   final VoidCallback onOpenSetup;
+  final VoidCallback onChanged;
+  final VoidCallback onDeleted;
 
   @override
   Widget build(BuildContext context) {
@@ -226,7 +150,12 @@ class _DetailBody extends StatelessWidget {
     // v49: setup CTA injected right after the status hero when the
     // device hasn't received its credentials yet.
     final children = <Widget>[
-      _StatusCard(device: d, isActive: isActive),
+      _StatusCard(
+        device: d,
+        isActive: isActive,
+        onChanged: onChanged,
+        onDeleted: onDeleted,
+      ),
       if (needsSetup) ...[
         const SizedBox(height: 12),
         _SetupRequiredCard(onTap: onOpenSetup),
@@ -278,24 +207,38 @@ class _DetailBody extends StatelessWidget {
 }
 
 class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.device, required this.isActive});
+  const _StatusCard({
+    required this.device,
+    required this.isActive,
+    required this.onChanged,
+    required this.onDeleted,
+  });
   final DeviceDetail device;
   final bool isActive;
+  final VoidCallback onChanged;
+  final VoidCallback onDeleted;
 
   @override
   Widget build(BuildContext context) {
     final connected = device.connectionStatus.toLowerCase() == 'ok';
     final lastSeen = formatDateTime(device.lastConnectedAt);
     return AppCard(
-      // v63: status card is the screen's hero — soft shadow gives it
-      // presence over the calmer info/settings cards below.
       elevated: true,
       borderColor: isActive ? ZynColors.primary500 : ZynColors.line,
       background: isActive ? ZynColors.primary50 : ZynColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(label: 'الحالة'),
+          Row(
+            children: [
+              const Expanded(child: _SectionTitle(label: 'الحالة')),
+              _DeviceDetailMenu(
+                device: device,
+                onChanged: onChanged,
+                onDeleted: onDeleted,
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           Row(
             children: [

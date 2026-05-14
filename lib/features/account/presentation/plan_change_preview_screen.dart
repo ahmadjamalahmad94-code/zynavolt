@@ -242,53 +242,42 @@ class _PlanChangePreviewScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('تغيير الخطة'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'تغيير الخطة',
+        subtitle: 'تفاصيل التحويل وأثره على الأيام والمدفوعات.',
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: FutureBuilder<PlanChangePreview>(
-            future: _previewFuture,
-            builder: (ctx, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const AppLoading(message: 'جاري حساب الأيام...');
-              }
-              if (snap.hasError) {
-                final exc = snap.error;
-                final apiExc = exc is ApiException
-                    ? exc
-                    : ApiException(
-                        message: 'تعذّر تحميل تفاصيل تغيير الخطة.',
-                        kind: ApiErrorKind.unknown,
-                      );
-                return AppErrorState(
-                  error: apiExc,
-                  onRetry: _refresh,
-                );
-              }
-              final preview = snap.data!;
-              if (preview.isBlocked) {
-                return _BlockedView(
-                  arabicMessage: _arabicBlockedReason(preview.blockedReason),
-                );
-              }
-              return RefreshIndicator(
-                color: ZynColors.primary500,
-                onRefresh: _refresh,
-                child: _PreviewBody(
-                  preview: preview,
-                  submitting: _submitting,
-                  onConfirm: (mode) => _onConfirm(preview, mode),
-                ),
-              );
-            },
-          ),
-        ),
+      child: FutureBuilder<PlanChangePreview>(
+        future: _previewFuture,
+        builder: (ctx, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: AppLoading(message: 'جاري حساب الأيام...'),
+            );
+          }
+          if (snap.hasError) {
+            final exc = snap.error;
+            final apiExc = exc is ApiException
+                ? exc
+                : ApiException(
+                    message: 'تعذّر تحميل تفاصيل تغيير الخطة.',
+                    kind: ApiErrorKind.unknown,
+                  );
+            return AppErrorState(error: apiExc, onRetry: _refresh);
+          }
+          final preview = snap.data!;
+          if (preview.isBlocked) {
+            return _BlockedView(
+              arabicMessage: _arabicBlockedReason(preview.blockedReason),
+            );
+          }
+          return _PreviewBody(
+            preview: preview,
+            submitting: _submitting,
+            onConfirm: (mode) => _onConfirm(preview, mode),
+          );
+        },
       ),
     );
   }
@@ -310,13 +299,8 @@ class _PreviewBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final policy = preview.policyKind;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.md,
-        ZynSpacing.lg,
-        ZynSpacing.xxl,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _PolicyHero(policy: policy),
         const SizedBox(height: ZynSpacing.md),

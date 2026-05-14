@@ -57,11 +57,10 @@ class _AppSettingsScreenState extends ConsumerState<AppSettingsScreen> {
     final activeDevice = ref.watch(effectiveDeviceProvider);
     final activeId = ref.watch(effectiveDeviceIdProvider);
 
-    return ZynPage(
-      appBar: AppBar(
-        title: const Text('إعدادات التطبيق'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'إعدادات التطبيق',
+        subtitle: 'تخصيص التطبيق ومعلومات الإصدار والاتصال.',
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

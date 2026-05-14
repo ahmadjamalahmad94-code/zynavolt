@@ -26,92 +26,67 @@ class SupportScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final page = ref.watch(supportCasesProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('الدعم'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: ZynColors.primary700),
-            tooltip: 'تحديث',
-            onPressed: () => ref.invalidate(supportCasesProvider),
-          ),
-        ],
+    return ZynScreen(
+      hero: ZynPageHero(
+        title: 'الدعم',
+        subtitle: 'محادثاتك وتذاكرك مع فريق الدعم.',
+        trailing: ZynHeroActionButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'تحديث',
+          onPressed: () => ref.invalidate(supportCasesProvider),
+        ),
       ),
       floatingActionButton: _NewCaseFab(
         onTap: () => context.push(AppRoutes.supportCreate),
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: ZynColors.primary500,
-            onRefresh: () async => ref.invalidate(supportCasesProvider),
-            child: page.when(
-              loading: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                children: const [
-                  AppLoading(message: 'جارٍ تحميل طلبات الدعم...'),
-                ],
-              ),
-              error: (err, _) => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(ZynSpacing.lg),
-                children: [
-                  AppErrorState(
-                    error: err is ApiException
-                        ? err
-                        : ApiException(
-                            message: 'تعذّر تحميل طلبات الدعم.',
-                            kind: ApiErrorKind.unknown,
-                          ),
-                    onRetry: () => ref.invalidate(supportCasesProvider),
-                  ),
-                ],
-              ),
-              data: (data) {
-                if (data.items.isEmpty) {
-                  return ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(ZynSpacing.lg),
-                    children: const [
-                      ZynEmptyState(
-                        icon: Icons.support_agent_outlined,
-                        title: 'لا توجد طلبات دعم بعد',
-                        subtitle:
-                            'ستظهر هنا أي محادثات أو تذاكر مفتوحة مع الدعم.',
-                      ),
-                    ],
-                  );
-                }
-                return ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(
-                    ZynSpacing.lg,
-                    ZynSpacing.md,
-                    ZynSpacing.lg,
-                    96,
-                  ),
-                  itemCount: data.items.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: ZynSpacing.sm),
-                  itemBuilder: (_, i) => _SupportCaseTile(
-                    caseSummary: data.items[i],
-                    onTap: () => context.push(
-                      AppRoutes.supportCase(
-                        data.items[i].type,
-                        data.items[i].id,
-                      ),
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        96,
+      ),
+      child: page.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحميل طلبات الدعم...'),
+        ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل طلبات الدعم.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () => ref.invalidate(supportCasesProvider),
+        ),
+        data: (data) {
+          if (data.items.isEmpty) {
+            return const ZynEmptyState(
+              icon: Icons.support_agent_outlined,
+              title: 'لا توجد طلبات دعم بعد',
+              subtitle:
+                  'ستظهر هنا أي محادثات أو تذاكر مفتوحة مع الدعم.',
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < data.items.length; i++) ...[
+                _SupportCaseTile(
+                  caseSummary: data.items[i],
+                  onTap: () => context.push(
+                    AppRoutes.supportCase(
+                      data.items[i].type,
+                      data.items[i].id,
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-        ),
+                ),
+                if (i < data.items.length - 1)
+                  const SizedBox(height: ZynSpacing.sm),
+              ],
+            ],
+          );
+        },
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
@@ -110,15 +111,17 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
   @override
   Widget build(BuildContext context) {
     final providers = ref.watch(deviceProvidersListProvider);
-    return Scaffold(
-      backgroundColor: ZynColors.bg,
-      appBar: AppBar(title: const Text('إضافة جهاز')),
-      body: SafeArea(
-        child: providers.when(
-          loading: () => const AppLoading(message: 'جارٍ تحميل المزوّدين...'),
-          error: (err, _) => Padding(
-            padding: const EdgeInsets.all(16),
-            child: AppErrorState(
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'إضافة جهاز',
+        subtitle: 'اربط جهاز Deye / Solis جديد بحسابك.',
+      ),
+      child: providers.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: AppLoading(message: 'جارٍ تحميل المزوّدين...'),
+          ),
+          error: (err, _) => AppErrorState(
               error: err is ApiException
                   ? err
                   : ApiException(
@@ -127,17 +130,13 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                     ),
               onRetry: () => ref.invalidate(deviceProvidersListProvider),
             ),
-          ),
           data: _buildForm,
         ),
-      ),
     );
   }
 
   Widget _buildForm(List<ProviderOption> providers) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Form(
+    return Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: Column(
@@ -184,11 +183,9 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
                 label: const Text('حفظ الجهاز'),
               ),
             ),
-            const SizedBox(height: 24),
           ],
         ),
-      ),
-    );
+      );
   }
 }
 

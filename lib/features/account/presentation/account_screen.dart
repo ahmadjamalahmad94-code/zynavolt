@@ -28,56 +28,31 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshot = ref.watch(accountSnapshotProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('الحساب والاشتراك'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          IconButton(
-            onPressed: () => ref.invalidate(accountSnapshotProvider),
-            icon: const Icon(
-              Icons.refresh_rounded,
-              color: ZynColors.primary700,
-            ),
-            tooltip: 'تحديث',
-          ),
-        ],
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: ZynColors.primary500,
-            onRefresh: () async => ref.invalidate(accountSnapshotProvider),
-            child: snapshot.when(
-              loading: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                children: const [
-                  AppLoading(message: 'جارٍ تحميل بيانات الحساب...'),
-                ],
-              ),
-              error: (err, _) => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(ZynSpacing.lg),
-                children: [
-                  AppErrorState(
-                    error: err is ApiException
-                        ? err
-                        : ApiException(
-                            message: 'تعذّر تحميل بيانات الحساب.',
-                            kind: ApiErrorKind.unknown,
-                          ),
-                    onRetry: () => ref.invalidate(accountSnapshotProvider),
-                  ),
-                ],
-              ),
-              data: (account) => _AccountBody(account: account),
-            ),
-          ),
+    return ZynScreen(
+      hero: ZynPageHero(
+        title: 'الحساب والاشتراك',
+        subtitle: 'باقتك، حدودك، وأمان حسابك.',
+        trailing: ZynHeroActionButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'تحديث',
+          onPressed: () => ref.invalidate(accountSnapshotProvider),
         ),
+      ),
+      child: snapshot.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحميل بيانات الحساب...'),
+        ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل بيانات الحساب.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () => ref.invalidate(accountSnapshotProvider),
+        ),
+        data: (account) => _AccountBody(account: account),
       ),
     );
   }
@@ -90,14 +65,8 @@ class _AccountBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.md,
-        ZynSpacing.lg,
-        ZynSpacing.xxl,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _IdentityHero(account: account),
         const SizedBox(height: ZynSpacing.lg),
@@ -170,120 +139,110 @@ class _IdentityHero extends StatelessWidget {
             : '—');
     final initials = _initialsFrom(name);
 
-    return DecoratedBox(
-      decoration: zynNavyHeroDecoration(),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(ZynRadii.hero),
-        child: DecoratedBox(
-          decoration: const BoxDecoration(gradient: ZynColors.navyHero),
-          child: Padding(
-            padding: const EdgeInsets.all(ZynSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    return Container(
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.xl),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.med(),
+      ),
+      padding: const EdgeInsets.all(ZynSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [ZynColors.primary500, ZynColors.primary700],
+                  ),
+                  borderRadius: BorderRadius.circular(ZynRadii.xl),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ZynColors.primary500.withValues(alpha: 0.40),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  initials,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+              const SizedBox(width: ZynSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            ZynColors.primary500,
-                            ZynColors.primary700,
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(ZynRadii.xl),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.22),
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: ZynColors.primary500.withValues(alpha: 0.45),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: ZynColors.ink,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                        height: 1.25,
                       ),
-                      child: Text(
-                        initials,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (account.email.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        account.email,
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.4,
+                          color: ZynColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          height: 1.3,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textDirection: TextDirection.ltr,
                       ),
-                    ),
-                    const SizedBox(width: ZynSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.2,
-                              height: 1.25,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (account.email.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              account.email,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.74),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                height: 1.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textDirection: TextDirection.ltr,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: ZynSpacing.md),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    ZynChip(
-                      icon: Icons.shield_outlined,
-                      text: role,
-                      onLight: false,
-                    ),
-                    ZynChip(
-                      icon: Icons.tag,
-                      text: '#${account.userId}',
-                      onLight: false,
-                    ),
-                    if (account.username.isNotEmpty)
-                      ZynChip(
-                        icon: Icons.alternate_email_rounded,
-                        text: account.username,
-                        onLight: false,
-                      ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ),
+          const SizedBox(height: ZynSpacing.md),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ZynChip(
+                icon: Icons.shield_outlined,
+                text: role,
+                tone: ZynColors.primary500,
+              ),
+              ZynChip(
+                icon: Icons.tag,
+                text: '#${account.userId}',
+                tone: ZynColors.accent,
+              ),
+              if (account.username.isNotEmpty)
+                ZynChip(
+                  icon: Icons.alternate_email_rounded,
+                  text: account.username,
+                  tone: ZynColors.info,
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

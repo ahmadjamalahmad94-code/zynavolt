@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/state/app_session.dart';
@@ -172,50 +173,38 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     final state = ref.watch(onboardingStateProvider);
 
-    // v100 — gradient backdrop for visual continuity.
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('البدء مع Zynavolt'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          TextButton(
-            onPressed: _finishing ? null : _finish,
-            child: const Text('تخطي'),
-          ),
-        ],
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-        child: state.when(
-          loading: () => const AppLoading(message: 'جارٍ تحضير شاشة البدء...'),
-          error: (err, _) => Padding(
-            padding: const EdgeInsets.all(16),
-            child: AppErrorState(
-              error: err is ApiException
-                  ? err
-                  : ApiException(
-                      message: 'تعذّر تحميل حالة البدء.',
-                      kind: ApiErrorKind.unknown,
-                    ),
-              onRetry: () => ref.invalidate(onboardingStateProvider),
-            ),
-          ),
-          data: (snap) => _buildBody(snap, firstName),
+    return ZynScreen(
+      hero: ZynPageHero(
+        title: 'البدء مع Zynavolt',
+        subtitle: 'إعداد حسابك خطوة بخطوة للبدء بمتابعة طاقتك.',
+        showBackButton: false,
+        trailing: _SkipAction(
+          onPressed: _finishing ? null : _finish,
         ),
-      ),  // close DecoratedBox child SafeArea (v100)
+      ),
+      child: state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحضير شاشة البدء...'),
+        ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل حالة البدء.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () => ref.invalidate(onboardingStateProvider),
+        ),
+        data: (snap) => _buildBody(snap, firstName),
       ),
     );
   }
 
   Widget _buildBody(OnboardingState snap, String firstName) {
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
           _WelcomeCard(firstName: firstName),
           const SizedBox(height: 12),
           _StageCard(
@@ -295,8 +284,39 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
           const SizedBox(height: 8),
           const _FinishNote(),
-          const SizedBox(height: 32),
         ],
+    );
+  }
+}
+
+class _SkipAction extends StatelessWidget {
+  const _SkipAction({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.white,
+        backgroundColor: Colors.white.withValues(alpha: 0.14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(ZynRadii.pill),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.22),
+            width: 0.8,
+          ),
+        ),
+      ),
+      child: const Text(
+        'تخطي',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

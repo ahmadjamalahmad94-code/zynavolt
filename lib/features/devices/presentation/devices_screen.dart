@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/state/auto_refresh.dart';
 // v100 — app_card import removed; the redesigned tile uses a
 // hand-rolled glossy gradient container instead.
-import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../data/device_models.dart';
@@ -32,21 +32,26 @@ class DevicesScreen extends ConsumerWidget {
     return AutoRefreshScope(
       interval: const Duration(seconds: 60),
       targets: [devicesListProvider],
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('الأجهزة'),
-          backgroundColor: Colors.transparent,
-          scrolledUnderElevation: 0,
+      child: ZynScreen(
+        hero: const ZynPageHero(
+          title: 'الأجهزة',
+          subtitle: 'الأجهزة المرتبطة بحسابك وحالة الاتصال.',
+          showBackButton: false,
         ),
         extendBody: true,
+        padding: const EdgeInsets.fromLTRB(
+          ZynSpacing.lg,
+          ZynSpacing.lg,
+          ZynSpacing.lg,
+          96,
+        ),
         floatingActionButton: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(ZynRadii.pill),
             boxShadow: [
               BoxShadow(
-                color: ZynColors.primary700.withValues(alpha: 0.45),
-                blurRadius: 18,
+                color: ZynColors.primary500.withValues(alpha: 0.40),
+                blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
             ],
@@ -54,87 +59,61 @@ class DevicesScreen extends ConsumerWidget {
           child: FloatingActionButton.extended(
             onPressed: () => _openAddDeviceFlow(context, ref),
             elevation: 0,
-            backgroundColor: Colors.transparent,
+            backgroundColor: ZynColors.primary700,
             icon: const Icon(Icons.add_rounded, color: Colors.white),
             label: const Text(
               'إضافة جهاز',
               style: TextStyle(
                 color: Colors.white,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
                 letterSpacing: 0.2,
               ),
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(ZynRadii.pill),
             ),
             extendedPadding: const EdgeInsets.symmetric(horizontal: 22),
-            // Direct background gradient via a foreground decoration trick:
-            // we wrap the FAB in a Container with shadow above and let the
-            // FAB's own gradient come through the foreground.
           ),
         ),
-        body: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: ZynColors.pageBackdrop,
+        child: devices.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: AppLoading(message: 'جارٍ تحميل أجهزتك...'),
           ),
-          child: SafeArea(
-            child: RefreshIndicator(
-              color: ZynColors.primary700,
-              onRefresh: () async => ref.invalidate(devicesListProvider),
-              child: devices.when(
-                loading: () => ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(vertical: 48),
-                  children: const [AppLoading(message: 'جارٍ تحميل أجهزتك...')],
-                ),
-                error: (err, _) => ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    AppErrorState(
-                      error: err is ApiException
-                          ? err
-                          : ApiException(
-                              message: 'تعذّر تحميل الأجهزة.',
-                              kind: ApiErrorKind.unknown,
-                            ),
-                      onRetry: () => ref.invalidate(devicesListProvider),
-                    ),
-                  ],
-                ),
-                data: (items) {
-                  if (items.isEmpty) {
-                    return ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      children: const [
-                        AppEmptyState(
-                          icon: Icons.solar_power_outlined,
-                          title: 'لا توجد أجهزة بعد',
-                          subtitle:
-                              'اضغط زر «إضافة جهاز» في الأسفل لربط جهازك الأول.',
-                        ),
-                      ],
-                    );
-                  }
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                    itemCount: items.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) {
-                      final d = items[i];
-                      final isSelected = activeId == d.id;
-                      return _DeviceTile(
-                        device: d,
-                        isSelected: isSelected,
-                        onTap: () => context.push(AppRoutes.deviceDetail(d.id)),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
+          error: (err, _) => AppErrorState(
+            error: err is ApiException
+                ? err
+                : ApiException(
+                    message: 'تعذّر تحميل الأجهزة.',
+                    kind: ApiErrorKind.unknown,
+                  ),
+            onRetry: () => ref.invalidate(devicesListProvider),
           ),
+          data: (items) {
+            if (items.isEmpty) {
+              return const ZynEmptyState(
+                icon: Icons.solar_power_outlined,
+                title: 'لا توجد أجهزة بعد',
+                subtitle:
+                    'اضغط زر «إضافة جهاز» في الأسفل لربط جهازك الأول.',
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < items.length; i++) ...[
+                  _DeviceTile(
+                    device: items[i],
+                    isSelected: activeId == items[i].id,
+                    onTap: () =>
+                        context.push(AppRoutes.deviceDetail(items[i].id)),
+                  ),
+                  if (i < items.length - 1)
+                    const SizedBox(height: ZynSpacing.md),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );

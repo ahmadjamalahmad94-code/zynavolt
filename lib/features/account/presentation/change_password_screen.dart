@@ -78,11 +78,10 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ZynPage(
-      appBar: AppBar(
-        title: const Text('تغيير كلمة المرور'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'تغيير كلمة المرور',
+        subtitle: 'حدّث كلمة المرور بأمان بعد التحقق من الحالية.',
       ),
       child: Form(
         key: _formKey,

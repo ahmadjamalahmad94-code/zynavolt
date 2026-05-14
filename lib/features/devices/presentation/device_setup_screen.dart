@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
@@ -113,26 +114,26 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final providers = ref.watch(deviceProvidersListProvider);
-    return Scaffold(
-      backgroundColor: ZynColors.bg,
-      appBar: AppBar(title: const Text('إكمال إعداد المزوّد')),
-      body: SafeArea(
-        child: providers.when(
-          loading: () => const AppLoading(message: 'جارٍ تحميل المزوّدين...'),
-          error: (err, _) => Padding(
-            padding: const EdgeInsets.all(16),
-            child: AppErrorState(
-              error: err is ApiException
-                  ? err
-                  : ApiException(
-                      message: 'تعذّر تحميل المزوّدين.',
-                      kind: ApiErrorKind.unknown,
-                    ),
-              onRetry: () => ref.invalidate(deviceProvidersListProvider),
-            ),
-          ),
-          data: (list) => _buildForm(context, list),
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'إكمال إعداد المزوّد',
+        subtitle: 'بيانات الاعتماد المطلوبة لربط الجهاز بحساب المزوّد.',
+      ),
+      child: providers.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحميل المزوّدين...'),
         ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل المزوّدين.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () => ref.invalidate(deviceProvidersListProvider),
+        ),
+        data: (list) => _buildForm(context, list),
       ),
     );
   }

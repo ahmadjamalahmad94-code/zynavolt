@@ -48,32 +48,62 @@ class ZynSectionHeader extends StatelessWidget {
     required this.label,
     required this.icon,
     this.trailing,
+    this.onDark = true,
   });
 
   final String label;
   final IconData icon;
   final Widget? trailing;
 
+  /// True (default) when rendered on the v102 dark navy backdrop —
+  /// label + icon use white tones. Set to `false` when rendered on
+  /// a light surface (rare in v102; kept for completeness).
+  final bool onDark;
+
   @override
   Widget build(BuildContext context) {
+    final labelColor = onDark ? Colors.white : ZynColors.ink;
+    final iconColor = onDark
+        ? Colors.white
+        : ZynColors.primary700;
+    final iconBg = onDark
+        ? Colors.white.withValues(alpha: 0.12)
+        : ZynColors.primary500.withValues(alpha: 0.10);
+    final dividerStart = onDark
+        ? Colors.white.withValues(alpha: 0.28)
+        : ZynColors.line.withValues(alpha: 0.80);
+    final dividerEnd = onDark
+        ? Colors.white.withValues(alpha: 0.00)
+        : ZynColors.line.withValues(alpha: 0.00);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: ZynSpacing.xs),
       child: Row(
         children: [
           Container(
-            width: 22,
-            height: 22,
+            width: 24,
+            height: 24,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: ZynColors.indigo.withValues(alpha: 0.10),
+              color: iconBg,
               borderRadius: BorderRadius.circular(ZynRadii.tight),
+              border: onDark
+                  ? Border.all(
+                      color: Colors.white.withValues(alpha: 0.20),
+                      width: 0.6,
+                    )
+                  : null,
             ),
-            child: Icon(icon, color: ZynColors.indigo, size: 13),
+            child: Icon(icon, color: iconColor, size: 14),
           ),
           const SizedBox(width: ZynSpacing.sm),
           Text(
             label,
-            style: ZynText.heading.copyWith(fontSize: 13.5),
+            style: TextStyle(
+              color: labelColor,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.1,
+            ),
           ),
           const SizedBox(width: ZynSpacing.md),
           Expanded(
@@ -81,10 +111,7 @@ class ZynSectionHeader extends StatelessWidget {
               height: 1,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    ZynColors.line.withValues(alpha: 0.80),
-                    ZynColors.line.withValues(alpha: 0.00),
-                  ],
+                  colors: [dividerStart, dividerEnd],
                 ),
               ),
             ),
@@ -631,6 +658,7 @@ class ZynEmptyState extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.action,
+    this.onDark = true,
   });
 
   final IconData icon;
@@ -638,8 +666,34 @@ class ZynEmptyState extends StatelessWidget {
   final String? subtitle;
   final Widget? action;
 
+  /// True (default) when rendered on the v102 dark navy backdrop.
+  /// Set `false` when shown inside a white card or on a light
+  /// surface.
+  final bool onDark;
+
   @override
   Widget build(BuildContext context) {
+    final titleColor = onDark ? Colors.white : ZynColors.ink;
+    final subtitleColor =
+        onDark ? Colors.white.withValues(alpha: 0.72) : ZynColors.muted;
+    final iconBg = onDark
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: 0.14),
+              Colors.white.withValues(alpha: 0.06),
+            ],
+          )
+        : const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+          );
+    final iconBorder = onDark
+        ? Colors.white.withValues(alpha: 0.24)
+        : ZynColors.primary500.withValues(alpha: 0.18);
+    final iconColor = onDark ? Colors.white : ZynColors.primary700;
     return Padding(
       padding: const EdgeInsets.symmetric(
           vertical: ZynSpacing.xxxl, horizontal: ZynSpacing.lg),
@@ -651,33 +705,34 @@ class ZynEmptyState extends StatelessWidget {
             height: 72,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFEEF2FF),
-                  Color(0xFFE0E7FF),
-                ],
-              ),
+              gradient: iconBg,
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: ZynColors.indigo.withValues(alpha: 0.18),
-                width: 1,
-              ),
+              border: Border.all(color: iconBorder, width: 1),
             ),
-            child: Icon(icon, color: ZynColors.indigo, size: 30),
+            child: Icon(icon, color: iconColor, size: 30),
           ),
           const SizedBox(height: ZynSpacing.md),
           Text(
             title,
-            style: ZynText.heading.copyWith(fontSize: 14.5),
+            style: TextStyle(
+              color: titleColor,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w800,
+              height: 1.25,
+              letterSpacing: -0.1,
+            ),
             textAlign: TextAlign.center,
           ),
           if (subtitle != null) ...[
             const SizedBox(height: 6),
             Text(
               subtitle!,
-              style: ZynText.caption,
+              style: TextStyle(
+                color: subtitleColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                height: 1.5,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -693,8 +748,9 @@ class ZynEmptyState extends StatelessWidget {
 
 // ─── Page scaffold ─────────────────────────────────────────────────
 
-/// Full-page scaffold with the soft-bg gradient backdrop + SafeArea.
-/// Use as the root of any screen so backgrounds match across the app.
+/// Legacy page shell. Kept for older callers; new code prefers
+/// [ZynScreen] + [ZynPageHero], which apply the v102 dark hero
+/// pattern uniformly across every non-Home screen.
 class ZynPage extends StatelessWidget {
   const ZynPage({
     super.key,
@@ -725,6 +781,240 @@ class ZynPage extends StatelessWidget {
                   child: child,
                 )
               : Padding(padding: padding, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Unified hero header (v102) ────────────────────────────────────
+
+/// v102 — unified dark-navy hero header. Every non-Home screen
+/// renders this strip at the top with the same height/colour/font.
+///
+/// Layout:
+///   [back button | (trailing actions)]   ← 44 dp top row
+///        Title (22 pt, white, bold)
+///        Subtitle (12.5 pt, white@72 %, optional 2 lines)
+///
+/// When [showBackButton] is false (tabs), the row stays the same
+/// height so every screen's hero ends at the same vertical offset.
+class ZynPageHero extends StatelessWidget {
+  const ZynPageHero({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.showBackButton = true,
+    this.trailing,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool showBackButton;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(gradient: ZynColors.navyHero),
+      padding: EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        topInset + ZynSpacing.sm,
+        ZynSpacing.lg,
+        ZynSpacing.xl,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 40,
+            child: Row(
+              children: [
+                if (showBackButton)
+                  const _HeroBackButton()
+                else
+                  const SizedBox(width: 40),
+                const Spacer(),
+                ?trailing,
+              ],
+            ),
+          ),
+          const SizedBox(height: ZynSpacing.md),
+          Center(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+                height: 1.2,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.72),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroBackButton extends StatelessWidget {
+  const _HeroBackButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.14),
+      shape: const CircleBorder(),
+      child: InkResponse(
+        onTap: () => Navigator.of(context).maybePop(),
+        radius: 22,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.22),
+              width: 0.8,
+            ),
+          ),
+          child: const Icon(
+            Icons.arrow_forward_rounded, // RTL: visually "back"
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// v102 — circular hero action button used in the trailing slot of
+/// [ZynPageHero] for refresh / today / etc. Mirrors the back-button
+/// style so AppBar-style actions on dark navy stay consistent.
+class ZynHeroActionButton extends StatelessWidget {
+  const ZynHeroActionButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = Material(
+      color: Colors.white.withValues(alpha: 0.14),
+      shape: const CircleBorder(),
+      child: InkResponse(
+        onTap: onPressed,
+        radius: 22,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.22),
+              width: 0.8,
+            ),
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      ),
+    );
+    if (tooltip == null) return button;
+    return Tooltip(message: tooltip!, child: button);
+  }
+}
+
+/// v102 — unified screen scaffold. Renders the dark navy backdrop
+/// (so short pages keep their bottom black), pins a [ZynPageHero]
+/// at the top, and gives the body a scrollable area below.
+///
+/// Use everywhere except `/home` (which has its own bespoke hero
+/// + navy gradient already) and the auth flow.
+class ZynScreen extends StatelessWidget {
+  const ZynScreen({
+    super.key,
+    required this.hero,
+    required this.child,
+    this.scrollable = true,
+    this.padding = const EdgeInsets.fromLTRB(
+      ZynSpacing.lg, ZynSpacing.lg, ZynSpacing.lg, ZynSpacing.xxl,
+    ),
+    this.floatingActionButton,
+    this.bottomNavigationBar,
+    this.extendBody = false,
+    this.scrollController,
+  });
+
+  final ZynPageHero hero;
+  final Widget child;
+  final bool scrollable;
+  final EdgeInsetsGeometry padding;
+  final Widget? floatingActionButton;
+  final Widget? bottomNavigationBar;
+  final bool extendBody;
+
+  /// Optional controller attached to the screen's inner scroll view
+  /// (only used when [scrollable] is `true`). Pass when the host
+  /// needs scroll-offset listeners (e.g. auto-mark-read in
+  /// Notifications).
+  final ScrollController? scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: ZynColors.navy900,
+      extendBody: extendBody,
+      floatingActionButton: floatingActionButton,
+      bottomNavigationBar: bottomNavigationBar,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: ZynColors.navyHero),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            hero,
+            Expanded(
+              child: scrollable
+                  ? SingleChildScrollView(
+                      controller: scrollController,
+                      padding: padding,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: child,
+                    )
+                  : Padding(padding: padding, child: child),
+            ),
+          ],
         ),
       ),
     );

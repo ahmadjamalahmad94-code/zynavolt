@@ -90,11 +90,10 @@ class _SupportCreateCaseScreenState
 
   @override
   Widget build(BuildContext context) {
-    return ZynPage(
-      appBar: AppBar(
-        title: const Text('طلب دعم جديد'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
+    return ZynScreen(
+      hero: const ZynPageHero(
+        title: 'طلب دعم جديد',
+        subtitle: 'افتح محادثة جديدة مع فريق الدعم.',
       ),
       child: Form(
         key: _formKey,

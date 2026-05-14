@@ -159,20 +159,22 @@ class _SupportCaseDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('تفاصيل الطلب'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded,
-                color: ZynColors.primary700),
-            tooltip: 'تحديث',
-            onPressed: _manualRefresh,
-          ),
-        ],
+    return ZynScreen(
+      hero: ZynPageHero(
+        title: 'تفاصيل الطلب',
+        subtitle: 'محادثتك مع فريق الدعم.',
+        trailing: ZynHeroActionButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'تحديث',
+          onPressed: _manualRefresh,
+        ),
+      ),
+      scrollController: _scrollController,
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        96,
       ),
       floatingActionButton: _hasUnseenIncoming
           ? Container(
@@ -202,44 +204,25 @@ class _SupportCaseDetailScreenState
               ),
             )
           : null,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: ZynColors.primary500,
-            onRefresh: _manualRefresh,
-            child: _state.when(
-              loading: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                children: const [
-                  AppLoading(message: 'جارٍ تحميل المحادثة...'),
-                ],
-              ),
-              error: (err, _) => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(ZynSpacing.lg),
-                children: [
-                  AppErrorState(
-                    error: err is ApiException
-                        ? err
-                        : ApiException(
-                            message: 'تعذّر تحميل المحادثة.',
-                            kind: ApiErrorKind.unknown,
-                          ),
-                    onRetry: _manualRefresh,
-                  ),
-                ],
-              ),
-              data: (d) => _DetailBody(
-                kind: widget.kind,
-                id: widget.id,
-                detail: d,
-                scrollController: _scrollController,
-                onMessageSent: _onLocalReplySent,
-              ),
-            ),
-          ),
+      child: _state.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: AppLoading(message: 'جارٍ تحميل المحادثة...'),
+        ),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل المحادثة.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: _manualRefresh,
+        ),
+        data: (d) => _DetailBody(
+          kind: widget.kind,
+          id: widget.id,
+          detail: d,
+          onMessageSent: _onLocalReplySent,
         ),
       ),
     );
@@ -251,14 +234,12 @@ class _DetailBody extends StatelessWidget {
     required this.kind,
     required this.id,
     required this.detail,
-    required this.scrollController,
     required this.onMessageSent,
   });
 
   final String kind;
   final int id;
   final SupportCaseDetail detail;
-  final ScrollController scrollController;
   final Future<void> Function() onMessageSent;
 
   @override
@@ -299,16 +280,8 @@ class _DetailBody extends StatelessWidget {
       isClosed: isClosed,
       onSent: onMessageSent,
     ));
-    children.add(const SizedBox(height: ZynSpacing.xxl));
-    return ListView(
-      controller: scrollController,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
-        ZynSpacing.md,
-        ZynSpacing.lg,
-        ZynSpacing.md,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
     );
   }

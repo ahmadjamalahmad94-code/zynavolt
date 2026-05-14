@@ -11,16 +11,27 @@ class AppErrorState extends StatelessWidget {
     required this.error,
     this.onRetry,
     this.retryLabel,
+    this.onDark = true,
   });
 
   final ApiException error;
   final VoidCallback? onRetry;
   final String? retryLabel;
 
+  /// True (default) when rendered on the v102 dark navy backdrop.
+  /// Set `false` inside a white card on a light surface.
+  final bool onDark;
+
   @override
   Widget build(BuildContext context) {
     final iconData = _iconFor(error.kind);
     final tone = _toneFor(error.kind);
+    final messageColor = onDark ? Colors.white : ZynColors.ink;
+    final codeColor =
+        onDark ? Colors.white.withValues(alpha: 0.60) : ZynColors.muted;
+    final iconBg = onDark
+        ? tone.withValues(alpha: 0.18)
+        : tone.withValues(alpha: 0.10);
 
     return Center(
       child: Padding(
@@ -31,8 +42,14 @@ class AppErrorState extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.10),
+                color: iconBg,
                 borderRadius: BorderRadius.circular(40),
+                border: onDark
+                    ? Border.all(
+                        color: tone.withValues(alpha: 0.30),
+                        width: 0.6,
+                      )
+                    : null,
               ),
               child: Icon(iconData, size: 28, color: tone),
             ),
@@ -40,8 +57,8 @@ class AppErrorState extends StatelessWidget {
             Text(
               error.message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: ZynColors.ink,
+              style: TextStyle(
+                color: messageColor,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 height: 1.55,
@@ -52,8 +69,8 @@ class AppErrorState extends StatelessWidget {
               Text(
                 error.code!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: ZynColors.muted,
+                style: TextStyle(
+                  color: codeColor,
                   fontSize: 11,
                   letterSpacing: 0.4,
                 ),

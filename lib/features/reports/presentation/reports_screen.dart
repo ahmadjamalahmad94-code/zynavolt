@@ -62,29 +62,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final deviceId = ref.watch(effectiveDeviceIdProvider);
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('التقارير'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        actions: [
-          IconButton(
-            tooltip: 'العودة لليوم',
-            onPressed: _resetToToday,
-            icon: const Icon(Icons.today_outlined,
-                color: ZynColors.primary700),
-          ),
-        ],
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-        child: SafeArea(
-          child: deviceId == null
-              ? const _NoDeviceState()
-              : _buildBody(deviceId),
+    return ZynScreen(
+      hero: ZynPageHero(
+        title: 'التقارير',
+        subtitle: 'ملخّصات الطاقة وحصص المصادر اليومية والشهرية.',
+        trailing: ZynHeroActionButton(
+          icon: Icons.today_outlined,
+          tooltip: 'العودة لليوم',
+          onPressed: _resetToToday,
         ),
       ),
+      child: deviceId == null
+          ? const _NoDeviceState()
+          : _buildBody(deviceId),
     );
   }
 
@@ -96,42 +86,30 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
     final snap = ref.watch(reportsProvider(query));
 
-    return RefreshIndicator(
-      color: ZynColors.primary500,
-      onRefresh: () async {
-        ref.invalidate(reportsProvider(query));
-        await ref.read(reportsProvider(query).future);
-      },
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          ZynSpacing.lg,
-          ZynSpacing.md,
-          ZynSpacing.lg,
-          ZynSpacing.xxl,
-        ),
-        children: [
-          _ViewSelector(view: _view, onChanged: _setView),
-          const SizedBox(height: ZynSpacing.md),
-          _AnchorRow(anchorIso: _anchorIso, onPick: _pickAnchor),
-          const SizedBox(height: ZynSpacing.md),
-          snap.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: ZynSpacing.xxl),
-              child: AppLoading(message: 'جارٍ تحميل التقارير...'),
-            ),
-            error: (err, _) => AppErrorState(
-              error: err is ApiException
-                  ? err
-                  : ApiException(
-                      message: 'تعذّر تحميل التقارير.',
-                      kind: ApiErrorKind.unknown,
-                    ),
-              onRetry: () => ref.invalidate(reportsProvider(query)),
-            ),
-            data: _buildSnapshot,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ViewSelector(view: _view, onChanged: _setView),
+        const SizedBox(height: ZynSpacing.md),
+        _AnchorRow(anchorIso: _anchorIso, onPick: _pickAnchor),
+        const SizedBox(height: ZynSpacing.md),
+        snap.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: ZynSpacing.xxl),
+            child: AppLoading(message: 'جارٍ تحميل التقارير...'),
           ),
-        ],
-      ),
+          error: (err, _) => AppErrorState(
+            error: err is ApiException
+                ? err
+                : ApiException(
+                    message: 'تعذّر تحميل التقارير.',
+                    kind: ApiErrorKind.unknown,
+                  ),
+            onRetry: () => ref.invalidate(reportsProvider(query)),
+          ),
+          data: _buildSnapshot,
+        ),
+      ],
     );
   }
 
@@ -674,17 +652,12 @@ class _NoDeviceState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(ZynSpacing.xxl),
-      child: _Card(
-        child: const ZynEmptyState(
-          icon: Icons.solar_power_outlined,
-          title: 'لا يوجد جهاز محدّد',
-          subtitle:
-              'لعرض التقارير، أضف جهازاً واحداً على الأقل من تبويب الأجهزة، '
-              'ثم اختره كجهاز فعّال.',
-        ),
-      ),
+    return const ZynEmptyState(
+      icon: Icons.solar_power_outlined,
+      title: 'لا يوجد جهاز محدّد',
+      subtitle:
+          'لعرض التقارير، أضف جهازاً واحداً على الأقل من تبويب الأجهزة، '
+          'ثم اختره كجهاز فعّال.',
     );
   }
 }
