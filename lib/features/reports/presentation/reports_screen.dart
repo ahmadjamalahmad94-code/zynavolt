@@ -3,32 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../devices/state/selected_device_provider.dart';
 import '../data/reports_models.dart';
 import '../data/reports_repository.dart';
 
-/// v60 — subscriber-facing reports summary screen.
+/// v102 DS v1 — التقارير.
 ///
-/// Consumes `GET /api/v1/devices/<id>/reports/summary` (v59). Replaces
-/// the v57 honest placeholder with a real read-only summary surface.
-///
-/// Scope (matching the v59 backend contract):
-///   * `view`   — `day` / `month` only.
-///   * `anchor` — single `YYYY-MM-DD` date.  Range step-prev / step-
-///                next will arrive once the screen earns chart
-///                navigation; for v60 the navigator is "today / pick"
-///                only, mirroring the v57 statistics screen pattern.
-///
-/// Deliberately NOT in v60:
-///   * PDF / CSV export — web-only, backend has no mobile endpoint.
-///   * Smart-load suggestions — backend helper is web-session coupled.
-///   * Per-bucket time-series — already in the v57 statistics screen;
-///     reports surfaces the *derived* metrics instead.
+/// Read-only summary over `/api/v1/devices/<id>/reports/summary`.
+/// Same `view`/`anchor` UI as Statistics; renders derived metrics
+/// (energy totals + source shares + averages). PDF/CSV export is
+/// web-only (honest note at the bottom).
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -59,12 +48,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       lastDate: _todayDateOnly(),
     );
     if (picked == null) return;
-    setState(() => _anchor = DateTime(picked.year, picked.month, picked.day));
+    setState(
+        () => _anchor = DateTime(picked.year, picked.month, picked.day));
   }
 
-  void _resetToToday() {
-    setState(() => _anchor = _todayDateOnly());
-  }
+  void _resetToToday() => setState(() => _anchor = _todayDateOnly());
 
   void _setView(String next) {
     if (next == _view) return;
@@ -74,8 +62,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final deviceId = ref.watch(effectiveDeviceIdProvider);
-    // v100 — wrapped in the gradient backdrop so Reports visually
-    // continues the rest of the redesigned app.
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -86,12 +72,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           IconButton(
             tooltip: 'العودة لليوم',
             onPressed: _resetToToday,
-            icon: const Icon(Icons.today_outlined),
+            icon: const Icon(Icons.today_outlined,
+                color: ZynColors.primary700),
           ),
         ],
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
         child: SafeArea(
           child: deviceId == null
               ? const _NoDeviceState()
@@ -110,20 +97,26 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final snap = ref.watch(reportsProvider(query));
 
     return RefreshIndicator(
+      color: ZynColors.primary500,
       onRefresh: () async {
         ref.invalidate(reportsProvider(query));
         await ref.read(reportsProvider(query).future);
       },
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(
+          ZynSpacing.lg,
+          ZynSpacing.md,
+          ZynSpacing.lg,
+          ZynSpacing.xxl,
+        ),
         children: [
           _ViewSelector(view: _view, onChanged: _setView),
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
           _AnchorRow(anchorIso: _anchorIso, onPick: _pickAnchor),
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
           snap.when(
             loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
+              padding: EdgeInsets.symmetric(vertical: ZynSpacing.xxl),
               child: AppLoading(message: 'جارٍ تحميل التقارير...'),
             ),
             error: (err, _) => AppErrorState(
@@ -148,11 +141,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       children: [
         if (s.titleHint.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.only(bottom: ZynSpacing.sm),
             child: Text(
               s.titleHint,
               style: const TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -162,22 +155,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           const _EmptyState()
         else ...[
           _EnergySummaryCard(summary: s.summary),
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
           _SharesCard(summary: s.summary),
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
           _DerivedMetricsCard(summary: s.summary),
         ],
-        const SizedBox(height: 14),
-        _StatisticsLink(),
-        const SizedBox(height: 12),
+        const SizedBox(height: ZynSpacing.md),
+        const _StatisticsLink(),
+        const SizedBox(height: ZynSpacing.md),
         const _HonestNote(),
-        const SizedBox(height: 24),
       ],
     );
   }
 }
 
-// ─── View selector + anchor row (same patterns as v57 statistics) ─────
+// ─── View selector + anchor row ─────────────────────────────────
 
 class _ViewSelector extends StatelessWidget {
   const _ViewSelector({required this.view, required this.onChanged});
@@ -190,8 +182,11 @@ class _ViewSelector extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(12),
+        color: ZynColors.primary50,
+        borderRadius: BorderRadius.circular(ZynRadii.inner),
+        border: Border.all(
+          color: ZynColors.primary500.withValues(alpha: 0.20),
+        ),
       ),
       child: Row(
         children: [
@@ -227,21 +222,35 @@ class _ViewChip extends StatelessWidget {
     return Expanded(
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(ZynRadii.tight + 1),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
-          child: Container(
+          borderRadius: BorderRadius.circular(ZynRadii.tight + 1),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
             height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: active ? AppTheme.indigoPrimary : Colors.transparent,
-              borderRadius: BorderRadius.circular(9),
+              gradient: active
+                  ? const LinearGradient(
+                      colors: [ZynColors.primary500, ZynColors.primary700],
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(ZynRadii.tight + 1),
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: ZynColors.primary500.withValues(alpha: 0.30),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
             ),
             child: Text(
               label,
               style: TextStyle(
-                color: active ? Colors.white : AppTheme.indigoPrimary,
+                color: active ? Colors.white : ZynColors.primary700,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
               ),
@@ -255,26 +264,43 @@ class _ViewChip extends StatelessWidget {
 
 class _AnchorRow extends StatelessWidget {
   const _AnchorRow({required this.anchorIso, required this.onPick});
+
   final String anchorIso;
   final VoidCallback onPick;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.calendar_today_outlined,
-              color: AppTheme.indigoPrimary, size: 18),
-          const SizedBox(width: 10),
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ZynColors.primary50,
+              borderRadius: BorderRadius.circular(ZynRadii.tight),
+            ),
+            child: const Icon(Icons.calendar_today_outlined,
+                color: ZynColors.primary700, size: 16),
+          ),
+          const SizedBox(width: ZynSpacing.md),
           Expanded(
             child: Text(
               anchorIso,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 14,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
                 letterSpacing: 0.3,
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -289,42 +315,43 @@ class _AnchorRow extends StatelessWidget {
   }
 }
 
-// ─── Summary cards ───────────────────────────────────────────────────
+// ─── Summary cards ──────────────────────────────────────────────
 
 class _EnergySummaryCard extends StatelessWidget {
   const _EnergySummaryCard({required this.summary});
+
   final ReportsSummary summary;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _SectionTitle(label: 'إجماليات الطاقة'),
-          const SizedBox(height: 10),
+          const _CardTitle(label: 'إجماليات الطاقة'),
+          const SizedBox(height: ZynSpacing.sm),
           _ValueRow(
             label: 'الإنتاج',
             icon: Icons.wb_sunny_outlined,
-            tone: AppTheme.warning,
+            tone: ZynColors.warning,
             value: _formatKwh(summary.productionKwh),
           ),
           _ValueRow(
             label: 'الاستهلاك',
             icon: Icons.home_outlined,
-            tone: AppTheme.indigoPrimary,
+            tone: ZynColors.primary500,
             value: _formatKwh(summary.consumptionKwh),
           ),
           _ValueRow(
             label: 'شحن البطارية',
             icon: Icons.battery_charging_full_outlined,
-            tone: AppTheme.success,
+            tone: ZynColors.success,
             value: _formatKwh(summary.batteryInKwh),
           ),
           _ValueRow(
             label: 'الاعتماد على الشبكة',
             icon: Icons.bolt_outlined,
-            tone: AppTheme.muted,
+            tone: ZynColors.muted,
             value: _formatKwh(summary.gridInKwh),
           ),
         ],
@@ -335,48 +362,51 @@ class _EnergySummaryCard extends StatelessWidget {
 
 class _SharesCard extends StatelessWidget {
   const _SharesCard({required this.summary});
+
   final ReportsSummary summary;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _SectionTitle(label: 'حصص مصادر الطاقة'),
+          const _CardTitle(label: 'حصص مصادر الطاقة'),
           const SizedBox(height: 4),
           const Text(
             'النسبة المئوية لما غذّى المنزل خلال هذه الفترة.',
             style: TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 11.5,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               height: 1.55,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: ZynSpacing.sm),
           _ShareBar(
             label: 'حصة الطاقة الشمسية',
             percent: summary.solarSharePercent,
-            tone: AppTheme.warning,
+            tone: ZynColors.warning,
           ),
           const SizedBox(height: 8),
           _ShareBar(
             label: 'حصة البطارية',
             percent: summary.batterySharePercent,
-            tone: AppTheme.success,
+            tone: ZynColors.success,
           ),
           const SizedBox(height: 8),
           _ShareBar(
             label: 'حصة الشبكة',
             percent: summary.gridSharePercent,
-            tone: AppTheme.muted,
+            tone: ZynColors.muted,
           ),
-          const Divider(height: 18),
+          const SizedBox(height: ZynSpacing.sm),
+          const Divider(color: ZynColors.lineSoft, height: 1, thickness: 1),
+          const SizedBox(height: ZynSpacing.sm),
           _ValueRow(
             label: 'الاكتفاء الذاتي',
             icon: Icons.shield_outlined,
-            tone: AppTheme.indigoPrimary,
+            tone: ZynColors.primary500,
             value: '${summary.selfSufficiencyPercent.toStringAsFixed(1)}%',
           ),
         ],
@@ -387,26 +417,27 @@ class _SharesCard extends StatelessWidget {
 
 class _DerivedMetricsCard extends StatelessWidget {
   const _DerivedMetricsCard({required this.summary});
+
   final ReportsSummary summary;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _SectionTitle(label: 'مؤشرات إضافية'),
-          const SizedBox(height: 10),
+          const _CardTitle(label: 'مؤشرات إضافية'),
+          const SizedBox(height: ZynSpacing.sm),
           _ValueRow(
             label: 'متوسط الحمل',
             icon: Icons.speed_outlined,
-            tone: AppTheme.indigoPrimary,
+            tone: ZynColors.primary500,
             value: '${summary.averageLoadW.toStringAsFixed(1)} W',
           ),
           _ValueRow(
             label: 'الفائض الشمسي',
             icon: Icons.wb_iridescent_outlined,
-            tone: AppTheme.warning,
+            tone: ZynColors.warning,
             value: _formatKwh(summary.solarSurplusKwh),
           ),
         ],
@@ -415,17 +446,18 @@ class _DerivedMetricsCard extends StatelessWidget {
   }
 }
 
-// ─── Atoms ───────────────────────────────────────────────────────────
+// ─── Atoms ──────────────────────────────────────────────────────
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.label});
+class _CardTitle extends StatelessWidget {
+  const _CardTitle({required this.label});
+
   final String label;
 
   @override
   Widget build(BuildContext context) => Text(
         label,
         style: const TextStyle(
-          color: AppTheme.ink,
+          color: ZynColors.ink,
           fontSize: 14,
           fontWeight: FontWeight.w800,
         ),
@@ -452,21 +484,21 @@ class _ValueRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: 30,
+            height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: tone.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: tone.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(ZynRadii.tight),
             ),
             child: Icon(icon, size: 16, color: tone),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: ZynSpacing.md),
           Expanded(
             child: Text(
               label,
               style: const TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -475,9 +507,10 @@ class _ValueRow extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 14,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -509,7 +542,7 @@ class _ShareBar extends StatelessWidget {
               child: Text(
                 label,
                 style: const TextStyle(
-                  color: AppTheme.softInk,
+                  color: ZynColors.inkSoft,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -520,14 +553,15 @@ class _ShareBar extends StatelessWidget {
               style: TextStyle(
                 color: tone,
                 fontSize: 12.5,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ],
         ),
         const SizedBox(height: 4),
         ClipRRect(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(ZynRadii.pill),
           child: LinearProgressIndicator(
             value: clamped / 100.0,
             minHeight: 6,
@@ -540,27 +574,27 @@ class _ShareBar extends StatelessWidget {
   }
 }
 
-// ─── Empty / footer states ───────────────────────────────────────────
+// ─── Empty / footer ────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const [
-          Icon(Icons.info_outline, color: AppTheme.faintMuted, size: 18),
+          Icon(Icons.info_outline_rounded, color: ZynColors.muted, size: 18),
           SizedBox(width: 10),
           Expanded(
             child: Text(
               'لا توجد قراءات لهذه الفترة لاحتساب التقرير. جرّب تاريخاً آخر '
               'أو انتظر تجميع قراءات إضافية.',
               style: TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 12.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 height: 1.6,
               ),
             ),
@@ -572,28 +606,34 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _StatisticsLink extends StatelessWidget {
+  const _StatisticsLink();
+
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Row(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 36,
+            height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppTheme.indigoSoft,
-              borderRadius: BorderRadius.circular(8),
+              gradient: ZynGradients.iconFill(ZynColors.primary500),
+              borderRadius: BorderRadius.circular(ZynRadii.inner),
+              boxShadow: ZynShadows.iconGlow(ZynColors.primary500),
             ),
-            child: const Icon(Icons.bar_chart_outlined,
-                color: AppTheme.indigoPrimary, size: 18),
+            child: const Icon(
+              Icons.bar_chart_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: ZynSpacing.md),
           const Expanded(
             child: Text(
               'للاطلاع على تفاصيل لكل ساعة أو يوم، افتح شاشة الإحصاءات.',
               style: TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.55,
@@ -619,10 +659,10 @@ class _HonestNote extends StatelessWidget {
       'تنزيل التقارير بصيغة PDF أو CSV غير متاح على التطبيق بعد، ويمكن الوصول '
       'إليه من نسخة الويب بنفس بيانات الدخول.',
       style: TextStyle(
-        color: AppTheme.faintMuted,
+        color: ZynColors.muted,
         fontSize: 11.5,
-        fontWeight: FontWeight.w600,
-        height: 1.7,
+        fontWeight: FontWeight.w500,
+        height: 1.65,
       ),
       textAlign: TextAlign.center,
     );
@@ -635,37 +675,45 @@ class _NoDeviceState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
-      child: AppCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
-            Text(
-              'لا يوجد جهاز محدّد',
-              style: TextStyle(
-                color: AppTheme.ink,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            SizedBox(height: 6),
-            Text(
+      padding: const EdgeInsets.all(ZynSpacing.xxl),
+      child: _Card(
+        child: const ZynEmptyState(
+          icon: Icons.solar_power_outlined,
+          title: 'لا يوجد جهاز محدّد',
+          subtitle:
               'لعرض التقارير، أضف جهازاً واحداً على الأقل من تبويب الأجهزة، '
               'ثم اختره كجهاز فعّال.',
-              style: TextStyle(
-                color: AppTheme.softInk,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                height: 1.7,
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 }
 
-// ─── Formatting helpers ──────────────────────────────────────────────
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
+      child: child,
+    );
+  }
+}
+
+// ─── Formatting helpers ────────────────────────────────────────
 
 String _formatKwh(double v) => '${v.toStringAsFixed(2)} kWh';

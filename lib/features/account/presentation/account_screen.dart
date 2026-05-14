@@ -3,26 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/state/app_session.dart';
-import '../../../core/widgets/app_card.dart';
-import '../../../core/widgets/app_error_state.dart';
 import '../../../core/utils/timestamp.dart';
+import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
-import '../../../core/widgets/app_refresh_button.dart';
 import '../data/account_labels.dart';
 import '../data/account_models.dart';
 import '../data/account_repository.dart';
 import 'plan_change_preview_screen.dart';
 
-/// Read-only Account & Subscription (v51).
+/// v102 DS v1 — الحساب والاشتراك.
 ///
-/// Pulls GET /api/mobile/account and renders calm informational cards.
-/// **No destructive / security actions:** no edit, no password change,
-/// no logout-all, no delete, no billing changes. Each section is built
-/// from server-declared capabilities so the UI never claims a feature
-/// the backend hasn't enabled.
+/// Read-only mirror of `GET /api/mobile/account` plus the v87
+/// subscriber-driven plan-change flow (modal sheet → preview screen
+/// → optional Stripe checkout). No destructive actions beyond what
+/// the server advertises in `capabilities`.
 class AccountScreen extends ConsumerWidget {
   const AccountScreen({super.key});
 
@@ -30,7 +28,6 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshot = ref.watch(accountSnapshotProvider);
 
-    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -38,46 +35,49 @@ class AccountScreen extends ConsumerWidget {
         backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
         actions: [
-          AppRefreshButton(
+          IconButton(
             onPressed: () => ref.invalidate(accountSnapshotProvider),
+            icon: const Icon(
+              Icons.refresh_rounded,
+              color: ZynColors.primary700,
+            ),
+            tooltip: 'تحديث',
           ),
         ],
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
         child: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(accountSnapshotProvider),
-          child: snapshot.when(
-            // v71: wrap loading in a ListView so RefreshIndicator always
-            // has a scrollable child to drive (pull-to-refresh works
-            // even during the initial load).
-            loading: () => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              children: const [
-                AppLoading(message: 'جارٍ تحميل بيانات الحساب...'),
-              ],
+          child: RefreshIndicator(
+            color: ZynColors.primary500,
+            onRefresh: () async => ref.invalidate(accountSnapshotProvider),
+            child: snapshot.when(
+              loading: () => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                children: const [
+                  AppLoading(message: 'جارٍ تحميل بيانات الحساب...'),
+                ],
+              ),
+              error: (err, _) => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(ZynSpacing.lg),
+                children: [
+                  AppErrorState(
+                    error: err is ApiException
+                        ? err
+                        : ApiException(
+                            message: 'تعذّر تحميل بيانات الحساب.',
+                            kind: ApiErrorKind.unknown,
+                          ),
+                    onRetry: () => ref.invalidate(accountSnapshotProvider),
+                  ),
+                ],
+              ),
+              data: (account) => _AccountBody(account: account),
             ),
-            error: (err, _) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              children: [
-                AppErrorState(
-                  error: err is ApiException
-                      ? err
-                      : ApiException(
-                          message: 'تعذّر تحميل بيانات الحساب.',
-                          kind: ApiErrorKind.unknown,
-                        ),
-                  onRetry: () => ref.invalidate(accountSnapshotProvider),
-                ),
-              ],
-            ),
-            data: (account) => _AccountBody(account: account),
           ),
         ),
-        ),  // close DecoratedBox child SafeArea
       ),
     );
   }
@@ -85,252 +85,77 @@ class AccountScreen extends ConsumerWidget {
 
 class _AccountBody extends StatelessWidget {
   const _AccountBody({required this.account});
+
   final AccountSnapshot account;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.xxl,
+      ),
       children: [
-        _IdentityCard(account: account),
-        const SizedBox(height: 12),
+        _IdentityHero(account: account),
+        const SizedBox(height: ZynSpacing.lg),
+        const ZynSectionHeader(
+          label: 'الاشتراك',
+          icon: Icons.workspace_premium_rounded,
+        ),
+        const SizedBox(height: ZynSpacing.sm),
         _SubscriptionCard(subscription: account.subscription),
-        // v66: plan-change request surface. Renders only when the
-        // server advertises the capability OR when a pending request
-        // is already on file — keeps the screen calm for older
-        // backends that don't ship the new keys.
         if (account.pendingPlanChangeRequest != null ||
             (account.capabilities.planChangeRequest &&
                 account.availablePlans.isNotEmpty)) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
           _PlanChangeSection(account: account),
         ],
-        // v76: subscriber quota visibility. Read-only — shows
-        // limit / used / remaining for each active tenant quota.
-        // Hidden when the server returned no rows (e.g. no tenant
-        // yet, or no active quotas), so older backends without the
-        // `quotas` key stay calm.
         if (account.quotas.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.lg),
+          const ZynSectionHeader(
+            label: 'حدود اشتراكك',
+            icon: Icons.tune_rounded,
+          ),
+          const SizedBox(height: ZynSpacing.sm),
           _QuotasCard(quotas: account.quotas),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: ZynSpacing.lg),
+        const ZynSectionHeader(
+          label: 'الأجهزة',
+          icon: Icons.solar_power_outlined,
+        ),
+        const SizedBox(height: ZynSpacing.sm),
         _DevicesCard(devices: account.devices),
-        // v89: real account actions (change password + logout-all), gated
-        // on server-declared capabilities. The previous v76 read-only
-        // banner is gone because the screen now offers real actions.
         if (account.capabilities.passwordChange ||
             account.capabilities.logoutAllRefreshTokens) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.lg),
+          const ZynSectionHeader(
+            label: 'أمان الحساب',
+            icon: Icons.shield_outlined,
+          ),
+          const SizedBox(height: ZynSpacing.sm),
           _SecurityActionsCard(capabilities: account.capabilities),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: ZynSpacing.lg),
+        const ZynSectionHeader(
+          label: 'القدرات المتاحة',
+          icon: Icons.check_circle_outline_rounded,
+        ),
+        const SizedBox(height: ZynSpacing.sm),
         _CapabilitiesCard(capabilities: account.capabilities),
-        const SizedBox(height: 24),
       ],
     );
   }
 }
 
-class _SecurityActionsCard extends ConsumerStatefulWidget {
-  const _SecurityActionsCard({required this.capabilities});
-  final AccountCapabilities capabilities;
+// ─── Identity hero ────────────────────────────────────────────────
 
-  @override
-  ConsumerState<_SecurityActionsCard> createState() =>
-      _SecurityActionsCardState();
-}
+class _IdentityHero extends StatelessWidget {
+  const _IdentityHero({required this.account});
 
-class _SecurityActionsCardState
-    extends ConsumerState<_SecurityActionsCard> {
-  bool _loggingOutAll = false;
-
-  Future<void> _confirmLogoutAll() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تسجيل الخروج من كل الأجهزة'),
-        content: const Text(
-          'سيتم إنهاء جلسة كل الأجهزة المسجَّلة بحسابك. '
-          'هل تريد المتابعة؟',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.danger,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('تأكيد'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    setState(() => _loggingOutAll = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final revoked =
-          await ref.read(accountRepositoryProvider).logoutAll();
-      // After revoking refresh tokens, sign out locally so the next
-      // 401 doesn't surprise the user — the access token will expire
-      // on its own; signing out clears it deterministically.
-      await ref.read(appSessionProvider.notifier).signOut();
-      if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          duration: const Duration(seconds: 3),
-          content: Text(
-            'تم تسجيل الخروج. عدد الجلسات الموقوفة: $revoked.',
-          ),
-        ));
-      // Router redirect picks up the unauthenticated phase and sends
-      // the user back to /login; the explicit navigation here clears
-      // the stack so back-button doesn't return to /account.
-      if (mounted) context.go(AppRoutes.login);
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (e) {
-      if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('تعذّر تسجيل الخروج: $e')),
-        );
-    } finally {
-      if (mounted) setState(() => _loggingOutAll = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final caps = widget.capabilities;
-    return AppCard(
-      elevated: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionTitle(label: 'أمان الحساب'),
-          const SizedBox(height: 8),
-          if (caps.passwordChange)
-            _ActionTile(
-              icon: Icons.lock_outline,
-              label: 'تغيير كلمة المرور',
-              subtitle: 'حدّث كلمة مرور حسابك.',
-              onTap: () => context.push(AppRoutes.changePassword),
-            ),
-          if (caps.passwordChange && caps.logoutAllRefreshTokens)
-            const Divider(color: AppTheme.line, height: 12, thickness: 1),
-          if (caps.logoutAllRefreshTokens)
-            _ActionTile(
-              icon: Icons.logout,
-              label: 'تسجيل الخروج من كل الأجهزة',
-              subtitle: 'إنهاء كل الجلسات المسجَّلة بحسابك.',
-              tone: AppTheme.danger,
-              busy: _loggingOutAll,
-              onTap: _loggingOutAll ? null : _confirmLogoutAll,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.onTap,
-    this.tone = AppTheme.indigoPrimary,
-    this.busy = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final VoidCallback? onTap;
-  final Color tone;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: tone.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: tone, size: 16),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: tone == AppTheme.danger
-                            ? AppTheme.danger
-                            : AppTheme.ink,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: AppTheme.faintMuted,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2.2),
-                    )
-                  : Icon(Icons.chevron_left,
-                      color: AppTheme.faintMuted,
-                      size: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.account});
   final AccountSnapshot account;
 
   @override
@@ -338,66 +163,203 @@ class _IdentityCard extends StatelessWidget {
     final name = account.fullName.isNotEmpty
         ? account.fullName
         : (account.username.isNotEmpty ? account.username : '—');
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionTitle(label: 'الهوية'),
-          const SizedBox(height: 8),
-          _KvRow(label: 'الاسم', value: name),
-          _KvRow(
-            label: 'اسم المستخدم',
-            value: account.username.isNotEmpty ? account.username : '—',
+    final role = account.role.label.isNotEmpty
+        ? account.role.label
+        : (account.role.code.isNotEmpty
+            ? AccountLabels.roleLabel(account.role.code)
+            : '—');
+    final initials = _initialsFrom(name);
+
+    return DecoratedBox(
+      decoration: zynNavyHeroDecoration(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(ZynRadii.hero),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: ZynColors.navyHero),
+          child: Padding(
+            padding: const EdgeInsets.all(ZynSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            ZynColors.primary500,
+                            ZynColors.primary700,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(ZynRadii.xl),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.22),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: ZynColors.primary500.withValues(alpha: 0.45),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: ZynSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                              height: 1.25,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (account.email.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              account.email,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.74),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                height: 1.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textDirection: TextDirection.ltr,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: ZynSpacing.md),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    ZynChip(
+                      icon: Icons.shield_outlined,
+                      text: role,
+                      onLight: false,
+                    ),
+                    ZynChip(
+                      icon: Icons.tag,
+                      text: '#${account.userId}',
+                      onLight: false,
+                    ),
+                    if (account.username.isNotEmpty)
+                      ZynChip(
+                        icon: Icons.alternate_email_rounded,
+                        text: account.username,
+                        onLight: false,
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          _KvRow(
-            label: 'البريد الإلكتروني',
-            value: account.email.isNotEmpty ? account.email : '—',
-          ),
-          _KvRow(
-            label: 'الدور',
-            // v57: prefer server-translated label; if absent, map the role
-            // code to its Arabic label rather than showing the raw slug.
-            value: account.role.label.isNotEmpty
-                ? account.role.label
-                : (account.role.code.isNotEmpty
-                    ? AccountLabels.roleLabel(account.role.code)
-                    : '—'),
-          ),
-          _KvRow(label: 'المعرّف', value: '#${account.userId}'),
-        ],
+        ),
       ),
     );
   }
+
+  String _initialsFrom(String name) {
+    final clean = name.trim();
+    if (clean.isEmpty || clean == '—') return '؟';
+    final parts =
+        clean.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '؟';
+    if (parts.length == 1) return parts.first.characters.first;
+    return parts.first.characters.first + parts.last.characters.first;
+  }
 }
+
+// ─── Subscription card ────────────────────────────────────────────
 
 class _SubscriptionCard extends StatelessWidget {
   const _SubscriptionCard({required this.subscription});
+
   final AccountSubscription subscription;
 
   @override
   Widget build(BuildContext context) {
     final plan = subscription.plan;
-    return AppCard(
-      // v67: subscription is the most actionable info on this screen,
-      // so it gets the elevated treatment to stand out among the calmer
-      // identity / devices / capabilities cards.
-      elevated: true,
+    final statusRaw = subscription.status;
+    final (statusLabel, statusTone) = _statusFor(statusRaw);
+
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(label: 'الاشتراك'),
-          const SizedBox(height: 8),
-          _KvRow(
-            label: 'الحالة',
-            value: subscription.status.isNotEmpty
-                ? _statusLabel(subscription.status)
-                : '—',
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: ZynGradients.iconFill(statusTone),
+                  borderRadius: BorderRadius.circular(ZynRadii.inner),
+                  boxShadow: ZynShadows.iconGlow(statusTone),
+                ),
+                child: const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: ZynSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      plan.hasName ? plan.displayName() : 'باقتك الحالية',
+                      style: const TextStyle(
+                        color: ZynColors.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        height: 1.25,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (statusLabel.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      ZynChip(text: statusLabel, tone: statusTone),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-          if (plan.hasName)
-            _KvRow(
-              label: 'الباقة',
-              value: plan.displayName(),
-            ),
+          const SizedBox(height: ZynSpacing.md),
           if (plan.price != null && plan.currency.isNotEmpty)
             _KvRow(
               label: 'السعر',
@@ -406,8 +368,7 @@ class _SubscriptionCard extends StatelessWidget {
           if ((subscription.maxDevices ?? plan.maxDevices) != null)
             _KvRow(
               label: 'الحد الأقصى للأجهزة',
-              value:
-                  '${subscription.maxDevices ?? plan.maxDevices}',
+              value: '${subscription.maxDevices ?? plan.maxDevices}',
             ),
           if (subscription.expiresAt != null &&
               subscription.expiresAt!.isNotEmpty)
@@ -421,31 +382,15 @@ class _SubscriptionCard extends StatelessWidget {
               value: formatDate(subscription.trialEndsAt) ?? '—',
             ),
           if (plan.features.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: ZynSpacing.sm),
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
                 for (final f in plan.features)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.indigoSoft,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: AppTheme.indigoBright.withValues(alpha: 0.20),
-                      ),
-                    ),
-                    child: Text(
-                      // v57: convert raw `can_*` slugs into Arabic labels.
-                      AccountLabels.planFeatureLabel(f),
-                      style: const TextStyle(
-                        color: AppTheme.indigoPrimary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  ZynChip(
+                    text: AccountLabels.planFeatureLabel(f),
+                    tone: ZynColors.primary500,
                   ),
               ],
             ),
@@ -455,14 +400,16 @@ class _SubscriptionCard extends StatelessWidget {
     );
   }
 
-  static String _statusLabel(String raw) {
+  static (String, Color) _statusFor(String raw) {
     final s = raw.toLowerCase();
-    if (s.contains('active')) return 'نشط';
-    if (s.contains('trial')) return 'تجريبي';
-    if (s.contains('expired')) return 'منتهي';
-    if (s.contains('grace')) return 'فترة سماح';
-    if (s.contains('canceled') || s.contains('cancelled')) return 'ملغى';
-    return raw;
+    if (s.contains('active')) return ('نشط', ZynColors.success);
+    if (s.contains('trial')) return ('تجريبي', ZynColors.info);
+    if (s.contains('expired')) return ('منتهي', ZynColors.danger);
+    if (s.contains('grace')) return ('فترة سماح', ZynColors.warning);
+    if (s.contains('canceled') || s.contains('cancelled')) {
+      return ('ملغى', ZynColors.muted);
+    }
+    return (raw, ZynColors.muted);
   }
 
   static String _fmtPrice(double v) {
@@ -471,18 +418,19 @@ class _SubscriptionCard extends StatelessWidget {
   }
 }
 
+// ─── Devices card ─────────────────────────────────────────────────
+
 class _DevicesCard extends StatelessWidget {
   const _DevicesCard({required this.devices});
+
   final AccountDeviceCounts devices;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(label: 'الأجهزة'),
-          const SizedBox(height: 8),
           _KvRow(label: 'إجمالي الأجهزة', value: '${devices.total}'),
           _KvRow(label: 'الأجهزة النشطة', value: '${devices.active}'),
           _KvRow(
@@ -497,42 +445,35 @@ class _DevicesCard extends StatelessWidget {
   }
 }
 
-/// v76: subscriber-visible quotas card.
-///
-/// Renders one row per `AccountQuota`: Arabic label, calm description
-/// when present, a soft progress bar, "X من Y" used/limit, and a
-/// remaining/unlimited badge. Status (`inactive` / `paused`) surfaces
-/// as a quiet pill so the user knows when a quota isn't enforced.
-///
-/// All values come from `quota_summary_rows` via the v76 backend
-/// projection — no quota math happens here. The card never claims a
-/// capability ("upgrade now", "buy more") — it's informational only,
-/// matching the v76 brief's "calm, read-only" tone.
+// ─── Quotas card ──────────────────────────────────────────────────
+
 class _QuotasCard extends StatelessWidget {
   const _QuotasCard({required this.quotas});
+
   final List<AccountQuota> quotas;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(label: 'حدود اشتراكك'),
-          const SizedBox(height: 4),
           const Text(
             'هذه حدود الباقة الحالية كما يحسبها الخادم. للقراءة فقط.',
             style: TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              height: 1.6,
+              fontWeight: FontWeight.w400,
+              height: 1.55,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: ZynSpacing.md),
           for (var i = 0; i < quotas.length; i++) ...[
             if (i > 0)
-              const Divider(color: AppTheme.line, height: 16, thickness: 1),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: ZynSpacing.md),
+                child: Divider(color: ZynColors.lineSoft, height: 1, thickness: 1),
+              ),
             _QuotaRow(quota: quotas[i]),
           ],
         ],
@@ -543,18 +484,16 @@ class _QuotasCard extends StatelessWidget {
 
 class _QuotaRow extends StatelessWidget {
   const _QuotaRow({required this.quota});
+
   final AccountQuota quota;
 
-  /// Soft tone for the progress bar — calm green when there's headroom,
-  /// amber once usage crosses 75%, red past 95%. Unlimited quotas read
-  /// as calm green because the bar is at 0.
   Color get _tone {
-    if (quota.isUnlimited) return AppTheme.success;
-    if (!quota.isActive) return AppTheme.faintMuted;
+    if (quota.isUnlimited) return ZynColors.success;
+    if (!quota.isActive) return ZynColors.muted;
     final p = quota.percent;
-    if (p >= 95) return AppTheme.danger;
-    if (p >= 75) return AppTheme.warning;
-    return AppTheme.success;
+    if (p >= 95) return ZynColors.danger;
+    if (p >= 75) return ZynColors.warning;
+    return ZynColors.success;
   }
 
   @override
@@ -565,16 +504,16 @@ class _QuotaRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Title row: label + status pill (only when not active).
         Row(
           children: [
             Expanded(
               child: Text(
                 label,
                 style: const TextStyle(
-                  color: AppTheme.ink,
+                  color: ZynColors.ink,
                   fontSize: 13.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
+                  height: 1.3,
                 ),
               ),
             ),
@@ -587,36 +526,34 @@ class _QuotaRow extends StatelessWidget {
           Text(
             quota.description,
             style: const TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 11.5,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               height: 1.55,
             ),
           ),
         ],
         const SizedBox(height: 8),
-        // Soft progress bar — unlimited quotas show a near-empty bar
-        // with a calm green tone so it never reads as "almost full".
         ClipRRect(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(ZynRadii.pill),
           child: LinearProgressIndicator(
             value: quota.progress,
             minHeight: 6,
-            backgroundColor: AppTheme.line,
+            backgroundColor: ZynColors.lineSoft,
             valueColor: AlwaysStoppedAnimation<Color>(tone),
           ),
         ),
         const SizedBox(height: 6),
-        // Numbers row: "X من Y" used/limit + remaining/unlimited badge.
         Row(
           children: [
             Expanded(
               child: Text(
                 _usedVsLimitLabel(quota),
                 style: const TextStyle(
-                  color: AppTheme.softInk,
+                  color: ZynColors.inkSoft,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
+                  fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
             ),
@@ -625,13 +562,12 @@ class _QuotaRow extends StatelessWidget {
               style: TextStyle(
                 color: tone,
                 fontSize: 12,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ],
         ),
-        // Source / reset period footer — quiet metadata so the user
-        // can see *why* the limit is what it is and when it resets.
         if (quota.sourceLabel.isNotEmpty || quota.resetPeriod.isNotEmpty) ...[
           const SizedBox(height: 6),
           Wrap(
@@ -641,9 +577,7 @@ class _QuotaRow extends StatelessWidget {
               if (quota.resetPeriod.isNotEmpty)
                 _QuotaMetaChip(
                   icon: Icons.refresh_outlined,
-                  label: AccountLabels.quotaResetPeriodLabel(
-                    quota.resetPeriod,
-                  ),
+                  label: AccountLabels.quotaResetPeriodLabel(quota.resetPeriod),
                 ),
               if (quota.sourceLabel.isNotEmpty)
                 _QuotaMetaChip(
@@ -677,16 +611,18 @@ class _QuotaRow extends StatelessWidget {
 
 class _QuotaStatusPill extends StatelessWidget {
   const _QuotaStatusPill({required this.status});
+
   final String status;
 
   @override
   Widget build(BuildContext context) {
-    final tone = status == 'paused' ? AppTheme.warning : AppTheme.faintMuted;
+    final tone =
+        status == 'paused' ? ZynColors.warning : ZynColors.muted;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: tone.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(ZynRadii.pill),
         border: Border.all(color: tone.withValues(alpha: 0.30)),
       ),
       child: Text(
@@ -694,7 +630,7 @@ class _QuotaStatusPill extends StatelessWidget {
         style: TextStyle(
           color: tone,
           fontSize: 10.5,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -703,6 +639,7 @@ class _QuotaStatusPill extends StatelessWidget {
 
 class _QuotaMetaChip extends StatelessWidget {
   const _QuotaMetaChip({required this.icon, required this.label});
+
   final IconData icon;
   final String label;
 
@@ -711,19 +648,19 @@ class _QuotaMetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppTheme.softBg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.line),
+        color: ZynColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(ZynRadii.pill),
+        border: Border.all(color: ZynColors.line),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: AppTheme.faintMuted, size: 12),
+          Icon(icon, color: ZynColors.muted, size: 12),
           const SizedBox(width: 4),
           Text(
             label,
             style: const TextStyle(
-              color: AppTheme.muted,
+              color: ZynColors.muted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -734,18 +671,214 @@ class _QuotaMetaChip extends StatelessWidget {
   }
 }
 
+// ─── Security actions ────────────────────────────────────────────
+
+class _SecurityActionsCard extends ConsumerStatefulWidget {
+  const _SecurityActionsCard({required this.capabilities});
+
+  final AccountCapabilities capabilities;
+
+  @override
+  ConsumerState<_SecurityActionsCard> createState() =>
+      _SecurityActionsCardState();
+}
+
+class _SecurityActionsCardState
+    extends ConsumerState<_SecurityActionsCard> {
+  bool _loggingOutAll = false;
+
+  Future<void> _confirmLogoutAll() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تسجيل الخروج من كل الأجهزة'),
+        content: const Text(
+          'سيتم إنهاء جلسة كل الأجهزة المسجَّلة بحسابك. هل تريد المتابعة؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: ZynColors.danger,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('تأكيد'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _loggingOutAll = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final revoked =
+          await ref.read(accountRepositoryProvider).logoutAll();
+      await ref.read(appSessionProvider.notifier).signOut();
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          duration: const Duration(seconds: 3),
+          content: Text(
+            'تم تسجيل الخروج. عدد الجلسات الموقوفة: $revoked.',
+          ),
+        ));
+      if (mounted) context.go(AppRoutes.login);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('تعذّر تسجيل الخروج: $e')),
+        );
+    } finally {
+      if (mounted) setState(() => _loggingOutAll = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final caps = widget.capabilities;
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (caps.passwordChange)
+            _SecurityTile(
+              icon: Icons.lock_outline,
+              label: 'تغيير كلمة المرور',
+              subtitle: 'حدّث كلمة مرور حسابك.',
+              tone: ZynColors.primary500,
+              onTap: () => context.push(AppRoutes.changePassword),
+            ),
+          if (caps.passwordChange && caps.logoutAllRefreshTokens)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: ZynSpacing.sm),
+              child: Divider(color: ZynColors.lineSoft, height: 1, thickness: 1),
+            ),
+          if (caps.logoutAllRefreshTokens)
+            _SecurityTile(
+              icon: Icons.logout_rounded,
+              label: 'تسجيل الخروج من كل الأجهزة',
+              subtitle: 'إنهاء كل الجلسات المسجَّلة بحسابك.',
+              tone: ZynColors.danger,
+              busy: _loggingOutAll,
+              onTap: _loggingOutAll ? null : _confirmLogoutAll,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SecurityTile extends StatelessWidget {
+  const _SecurityTile({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.tone,
+    required this.onTap,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color tone;
+  final VoidCallback? onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(ZynRadii.inner),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(ZynRadii.inner),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(ZynRadii.inner),
+                ),
+                child: Icon(icon, color: tone, size: 18),
+              ),
+              const SizedBox(width: ZynSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: tone == ZynColors.danger
+                            ? ZynColors.danger
+                            : ZynColors.ink,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: ZynColors.muted,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w400,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : const Icon(
+                      Icons.chevron_left_rounded,
+                      color: ZynColors.muted,
+                      size: 22,
+                    ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Capabilities card ───────────────────────────────────────────
+
 class _CapabilitiesCard extends StatelessWidget {
   const _CapabilitiesCard({required this.capabilities});
+
   final AccountCapabilities capabilities;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(label: 'القدرات المتاحة'),
-          const SizedBox(height: 8),
           _CapRow(
             label: 'تعديل الملف الشخصي',
             enabled: capabilities.profileUpdate,
@@ -763,11 +896,11 @@ class _CapabilitiesCard extends StatelessWidget {
             enabled: capabilities.accountDeletion,
           ),
           if (capabilities.mobileApiSections.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: ZynSpacing.md),
             const Text(
               'أقسام واجهة التطبيق المتاحة',
               style: TextStyle(
-                color: AppTheme.muted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -778,23 +911,9 @@ class _CapabilitiesCard extends StatelessWidget {
               runSpacing: 6,
               children: [
                 for (final s in capabilities.mobileApiSections)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.softBg,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AppTheme.line),
-                    ),
-                    child: Text(
-                      // v57: convert raw section slugs into Arabic labels.
-                      AccountLabels.apiSectionLabel(s),
-                      style: const TextStyle(
-                        color: AppTheme.muted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  _QuotaMetaChip(
+                    icon: Icons.check_rounded,
+                    label: AccountLabels.apiSectionLabel(s),
                   ),
               ],
             ),
@@ -805,71 +924,15 @@ class _CapabilitiesCard extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: AppTheme.ink,
-        fontSize: 14,
-        fontWeight: FontWeight.w800,
-      ),
-    );
-  }
-}
-
-class _KvRow extends StatelessWidget {
-  const _KvRow({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: AppTheme.muted,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppTheme.ink,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _CapRow extends StatelessWidget {
   const _CapRow({required this.label, required this.enabled});
+
   final String label;
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled ? AppTheme.success : AppTheme.faintMuted;
+    final color = enabled ? ZynColors.success : ZynColors.muted;
     final icon = enabled
         ? Icons.check_circle_outline
         : Icons.remove_circle_outline;
@@ -877,13 +940,13 @@ class _CapRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 16),
+          Icon(icon, color: color, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               label,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -903,19 +966,11 @@ class _CapRow extends StatelessWidget {
   }
 }
 
-// ─── v66: plan-change request section + modal sheet ──────────────────
+// ─── Plan-change section + sheet ─────────────────────────────────
 
-/// Renders one of two states:
-///   * pending request banner — when `account.pendingPlanChangeRequest`
-///     is set. Calm, honest copy ("قيد المراجعة من الفريق").
-///   * request-change action — when no pending request AND the server
-///     advertises `capabilities.plan_change_request`.
-///
-/// Both states deep-link to the same modal sheet for transparency
-/// (the pending banner offers an "اطلب خطة أخرى" button which replaces
-/// the open case — same cancel-then-create semantics the backend uses).
 class _PlanChangeSection extends ConsumerStatefulWidget {
   const _PlanChangeSection({required this.account});
+
   final AccountSnapshot account;
 
   @override
@@ -924,13 +979,6 @@ class _PlanChangeSection extends ConsumerStatefulWidget {
 }
 
 class _PlanChangeSectionState extends ConsumerState<_PlanChangeSection> {
-  /// v91 — replaces the v66 "send a request to admin" flow with the
-  /// v87 subscriber-driven flow: pick a plan via the existing sheet,
-  /// then navigate to `PlanChangePreviewScreen` which computes both
-  /// scenarios, lets the subscriber confirm, and (for upgrade
-  /// keep-days) launches the Stripe-hosted checkout. The plan
-  /// switches immediately without admin approval; admins only see
-  /// it in the workbench when payment is involved.
   Future<void> _openRequestSheet() async {
     final pickedPlanId = await showModalBottomSheet<int>(
       context: context,
@@ -942,7 +990,6 @@ class _PlanChangeSectionState extends ConsumerState<_PlanChangeSection> {
         ),
         child: _PlanChangeRequestSheet(
           availablePlans: widget.account.availablePlans,
-          currentPlanId: widget.account.subscription.plan.id,
         ),
       ),
     );
@@ -970,9 +1017,6 @@ class _PlanChangeSectionState extends ConsumerState<_PlanChangeSection> {
     );
     if (!mounted) return;
     if (result == true) {
-      // The preview screen popped with `true` on a successful
-      // apply / checkout launch — refresh the account snapshot so
-      // the new plan / pending invoice appears.
       ref.invalidate(accountSnapshotProvider);
     }
   }
@@ -1004,60 +1048,42 @@ class _PendingPlanChangeBanner extends StatelessWidget {
     final planName = pending.requestedPlanName.isNotEmpty
         ? pending.requestedPlanName
         : '—';
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 36,
+                height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppTheme.indigoSoft,
-                  borderRadius: BorderRadius.circular(8),
+                  gradient: ZynGradients.iconFill(ZynColors.warning),
+                  borderRadius: BorderRadius.circular(ZynRadii.inner),
+                  boxShadow: ZynShadows.iconGlow(ZynColors.warning),
                 ),
                 child: const Icon(
                   Icons.hourglass_top_outlined,
-                  color: AppTheme.indigoPrimary,
+                  color: Colors.white,
                   size: 18,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: ZynSpacing.md),
               const Expanded(
                 child: Text(
                   'طلب تغيير الخطة قيد المراجعة',
                   style: TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 14,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              // Calm status pill — never claims "approved" / "paid".
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: AppTheme.warning.withValues(alpha: 0.30),
-                  ),
-                ),
-                child: const Text(
-                  'قيد المراجعة',
-                  style: TextStyle(
-                    color: AppTheme.warning,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
+              const ZynChip(text: 'قيد المراجعة', tone: ZynColors.warning),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: ZynSpacing.md),
           _KvRow(label: 'الخطة المطلوبة', value: planName),
           _KvRow(
             label: 'تاريخ الطلب',
@@ -1065,25 +1091,23 @@ class _PendingPlanChangeBanner extends StatelessWidget {
           ),
           if (pending.message != null && pending.message!.isNotEmpty)
             _KvRow(label: 'الملاحظة', value: pending.message!),
-          const SizedBox(height: 10),
+          const SizedBox(height: ZynSpacing.md),
           const Text(
             'سيتواصل معك الفريق لمتابعة الطلب. لن يتم تغيير الخطة أو '
             'استلام أي مبلغ تلقائياً.',
             style: TextStyle(
-              color: AppTheme.softInk,
+              color: ZynColors.inkSoft,
               fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              height: 1.7,
+              fontWeight: FontWeight.w400,
+              height: 1.65,
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: AppTheme.formControlHeight,
-            child: OutlinedButton.icon(
-              onPressed: onChangeRequestedPlan,
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              label: const Text('اطلب خطة أخرى'),
-            ),
+          const SizedBox(height: ZynSpacing.md),
+          ZynButton(
+            label: 'اطلب خطة أخرى',
+            icon: Icons.edit_outlined,
+            variant: ZynButtonVariant.secondary,
+            onTap: onChangeRequestedPlan,
           ),
         ],
       ),
@@ -1093,62 +1117,61 @@ class _PendingPlanChangeBanner extends StatelessWidget {
 
 class _RequestPlanChangeCard extends StatelessWidget {
   const _RequestPlanChangeCard({required this.onOpen});
+
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 36,
+                height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppTheme.indigoSoft,
-                  borderRadius: BorderRadius.circular(8),
+                  gradient: ZynGradients.iconFill(ZynColors.primary500),
+                  borderRadius: BorderRadius.circular(ZynRadii.inner),
+                  boxShadow: ZynShadows.iconGlow(ZynColors.primary500),
                 ),
                 child: const Icon(
                   Icons.swap_horiz_outlined,
-                  color: AppTheme.indigoPrimary,
+                  color: Colors.white,
                   size: 18,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: ZynSpacing.md),
               const Expanded(
                 child: Text(
                   'تغيير الخطة',
                   style: TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 14,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: ZynSpacing.sm),
           const Text(
-            'اختر خطة جديدة لترى الأيام والمبالغ بدقّة. '
-            'يمكنك التحويل مباشرة، أو إكمال الدفع لو كان هناك مبلغ مستحق.',
+            'اختر خطة جديدة لترى الأيام والمبالغ بدقّة. يمكنك التحويل '
+            'مباشرة، أو إكمال الدفع لو كان هناك مبلغ مستحق.',
             style: TextStyle(
-              color: AppTheme.softInk,
+              color: ZynColors.inkSoft,
               fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              height: 1.7,
+              fontWeight: FontWeight.w400,
+              height: 1.65,
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: AppTheme.formControlHeight,
-            child: FilledButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.swap_horiz, size: 18),
-              label: const Text('غيّر خطتي'),
-            ),
+          const SizedBox(height: ZynSpacing.md),
+          ZynButton(
+            label: 'غيّر خطتي',
+            icon: Icons.swap_horiz,
+            onTap: onOpen,
           ),
         ],
       ),
@@ -1156,17 +1179,10 @@ class _RequestPlanChangeCard extends StatelessWidget {
   }
 }
 
-/// Modal bottom sheet — lists available plans (current plan dimmed and
-/// non-selectable), captures an optional message, submits via the v65
-/// endpoint. Pops with `true` on success so the parent can refresh.
 class _PlanChangeRequestSheet extends ConsumerStatefulWidget {
-  const _PlanChangeRequestSheet({
-    required this.availablePlans,
-    required this.currentPlanId,
-  });
+  const _PlanChangeRequestSheet({required this.availablePlans});
 
   final List<AvailablePlan> availablePlans;
-  final int? currentPlanId;
 
   @override
   ConsumerState<_PlanChangeRequestSheet> createState() =>
@@ -1176,22 +1192,8 @@ class _PlanChangeRequestSheet extends ConsumerStatefulWidget {
 class _PlanChangeRequestSheetState
     extends ConsumerState<_PlanChangeRequestSheet> {
   int? _selectedPlanId;
-  final _messageCtrl = TextEditingController();
-  bool _submitting = false;
   String? _error;
 
-  @override
-  void dispose() {
-    _messageCtrl.dispose();
-    super.dispose();
-  }
-
-  /// v91 — picker only. Returns the chosen plan id to the parent;
-  /// the parent navigates to `PlanChangePreviewScreen` for the full
-  /// preview/confirm/checkout flow. The legacy "send a request to
-  /// admin" path (v66) is intentionally removed from this sheet —
-  /// the new flow applies the plan immediately (or routes to
-  /// Stripe for the upgrade-keep-days case).
   void _submit() {
     final selected = _selectedPlanId;
     if (selected == null) {
@@ -1204,37 +1206,51 @@ class _PlanChangeRequestSheetState
 
   @override
   Widget build(BuildContext context) {
-    // Selectable rows = plans the user can actually request. We keep
-    // the current plan visible (dimmed) so the user gets a calm "this
-    // is your current plan" cue rather than an inexplicable absence.
     final plans = widget.availablePlans;
 
     return SafeArea(
       top: false,
       child: Container(
         decoration: const BoxDecoration(
-          color: AppTheme.softBg,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          color: ZynColors.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(ZynRadii.hero)),
         ),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(
+          ZynSpacing.lg,
+          ZynSpacing.md,
+          ZynSpacing.lg,
+          ZynSpacing.lg,
+        ),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ZynColors.line,
+                    borderRadius: BorderRadius.circular(ZynRadii.pill),
+                  ),
+                ),
+              ),
+              const SizedBox(height: ZynSpacing.md),
               Row(
                 children: [
                   const Expanded(
                     child: Text(
                       'اطلب تغيير الخطة',
                       style: TextStyle(
-                        color: AppTheme.ink,
+                        color: ZynColors.ink,
                         fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close, color: ZynColors.muted),
                     tooltip: 'إغلاق',
                     onPressed: () => Navigator.of(context).pop(),
                   ),
@@ -1245,13 +1261,13 @@ class _PlanChangeRequestSheetState
                 'اختر الخطة المطلوبة لرؤية الأيام والمبالغ الناتجة بدقّة. '
                 'يمكنك بعدها تأكيد التحويل أو إكمال الدفع إن كان مستحقّاً.',
                 style: TextStyle(
-                  color: AppTheme.faintMuted,
+                  color: ZynColors.muted,
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  height: 1.7,
+                  fontWeight: FontWeight.w400,
+                  height: 1.65,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: ZynSpacing.md),
               if (plans.isEmpty)
                 const _SheetEmptyState()
               else
@@ -1271,39 +1287,16 @@ class _PlanChangeRequestSheetState
                       ),
                   ],
                 ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _messageCtrl,
-                maxLines: 3,
-                maxLength: 240,
-                decoration: const InputDecoration(
-                  labelText: 'ملاحظة قصيرة (اختياري)',
-                  hintText: 'مثال: أرغب بترقية الخطة لزيادة عدد الأجهزة.',
-                ),
-              ),
               if (_error != null) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: ZynSpacing.sm),
                 _SheetErrorBanner(message: _error!),
               ],
-              const SizedBox(height: 12),
-              SizedBox(
-                height: AppTheme.formControlHeight + 4,
-                child: FilledButton.icon(
-                  onPressed: _submitting ? null : _submit,
-                  icon: _submitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.arrow_forward, size: 18),
-                  label: const Text('عرض تفاصيل التحويل'),
-                ),
+              const SizedBox(height: ZynSpacing.md),
+              ZynButton(
+                label: 'عرض تفاصيل التحويل',
+                icon: Icons.arrow_forward_rounded,
+                onTap: _submit,
               ),
-              const SizedBox(height: 6),
             ],
           ),
         ),
@@ -1326,12 +1319,7 @@ class _PlanRadioTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = onTap == null;
-    final Color tone = selected
-        ? AppTheme.indigoPrimary
-        : disabled
-            ? AppTheme.faintMuted
-            : AppTheme.muted;
-    final priceText = (plan.price != null)
+    final priceText = plan.price != null
         ? '${_fmtPrice(plan.price!)}${plan.currency.isNotEmpty ? ' ${plan.currency}' : ''}'
         : null;
 
@@ -1339,19 +1327,20 @@ class _PlanRadioTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        borderRadius: BorderRadius.circular(ZynRadii.card),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+          borderRadius: BorderRadius.circular(ZynRadii.card),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
-              color: selected ? AppTheme.indigoSoft : AppTheme.surface,
-              borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+              color: selected ? ZynColors.primary50 : ZynColors.surface,
+              borderRadius: BorderRadius.circular(ZynRadii.card),
               border: Border.all(
                 color: selected
-                    ? AppTheme.indigoBright.withValues(alpha: 0.40)
-                    : AppTheme.line,
+                    ? ZynColors.primary500.withValues(alpha: 0.45)
+                    : ZynColors.line,
+                width: selected ? 1.5 : 1,
               ),
             ),
             child: Row(
@@ -1361,10 +1350,14 @@ class _PlanRadioTile extends StatelessWidget {
                   selected
                       ? Icons.radio_button_checked
                       : Icons.radio_button_off,
-                  color: tone,
+                  color: selected
+                      ? ZynColors.primary500
+                      : disabled
+                          ? ZynColors.faint
+                          : ZynColors.muted,
                   size: 20,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: ZynSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1375,21 +1368,22 @@ class _PlanRadioTile extends StatelessWidget {
                             child: Text(
                               plan.displayName(),
                               style: TextStyle(
-                                color: disabled
-                                    ? AppTheme.faintMuted
-                                    : AppTheme.ink,
+                                color: disabled ? ZynColors.muted : ZynColors.ink,
                                 fontSize: 14,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
                           if (plan.isCurrent)
-                            const _CurrentPlanPill(),
+                            const ZynChip(
+                              text: 'خطتك الحالية',
+                              tone: ZynColors.success,
+                            ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Wrap(
-                        spacing: 12,
+                        spacing: 10,
                         runSpacing: 4,
                         children: [
                           if (priceText != null)
@@ -1421,32 +1415,9 @@ class _PlanRadioTile extends StatelessWidget {
   }
 }
 
-class _CurrentPlanPill extends StatelessWidget {
-  const _CurrentPlanPill();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppTheme.success.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.success.withValues(alpha: 0.30)),
-      ),
-      child: const Text(
-        'خطتك الحالية',
-        style: TextStyle(
-          color: AppTheme.success,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
 class _MetaChip extends StatelessWidget {
   const _MetaChip({required this.icon, required this.label});
+
   final IconData icon;
   final String label;
 
@@ -1455,12 +1426,12 @@ class _MetaChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: AppTheme.faintMuted, size: 13),
+        Icon(icon, color: ZynColors.muted, size: 13),
         const SizedBox(width: 4),
         Text(
           label,
           style: const TextStyle(
-            color: AppTheme.faintMuted,
+            color: ZynColors.muted,
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
           ),
@@ -1476,19 +1447,19 @@ class _SheetEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(ZynSpacing.md),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.line),
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line),
       ),
       child: const Text(
         'لا توجد خطط متاحة للتغيير حالياً. تواصل مع الدعم لمزيد من '
         'المعلومات.',
         style: TextStyle(
-          color: AppTheme.softInk,
+          color: ZynColors.inkSoft,
           fontSize: 12.5,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1.6,
         ),
       ),
@@ -1498,6 +1469,7 @@ class _SheetEmptyState extends StatelessWidget {
 
 class _SheetErrorBanner extends StatelessWidget {
   const _SheetErrorBanner({required this.message});
+
   final String message;
 
   @override
@@ -1505,19 +1477,19 @@ class _SheetErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.danger.withValues(alpha: 0.30)),
+        color: ZynColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(ZynRadii.inner),
+        border: Border.all(color: ZynColors.danger.withValues(alpha: 0.30)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 18, color: AppTheme.danger),
+          const Icon(Icons.error_outline, size: 18, color: ZynColors.danger),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.danger,
+                color: ZynColors.danger,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.55,
@@ -1530,9 +1502,76 @@ class _SheetErrorBanner extends StatelessWidget {
   }
 }
 
-/// Parse the backend `created_at` ISO string into a friendly Arabic
-/// date for the pending-request banner. Returns `null` for malformed
-/// values so the caller can fall back to `'—'`.
+// ─── Atoms ────────────────────────────────────────────────────────
+
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _KvRow extends StatelessWidget {
+  const _KvRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: ZynColors.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: ZynColors.ink,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 String? _formatRequestDate(String? iso) {
   if (iso == null || iso.isEmpty) return null;
   try {

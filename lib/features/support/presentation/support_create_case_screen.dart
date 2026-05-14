@@ -3,19 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../data/support_repository.dart';
 import 'attachment_draft_strip.dart';
 
-/// طلب دعم جديد (v88).
+/// v102 DS v1 — طلب دعم جديد.
 ///
 /// Posts to `POST /api/v1/support/cases`. The backend rejects empty
 /// subject / body and tracks per-tenant quotas — both surface as
-/// `ApiException`s that we render in-screen.
-///
-/// `kind` defaults to `message` (internal mail thread). Toggling to
+/// `ApiException`s. `kind` defaults to `message`; switching to
 /// `ticket` makes the case visible on the admin ticket queue.
 class SupportCreateCaseScreen extends ConsumerStatefulWidget {
   const SupportCreateCaseScreen({super.key});
@@ -34,9 +32,6 @@ class _SupportCreateCaseScreenState
   String _priority = 'normal';
   bool _submitting = false;
   String? _error;
-  // v72: draft attachments picked via `file_picker`. Stays `[]` for
-  // the JSON-only path; non-empty switches the repository call to
-  // the multipart route added in v71.
   List<AttachmentDraft> _attachments = const [];
 
   @override
@@ -64,9 +59,6 @@ class _SupportCreateCaseScreenState
           );
       ref.invalidate(supportCasesProvider);
       if (!mounted) return;
-      // v72: surface the backend's rejected_attachments[] honestly.
-      // The case itself was created — never block navigation just
-      // because one upload was rejected.
       final summary = buildRejectionSummary(
         result.rejectedAttachments,
         savedCount: result.savedAttachments.length,
@@ -74,8 +66,9 @@ class _SupportCreateCaseScreenState
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
-          duration:
-              summary != null ? const Duration(seconds: 5) : const Duration(seconds: 2),
+          duration: summary != null
+              ? const Duration(seconds: 5)
+              : const Duration(seconds: 2),
           content: Text(summary ?? 'تم إنشاء طلب الدعم.'),
         ));
       context.pushReplacement(
@@ -97,33 +90,76 @@ class _SupportCreateCaseScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.softBg,
-      appBar: AppBar(title: const Text('طلب دعم جديد')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: AppCard(
-              elevated: true,
+    return ZynPage(
+      appBar: AppBar(
+        title: const Text('طلب دعم جديد'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Card(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'افتح طلب دعم جديد',
-                    style: TextStyle(
-                      color: AppTheme.ink,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          gradient:
+                              ZynGradients.iconFill(ZynColors.primary500),
+                          borderRadius: BorderRadius.circular(ZynRadii.inner),
+                          boxShadow:
+                              ZynShadows.iconGlow(ZynColors.primary500),
+                        ),
+                        child: const Icon(
+                          Icons.support_agent_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: ZynSpacing.md),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'افتح طلب دعم جديد',
+                              style: TextStyle(
+                                color: ZynColors.ink,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                height: 1.3,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'اختر النوع، الأولوية، ثم اشرح موقفك بإيجاز.',
+                              style: TextStyle(
+                                color: ZynColors.muted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: ZynSpacing.md),
                   _KindPicker(
                     value: _kind,
                     onChanged: (v) => setState(() => _kind = v),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: ZynSpacing.md),
                   TextFormField(
                     controller: _subject,
                     textInputAction: TextInputAction.next,
@@ -134,7 +170,7 @@ class _SupportCreateCaseScreenState
                         ? 'العنوان مطلوب.'
                         : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: ZynSpacing.md),
                   TextFormField(
                     controller: _body,
                     minLines: 4,
@@ -147,12 +183,12 @@ class _SupportCreateCaseScreenState
                         ? 'الرسالة مطلوبة.'
                         : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: ZynSpacing.md),
                   _PriorityPicker(
                     value: _priority,
                     onChanged: (v) => setState(() => _priority = v),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: ZynSpacing.md),
                   AttachmentDraftStrip(
                     drafts: _attachments,
                     enabled: !_submitting,
@@ -160,39 +196,54 @@ class _SupportCreateCaseScreenState
                         setState(() => _attachments = next),
                   ),
                   if (_error != null) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: ZynSpacing.md),
                     _ErrorBanner(message: _error!),
                   ],
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: AppTheme.formControlHeight + 4,
-                    child: FilledButton.icon(
-                      onPressed: _submitting ? null : _submit,
-                      icon: _submitting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.send, size: 18),
-                      label: const Text('إرسال الطلب'),
-                    ),
+                  const SizedBox(height: ZynSpacing.lg),
+                  ZynButton(
+                    label: 'إرسال الطلب',
+                    icon: Icons.send_rounded,
+                    busy: _submitting,
+                    onTap: _submitting ? null : _submit,
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+      ),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
+      child: child,
+    );
+  }
+}
+
 class _KindPicker extends StatelessWidget {
   const _KindPicker({required this.value, required this.onChanged});
+
   final String value;
   final ValueChanged<String> onChanged;
 
@@ -224,6 +275,7 @@ class _KindPicker extends StatelessWidget {
 
 class _PriorityPicker extends StatelessWidget {
   const _PriorityPicker({required this.value, required this.onChanged});
+
   final String value;
   final ValueChanged<String> onChanged;
 
@@ -235,12 +287,12 @@ class _PriorityPicker extends StatelessWidget {
         const Text(
           'الأولوية',
           style: TextStyle(
-            color: AppTheme.muted,
+            color: ZynColors.muted,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Row(
           children: [
             Expanded(
@@ -288,25 +340,41 @@ class _PillToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? AppTheme.indigoPrimary : AppTheme.surface;
-    final fg = selected ? Colors.white : AppTheme.indigoPrimary;
-    final border = selected
-        ? AppTheme.indigoPrimary
-        : AppTheme.indigoBright.withValues(alpha: 0.30);
+    final fg = selected ? Colors.white : ZynColors.primary700;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(ZynRadii.pill),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(ZynRadii.pill),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: border),
+            gradient: selected
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [ZynColors.primary500, ZynColors.primary700],
+                  )
+                : null,
+            color: selected ? null : ZynColors.surface,
+            borderRadius: BorderRadius.circular(ZynRadii.pill),
+            border: Border.all(
+              color: selected
+                  ? ZynColors.primary700
+                  : ZynColors.primary500.withValues(alpha: 0.30),
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: ZynColors.primary500.withValues(alpha: 0.30),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -333,6 +401,7 @@ class _PillToggle extends StatelessWidget {
 
 class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message});
+
   final String message;
 
   @override
@@ -340,20 +409,19 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFECACA)),
+        color: ZynColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(ZynRadii.inner),
+        border: Border.all(color: ZynColors.danger.withValues(alpha: 0.30)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline,
-              size: 18, color: AppTheme.danger),
+          const Icon(Icons.error_outline, size: 18, color: ZynColors.danger),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.danger,
+                color: ZynColors.danger,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.5,

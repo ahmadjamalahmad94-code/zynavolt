@@ -1,30 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../devices/state/selected_device_provider.dart';
 import '../data/statistics_models.dart';
 import '../data/statistics_repository.dart';
 
-/// v57 — minimal subscriber-facing statistics screen.
+/// v102 DS v1 — الإحصاءات.
 ///
-/// Structural baseline only: this screen establishes the route, the
-/// data-layer wiring to the v56 `/api/v1/devices/<id>/statistics`
-/// endpoint, and an honest read-only render of the totals + buckets.
-/// No chart library is pulled in — the buckets are listed in a small
-/// scrolling table. A future v-series can swap the table for a real
-/// chart without changing the data path.
-///
-/// Scope (matching the v56 backend contract):
-///   * `view`   — `day` / `month` only.  `year` is deferred.
-///   * `anchor` — single `YYYY-MM-DD` date passed to the backend.
-///                Phase-1 navigator is simple "today / pick" only;
-///                step-prev / step-next will arrive once the
-///                screen earns a real chart.
+/// Subscriber-facing day/month view over `/api/v1/devices/<id>/statistics`.
+/// View selector pills + anchor picker; totals card + per-bucket detail
+/// table. PDF/CSV export is web-only (honest note at the bottom).
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
 
@@ -55,12 +45,11 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       lastDate: _todayDateOnly(),
     );
     if (picked == null) return;
-    setState(() => _anchor = DateTime(picked.year, picked.month, picked.day));
+    setState(
+        () => _anchor = DateTime(picked.year, picked.month, picked.day));
   }
 
-  void _resetToToday() {
-    setState(() => _anchor = _todayDateOnly());
-  }
+  void _resetToToday() => setState(() => _anchor = _todayDateOnly());
 
   void _setView(String next) {
     if (next == _view) return;
@@ -71,7 +60,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   Widget build(BuildContext context) {
     final deviceId = ref.watch(effectiveDeviceIdProvider);
 
-    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -82,12 +70,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           IconButton(
             tooltip: 'العودة لليوم',
             onPressed: _resetToToday,
-            icon: const Icon(Icons.today_outlined),
+            icon: const Icon(Icons.today_outlined,
+                color: ZynColors.primary700),
           ),
         ],
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
         child: SafeArea(
           child: deviceId == null
               ? const _NoDeviceState()
@@ -106,23 +95,26 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final snap = ref.watch(statisticsProvider(query));
 
     return RefreshIndicator(
+      color: ZynColors.primary500,
       onRefresh: () async {
         ref.invalidate(statisticsProvider(query));
         await ref.read(statisticsProvider(query).future);
       },
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(
+          ZynSpacing.lg,
+          ZynSpacing.md,
+          ZynSpacing.lg,
+          ZynSpacing.xxl,
+        ),
         children: [
           _ViewSelector(view: _view, onChanged: _setView),
-          const SizedBox(height: 12),
-          _AnchorRow(
-            anchorIso: _anchorIso,
-            onPick: _pickAnchor,
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
+          _AnchorRow(anchorIso: _anchorIso, onPick: _pickAnchor),
+          const SizedBox(height: ZynSpacing.md),
           snap.when(
             loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
+              padding: EdgeInsets.symmetric(vertical: ZynSpacing.xxl),
               child: AppLoading(message: 'جارٍ تحميل الإحصاءات...'),
             ),
             error: (err, _) => AppErrorState(
@@ -147,31 +139,27 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       children: [
         if (s.titleHint.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.only(bottom: ZynSpacing.sm),
             child: Text(
               s.titleHint,
               style: const TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
         _TotalsCard(totals: s.totals),
-        const SizedBox(height: 12),
-        if (s.empty)
-          const _EmptyState()
-        else
-          _BucketsCard(buckets: s.buckets, view: s.view),
-        const SizedBox(height: 18),
+        const SizedBox(height: ZynSpacing.md),
+        if (s.empty) const _EmptyState() else _BucketsCard(buckets: s.buckets, view: s.view),
+        const SizedBox(height: ZynSpacing.lg),
         const _HonestNote(),
-        const SizedBox(height: 24),
       ],
     );
   }
 }
 
-// ─── Sub-widgets ─────────────────────────────────────────────────────
+// ─── View selector ───────────────────────────────────────────────
 
 class _ViewSelector extends StatelessWidget {
   const _ViewSelector({required this.view, required this.onChanged});
@@ -184,8 +172,11 @@ class _ViewSelector extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(12),
+        color: ZynColors.primary50,
+        borderRadius: BorderRadius.circular(ZynRadii.inner),
+        border: Border.all(
+          color: ZynColors.primary500.withValues(alpha: 0.20),
+        ),
       ),
       child: Row(
         children: [
@@ -221,21 +212,35 @@ class _ViewChip extends StatelessWidget {
     return Expanded(
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(ZynRadii.tight + 1),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
-          child: Container(
+          borderRadius: BorderRadius.circular(ZynRadii.tight + 1),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
             height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: active ? AppTheme.indigoPrimary : Colors.transparent,
-              borderRadius: BorderRadius.circular(9),
+              gradient: active
+                  ? const LinearGradient(
+                      colors: [ZynColors.primary500, ZynColors.primary700],
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(ZynRadii.tight + 1),
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: ZynColors.primary500.withValues(alpha: 0.30),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
             ),
             child: Text(
               label,
               style: TextStyle(
-                color: active ? Colors.white : AppTheme.indigoPrimary,
+                color: active ? Colors.white : ZynColors.primary700,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
               ),
@@ -247,6 +252,8 @@ class _ViewChip extends StatelessWidget {
   }
 }
 
+// ─── Anchor row ─────────────────────────────────────────────────
+
 class _AnchorRow extends StatelessWidget {
   const _AnchorRow({required this.anchorIso, required this.onPick});
 
@@ -255,21 +262,37 @@ class _AnchorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.calendar_today_outlined,
-              color: AppTheme.indigoPrimary, size: 18),
-          const SizedBox(width: 10),
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ZynColors.primary50,
+              borderRadius: BorderRadius.circular(ZynRadii.tight),
+            ),
+            child: const Icon(Icons.calendar_today_outlined,
+                color: ZynColors.primary700, size: 16),
+          ),
+          const SizedBox(width: ZynSpacing.md),
           Expanded(
             child: Text(
               anchorIso,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 14,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
                 letterSpacing: 0.3,
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -284,6 +307,8 @@ class _AnchorRow extends StatelessWidget {
   }
 }
 
+// ─── Totals card ────────────────────────────────────────────────
+
 class _TotalsCard extends StatelessWidget {
   const _TotalsCard({required this.totals});
 
@@ -291,44 +316,46 @@ class _TotalsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
             'إجماليات الفترة',
             style: TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 14,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: ZynSpacing.sm),
           _TotalRow(
             label: 'الإنتاج',
             valueKwh: totals.productionKwh,
             icon: Icons.wb_sunny_outlined,
-            tone: AppTheme.warning,
+            tone: ZynColors.warning,
           ),
           _TotalRow(
             label: 'الاستهلاك',
             valueKwh: totals.consumptionKwh,
             icon: Icons.home_outlined,
-            tone: AppTheme.indigoPrimary,
+            tone: ZynColors.primary500,
           ),
           _TotalRow(
             label: 'شحن البطارية',
             valueKwh: totals.batteryInKwh,
             icon: Icons.battery_charging_full_outlined,
-            tone: AppTheme.success,
+            tone: ZynColors.success,
           ),
           _TotalRow(
             label: 'استيراد الشبكة',
             valueKwh: totals.gridInKwh,
             icon: Icons.bolt_outlined,
-            tone: AppTheme.muted,
+            tone: ZynColors.muted,
           ),
-          const Divider(height: 18),
+          const SizedBox(height: 8),
+          const Divider(color: ZynColors.lineSoft, height: 1, thickness: 1),
+          const SizedBox(height: 8),
           _MetaRow(
             label: 'متوسط الشحنة %',
             value: totals.avgBatterySocPercent.toStringAsFixed(1),
@@ -337,15 +364,9 @@ class _TotalsCard extends StatelessWidget {
             label: 'ذروة الإنتاج (واط)',
             value: totals.maxSolarW.toStringAsFixed(0),
           ),
-          _MetaRow(
-            label: 'عدد القراءات',
-            value: totals.samples.toString(),
-          ),
+          _MetaRow(label: 'عدد القراءات', value: totals.samples.toString()),
           if (totals.dataGaps > 0)
-            _MetaRow(
-              label: 'فجوات البيانات',
-              value: totals.dataGaps.toString(),
-            ),
+            _MetaRow(label: 'فجوات البيانات', value: totals.dataGaps.toString()),
         ],
       ),
     );
@@ -372,21 +393,21 @@ class _TotalRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: 30,
+            height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: tone.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: tone.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(ZynRadii.tight),
             ),
             child: Icon(icon, size: 16, color: tone),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: ZynSpacing.md),
           Expanded(
             child: Text(
               label,
               style: const TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -395,9 +416,10 @@ class _TotalRow extends StatelessWidget {
           Text(
             '${valueKwh.toStringAsFixed(2)} kWh',
             style: const TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 14,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -408,6 +430,7 @@ class _TotalRow extends StatelessWidget {
 
 class _MetaRow extends StatelessWidget {
   const _MetaRow({required this.label, required this.value});
+
   final String label;
   final String value;
 
@@ -421,7 +444,7 @@ class _MetaRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: AppTheme.muted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -430,9 +453,10 @@ class _MetaRow extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -440,6 +464,8 @@ class _MetaRow extends StatelessWidget {
     );
   }
 }
+
+// ─── Buckets card ───────────────────────────────────────────────
 
 class _BucketsCard extends StatelessWidget {
   const _BucketsCard({required this.buckets, required this.view});
@@ -457,7 +483,7 @@ class _BucketsCard extends StatelessWidget {
 
     final unitLabel = view == 'day' ? 'كل ساعة' : 'كل يوم';
 
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -466,7 +492,7 @@ class _BucketsCard extends StatelessWidget {
               const Text(
                 'التفاصيل',
                 style: TextStyle(
-                  color: AppTheme.ink,
+                  color: ZynColors.ink,
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                 ),
@@ -475,16 +501,18 @@ class _BucketsCard extends StatelessWidget {
               Text(
                 unitLabel,
                 style: const TextStyle(
-                  color: AppTheme.faintMuted,
+                  color: ZynColors.muted,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          _BucketHeader(),
-          const Divider(height: 14),
+          const SizedBox(height: ZynSpacing.sm),
+          const _BucketHeader(),
+          const SizedBox(height: 4),
+          const Divider(color: ZynColors.lineSoft, height: 1, thickness: 1),
+          const SizedBox(height: 4),
           for (var i = 0; i < count; i++)
             _BucketRow(
               label: buckets.labels[i],
@@ -498,26 +526,29 @@ class _BucketsCard extends StatelessWidget {
 }
 
 class _BucketHeader extends StatelessWidget {
+  const _BucketHeader();
+
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(
-      color: AppTheme.faintMuted,
+      color: ZynColors.muted,
       fontSize: 11,
       fontWeight: FontWeight.w800,
-      letterSpacing: 0.3,
+      letterSpacing: 0.2,
     );
-    return Row(
-      children: const [
+    return const Row(
+      children: [
         Expanded(flex: 3, child: Text('الفترة', style: style)),
         Expanded(
           flex: 3,
-          child: Text('الإنتاج (kWh)', style: style, textAlign: TextAlign.end),
+          child: Text('الإنتاج (kWh)',
+              style: style, textAlign: TextAlign.end),
         ),
         SizedBox(width: 8),
         Expanded(
           flex: 3,
-          child:
-              Text('الاستهلاك (kWh)', style: style, textAlign: TextAlign.end),
+          child: Text('الاستهلاك (kWh)',
+              style: style, textAlign: TextAlign.end),
         ),
       ],
     );
@@ -546,9 +577,10 @@ class _BucketRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -558,9 +590,10 @@ class _BucketRow extends StatelessWidget {
               production.toStringAsFixed(2),
               textAlign: TextAlign.end,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w800,
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -571,9 +604,10 @@ class _BucketRow extends StatelessWidget {
               consumption.toStringAsFixed(2),
               textAlign: TextAlign.end,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w800,
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -583,24 +617,26 @@ class _BucketRow extends StatelessWidget {
   }
 }
 
+// ─── Empty + honest note ───────────────────────────────────────
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Row(
         children: const [
-          Icon(Icons.info_outline, color: AppTheme.faintMuted, size: 18),
+          Icon(Icons.info_outline_rounded, color: ZynColors.muted, size: 18),
           SizedBox(width: 10),
           Expanded(
             child: Text(
               'لا توجد قراءات كافية لهذه الفترة. جرّب تاريخاً آخر أو انتظر '
               'تجميع المزيد من القراءات.',
               style: TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 12.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 height: 1.6,
               ),
             ),
@@ -616,15 +652,14 @@ class _HonestNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
+    return const Text(
       'هذه شاشة الإحصاءات الأساسية. الرسم البياني التفصيلي وعرض السنة '
-      'سيُضافان في تحديث لاحق. لتنزيل تقرير قابل للطباعة استخدم نسخة الويب '
-      'حالياً.',
-      style: const TextStyle(
-        color: AppTheme.faintMuted,
+      'سيُضافان في تحديث لاحق. لتنزيل تقرير قابل للطباعة استخدم نسخة الويب.',
+      style: TextStyle(
+        color: ZynColors.muted,
         fontSize: 11.5,
-        fontWeight: FontWeight.w600,
-        height: 1.7,
+        fontWeight: FontWeight.w500,
+        height: 1.65,
       ),
       textAlign: TextAlign.center,
     );
@@ -637,33 +672,41 @@ class _NoDeviceState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
-      child: AppCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
-            Text(
-              'لا يوجد جهاز محدّد',
-              style: TextStyle(
-                color: AppTheme.ink,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            SizedBox(height: 6),
-            Text(
+      padding: const EdgeInsets.all(ZynSpacing.xxl),
+      child: _Card(
+        child: const ZynEmptyState(
+          icon: Icons.solar_power_outlined,
+          title: 'لا يوجد جهاز محدّد',
+          subtitle:
               'لعرض الإحصاءات، أضف جهازاً واحداً على الأقل من تبويب الأجهزة، '
               'ثم اختره كجهاز فعّال.',
-              style: TextStyle(
-                color: AppTheme.softInk,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                height: 1.7,
-              ),
-            ),
-          ],
         ),
       ),
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
+      child: child,
     );
   }
 }

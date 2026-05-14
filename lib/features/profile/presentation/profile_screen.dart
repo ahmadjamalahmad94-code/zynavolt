@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../data/location_catalog_models.dart';
@@ -11,12 +11,16 @@ import '../data/location_catalog_repository.dart';
 import '../data/profile_models.dart';
 import '../state/profile_controller.dart';
 
-/// Profile screen — read + safe edit.
+/// v102 DS v1 — الملف الشخصي.
 ///
-/// Editable in v44:  full_name · email · phone_number · city ·
-///                   preferred_language · country · timezone ·
-///                   phone_country_code (catalog-validated)
-/// Read-only:        username · role · status — server-managed
+/// Full rebuild on the new design system. Form state + catalog
+/// hydration + validation logic carried over unchanged; only the
+/// rendered widget tree was rewritten.
+///
+/// Editable: full_name · email · phone_number · city ·
+///           preferred_language · country · timezone ·
+///           phone_country_code (catalog-validated)
+/// Read-only: username · role · status
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -24,33 +28,26 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileControllerProvider);
 
-    // v100 — gradient backdrop for visual continuity with Home/More.
-    return Scaffold(
-      backgroundColor: Colors.transparent,
+    return ZynPage(
       appBar: AppBar(
         title: const Text('الملف الشخصي'),
         backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
       ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
-        child: SafeArea(
-        child: profile.when(
-          loading: () => const AppLoading(message: 'جارٍ تحميل الملف...'),
-          error: (err, _) => AppErrorState(
-            error: err is ApiException
-                ? err
-                : ApiException(
-                    message: 'تعذّر تحميل الملف الشخصي.',
-                    kind: ApiErrorKind.unknown,
-                  ),
-            onRetry: () =>
-                ref.read(profileControllerProvider.notifier).refresh(),
-          ),
-          data: (data) => _ProfileForm(initial: data),
+      child: profile.when(
+        loading: () => const AppLoading(message: 'جارٍ تحميل الملف...'),
+        error: (err, _) => AppErrorState(
+          error: err is ApiException
+              ? err
+              : ApiException(
+                  message: 'تعذّر تحميل الملف الشخصي.',
+                  kind: ApiErrorKind.unknown,
+                ),
+          onRetry: () =>
+              ref.read(profileControllerProvider.notifier).refresh(),
         ),
+        data: (data) => _ProfileForm(initial: data),
       ),
-      ),  // close DecoratedBox
     );
   }
 }
@@ -71,9 +68,6 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   late final TextEditingController _city;
   late String _language;
 
-  // Catalog-bound selections. `null` means "user has not picked a value
-  // yet — fall back to whatever the catalog resolves from the Profile".
-  // Once the user touches a dropdown, this becomes the source of truth.
   String? _countryCode;
   String? _timezone;
   String? _phoneDial;
@@ -91,9 +85,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     _language = widget.initial.preferredLanguage.isEmpty
         ? 'ar'
         : widget.initial.preferredLanguage;
-    _timezone = widget.initial.timezone.isEmpty
-        ? null
-        : widget.initial.timezone;
+    _timezone = widget.initial.timezone.isEmpty ? null : widget.initial.timezone;
     _phoneDial = widget.initial.phoneCountryCode.isEmpty
         ? null
         : widget.initial.phoneCountryCode;
@@ -102,9 +94,6 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   @override
   void didUpdateWidget(covariant _ProfileForm oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // The controller may emit a new Profile after a successful save —
-    // reseat the controllers so the displayed text matches the saved values
-    // (including server-side normalisation like email lower-casing).
     if (!identical(oldWidget.initial, widget.initial)) {
       _fullName.text = widget.initial.fullName;
       _email.text = widget.initial.email;
@@ -113,14 +102,11 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
       _language = widget.initial.preferredLanguage.isEmpty
           ? 'ar'
           : widget.initial.preferredLanguage;
-      _timezone = widget.initial.timezone.isEmpty
-          ? null
-          : widget.initial.timezone;
+      _timezone =
+          widget.initial.timezone.isEmpty ? null : widget.initial.timezone;
       _phoneDial = widget.initial.phoneCountryCode.isEmpty
           ? null
           : widget.initial.phoneCountryCode;
-      // Reset the user's country selection so the next render picks up the
-      // newly-saved profile value via the inline catalog lookup.
       _countryCode = null;
     }
   }
@@ -147,10 +133,6 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
       ..setPhoneCountryCode(_phoneDial,
           current: widget.initial.phoneCountryCode);
 
-    // The country PATCH uses `country_code` so the backend can resolve the
-    // localised name. The current code is whatever the catalog matched on
-    // initial hydration; if nothing matched, _initialCountryCode is null
-    // and any selection counts as a change.
     final initialCountryCode = _initialCountryCodeForCompare();
     patch.setCountryCode(_countryCode, current: initialCountryCode);
 
@@ -180,11 +162,6 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     }
   }
 
-  /// Derive the country_code that would have been sent if the user had not
-  /// touched the dropdown — used by [ProfilePatch.setCountryCode] to decide
-  /// "did this change". On first build, _countryCode is the catalog match
-  /// of the initial country name; after the user picks a new option, this
-  /// helper still returns that original baseline.
   String _initialCountryCodeForCompare() {
     final catalog = ref.read(locationCatalogProvider).valueOrNull;
     if (catalog == null) return _countryCode ?? '';
@@ -197,17 +174,20 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
     final p = widget.initial;
     return Form(
       key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _IdentityCard(profile: p),
-          const SizedBox(height: 12),
-          AppCard(
+          _IdentityHero(profile: p),
+          const SizedBox(height: ZynSpacing.lg),
+          const ZynSectionHeader(
+            label: 'البيانات الأساسية',
+            icon: Icons.edit_note_rounded,
+          ),
+          const SizedBox(height: ZynSpacing.sm),
+          _SectionCard(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _SectionHeader(title: 'البيانات القابلة للتعديل'),
-                const SizedBox(height: 10),
                 _LabeledField(
                   label: 'الاسم الكامل',
                   child: TextFormField(
@@ -247,7 +227,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                     currentDial: _phoneDial,
                     fallbackDial: widget.initial.phoneCountryCode,
                     numberController: _phoneNumber,
-                    onDialChanged: (dial) => setState(() => _phoneDial = dial),
+                    onDialChanged: (d) => setState(() => _phoneDial = d),
                   ),
                 ),
                 _LabeledField(
@@ -274,56 +254,42 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                         setState(() => _language = s.first),
                   ),
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: 6),
-                  _InlineError(message: _error!),
-                ],
-                const SizedBox(height: 14),
-                SizedBox(
-                  height: AppTheme.formControlHeight + 4,
-                  child: FilledButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.save_outlined, size: 18),
-                    label: const Text('حفظ التغييرات'),
-                  ),
-                ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.lg),
+          const ZynSectionHeader(
+            label: 'الموقع والمنطقة الزمنية',
+            icon: Icons.public_rounded,
+          ),
+          const SizedBox(height: ZynSpacing.sm),
           _LocationContactCard(
             initial: p,
             countryCode: _countryCode,
             timezone: _timezone,
-            onCountryChanged: (code) => setState(() => _countryCode = code),
+            onCountryChanged: (c) => setState(() => _countryCode = c),
             onTimezoneChanged: (tz) => setState(() => _timezone = tz),
           ),
-          const SizedBox(height: 12),
-          AppCard(
+          const SizedBox(height: ZynSpacing.lg),
+          const ZynSectionHeader(
+            label: 'معلومات النظام',
+            icon: Icons.verified_user_outlined,
+          ),
+          const SizedBox(height: ZynSpacing.sm),
+          _SectionCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _SectionHeader(title: 'معلومات للقراءة فقط'),
-                const SizedBox(height: 6),
                 const Text(
                   'هذه الحقول يديرها الخادم ولا يمكن تعديلها من التطبيق.',
                   style: TextStyle(
-                    color: AppTheme.faintMuted,
+                    color: ZynColors.muted,
                     fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    height: 1.55,
+                    fontWeight: FontWeight.w400,
+                    height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: ZynSpacing.md),
                 _ReadOnlyRow(label: 'اسم المستخدم', value: p.username),
                 _ReadOnlyRow(label: 'الدور', value: _displayRole(p)),
                 _ReadOnlyRow(
@@ -332,6 +298,17 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                 ),
               ],
             ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: ZynSpacing.md),
+            _InlineError(message: _error!),
+          ],
+          const SizedBox(height: ZynSpacing.xl),
+          ZynButton(
+            label: 'حفظ التغييرات',
+            icon: Icons.save_outlined,
+            busy: _saving,
+            onTap: _saving ? null : _save,
           ),
         ],
       ),
@@ -345,13 +322,136 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
   }
 }
 
-/// Card holding the catalog-validated location selectors (country +
-/// timezone). Phone prefix lives in the contact row inside the editable
-/// section so it sits next to the phone number.
-///
-/// Loads the catalog through `locationCatalogProvider`. While loading or
-/// on error the dropdowns degrade to read-only rows — the user is never
-/// offered fake options.
+// ─── Identity hero ────────────────────────────────────────────────
+
+class _IdentityHero extends StatelessWidget {
+  const _IdentityHero({required this.profile});
+
+  final Profile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = _initials(profile.fullName, profile.username);
+    final name = profile.fullName.isNotEmpty
+        ? profile.fullName
+        : profile.username;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: ZynGradients.glossSurface(tint: ZynColors.primary500),
+        borderRadius: BorderRadius.circular(ZynRadii.xl),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.med(),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [ZynColors.primary500, ZynColors.primary700],
+              ),
+              borderRadius: BorderRadius.circular(ZynRadii.xl),
+              boxShadow: ZynShadows.iconGlow(ZynColors.primary500),
+            ),
+            child: Text(
+              initials,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+          const SizedBox(width: ZynSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: ZynColors.ink,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                    height: 1.25,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  profile.email.isNotEmpty ? profile.email : '—',
+                  style: const TextStyle(
+                    color: ZynColors.muted,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    height: 1.4,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textDirection: TextDirection.ltr,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _initials(String name, String username) {
+    final source = (name.isNotEmpty ? name : username).trim();
+    if (source.isEmpty) return '؟';
+    final parts =
+        source.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return source.characters.first;
+    if (parts.length == 1) return parts.first.characters.first;
+    return parts.first.characters.first + parts.last.characters.first;
+  }
+}
+
+// ─── Section card ────────────────────────────────────────────────
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.lg,
+      ),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
+      child: child,
+    );
+  }
+}
+
+// ─── Location + timezone (catalog-validated) ─────────────────────
+
 class _LocationContactCard extends ConsumerWidget {
   const _LocationContactCard({
     required this.initial,
@@ -371,35 +471,28 @@ class _LocationContactCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final catalog = ref.watch(locationCatalogProvider);
 
-    return AppCard(
+    return _SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(title: 'الموقع والمنطقة الزمنية'),
-          const SizedBox(height: 6),
           const Text(
             'تستخدم هذه الحقول قوائم محدّدة من خادم Zynavolt.',
             style: TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 11.5,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               height: 1.55,
             ),
           ),
           catalog.when(
             loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
+              padding: EdgeInsets.symmetric(vertical: ZynSpacing.lg),
               child: AppLoading(message: 'جارٍ تحميل القوائم...'),
             ),
             error: (err, _) => _CatalogFallback(profile: initial, error: err),
             data: (data) {
-              // Resolve the displayed country code inline. Priority:
-              //   1. user's in-progress selection (`countryCode`)
-              //   2. catalog match against the saved country name
-              //   3. null (dropdown shows no selection + helper hint)
-              // No post-frame callback / setState-after-build needed.
-              final resolvedCountryCode = countryCode ??
-                  data.findCountryByName(initial.country)?.code;
+              final resolvedCountryCode =
+                  countryCode ?? data.findCountryByName(initial.country)?.code;
               return _LocationEditors(
                 catalog: data,
                 lang: initial.preferredLanguage,
@@ -452,9 +545,6 @@ class _LocationEditors extends StatelessWidget {
           label: 'الدولة',
           helper: countryHelper,
           child: DropdownButtonFormField<String>(
-            // The dropdown only mounts inside the `catalog.when(data:)` branch,
-            // so `resolvedCountryCode` is already the right value at first
-            // mount — no value-vs-initialValue race.
             key: ValueKey('country-${resolvedCountryCode ?? ''}'),
             initialValue: resolvedCountryCode,
             isExpanded: true,
@@ -497,10 +587,8 @@ class _LocationEditors extends StatelessWidget {
   }
 }
 
-/// Compact phone row: a narrow prefix dropdown sourced from the catalog,
-/// plus the existing phone-number text field, on one LTR line so the
-/// composed value reads naturally as "+970 599043337" — matches the
-/// canonical web v35 phone display.
+// ─── Phone row ───────────────────────────────────────────────────
+
 class _PhoneRow extends ConsumerWidget {
   const _PhoneRow({
     required this.currentDial,
@@ -509,13 +597,8 @@ class _PhoneRow extends ConsumerWidget {
     required this.onDialChanged,
   });
 
-  /// In-progress user selection. `null` means the user has not touched
-  /// the dropdown yet; we fall back to [fallbackDial] from the profile.
   final String? currentDial;
-
-  /// The phone_country_code value from the saved profile.
   final String fallbackDial;
-
   final TextEditingController numberController;
   final ValueChanged<String?> onDialChanged;
 
@@ -573,9 +656,6 @@ class _PhoneRow extends ConsumerWidget {
   }
 }
 
-/// Calm read-only stand-in for the dial dropdown while the catalog is
-/// loading or has failed. Matches the dropdown's height + radius so the
-/// row never jumps when the catalog finishes loading.
 class _DialPlainBox extends StatelessWidget {
   const _DialPlainBox({required this.text});
   final String text;
@@ -583,19 +663,19 @@ class _DialPlainBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: AppTheme.formControlHeight,
+      height: 42,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppTheme.softBg,
-        borderRadius: BorderRadius.circular(AppTheme.radiusInput),
-        border: Border.all(color: AppTheme.line),
+        color: ZynColors.bg,
+        borderRadius: BorderRadius.circular(ZynRadii.inner),
+        border: Border.all(color: ZynColors.line),
       ),
       child: Text(
         text.isNotEmpty ? text : '—',
         style: const TextStyle(
-          color: AppTheme.muted,
+          color: ZynColors.muted,
           fontSize: 13,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           fontFeatures: [FontFeature.tabularFigures()],
         ),
       ),
@@ -614,28 +694,33 @@ class _CatalogFallback extends StatelessWidget {
         ? (error as ApiException).message
         : 'تعذّر تحميل قوائم الدولة والمنطقة الزمنية.';
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.only(top: ZynSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF7ED),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFFED7AA)),
+              color: ZynColors.warning.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(ZynRadii.inner),
+              border: Border.all(
+                color: ZynColors.warning.withValues(alpha: 0.30),
+              ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.warning_amber_outlined,
-                    size: 16, color: AppTheme.warning),
+                const Icon(
+                  Icons.warning_amber_outlined,
+                  size: 16,
+                  color: ZynColors.warning,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     '$message تعرض الحقول للقراءة فقط حالياً.',
                     style: const TextStyle(
-                      color: Color(0xFF92400E),
+                      color: ZynColors.warning,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       height: 1.5,
@@ -645,7 +730,7 @@ class _CatalogFallback extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: ZynSpacing.sm),
           _ReadOnlyRow(label: 'الدولة', value: profile.country),
           _ReadOnlyRow(label: 'المنطقة الزمنية', value: profile.timezone),
           _ReadOnlyRow(
@@ -656,92 +741,7 @@ class _CatalogFallback extends StatelessWidget {
   }
 }
 
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.profile});
-  final Profile profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final initials = _initials(profile.fullName, profile.username);
-    return AppCard(
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppTheme.indigoSoft,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: AppTheme.indigoPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  profile.fullName.isNotEmpty
-                      ? profile.fullName
-                      : profile.username,
-                  style: const TextStyle(
-                    color: AppTheme.ink,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  profile.email.isNotEmpty ? profile.email : '—',
-                  style: const TextStyle(
-                    color: AppTheme.faintMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _initials(String name, String username) {
-    final source = (name.isNotEmpty ? name : username).trim();
-    if (source.isEmpty) return '؟';
-    final parts =
-        source.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return source.characters.first;
-    if (parts.length == 1) return parts.first.characters.first;
-    return parts.first.characters.first + parts.last.characters.first;
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: AppTheme.ink,
-        fontSize: 14,
-        fontWeight: FontWeight.w800,
-      ),
-    );
-  }
-}
+// ─── Atoms ────────────────────────────────────────────────────────
 
 class _LabeledField extends StatelessWidget {
   const _LabeledField({
@@ -757,16 +757,17 @@ class _LabeledField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.only(top: ZynSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: const TextStyle(
-              color: AppTheme.muted,
+              color: ZynColors.muted,
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
             ),
           ),
           const SizedBox(height: 4),
@@ -776,9 +777,10 @@ class _LabeledField extends StatelessWidget {
             Text(
               helper!,
               style: const TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.faint,
                 fontSize: 11.5,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
+                height: 1.5,
               ),
             ),
           ],
@@ -805,9 +807,10 @@ class _ReadOnlyRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: AppTheme.muted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
+                height: 1.4,
               ),
             ),
           ),
@@ -816,9 +819,10 @@ class _ReadOnlyRow extends StatelessWidget {
             child: Text(
               value.isEmpty ? '—' : value,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
+                height: 1.4,
               ),
             ),
           ),
@@ -835,22 +839,22 @@ class _InlineError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFECACA)),
+        color: ZynColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(ZynRadii.inner),
+        border: Border.all(color: ZynColors.danger.withValues(alpha: 0.30)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, size: 16, color: AppTheme.danger),
+          const Icon(Icons.error_outline, size: 16, color: ZynColors.danger),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.danger,
+                color: ZynColors.danger,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 height: 1.5,

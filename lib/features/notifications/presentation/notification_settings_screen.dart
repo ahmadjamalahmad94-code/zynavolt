@@ -1,25 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
-import '../../../core/widgets/app_refresh_button.dart';
 import '../data/notification_settings_models.dart';
 import '../data/notifications_repository.dart';
 
-/// إعدادات الإشعارات (v87).
+/// v102 DS v1 — إعدادات الإشعارات.
 ///
-/// Surfaces a focused, safe subset of `GET /api/mobile/notifications/settings`:
-/// the master `notifications_enabled` switch, channel on/off + configured
-/// status, and the major per-section enabled toggles.
-///
-/// Every change writes through `PATCH /api/mobile/notifications/settings`
-/// with the backend's allowed-key whitelist. Provider credentials
-/// (bot tokens, sms keys/urls) are NEVER fetched into Flutter and have
-/// no UI here.
+/// Focused subset of `GET /api/mobile/notifications/settings`:
+/// master switch, telegram/SMS/Push channels + per-section
+/// toggles. Each change PATCHes the backend; per-key optimistic
+/// override keeps the UI responsive while the request is in
+/// flight. Provider credentials never appear in the UI.
 class NotificationSettingsScreen extends ConsumerStatefulWidget {
   const NotificationSettingsScreen({super.key});
 
@@ -30,25 +25,10 @@ class NotificationSettingsScreen extends ConsumerStatefulWidget {
 
 class _NotificationSettingsScreenState
     extends ConsumerState<NotificationSettingsScreen> {
-  /// v90c: per-key optimistic overrides. A key in this map means "the user
-  /// just toggled this; show the new value immediately, regardless of what
-  /// the server currently says." Entries are dropped automatically once
-  /// the server-side truth catches up (see `_reconcile`).
   final Map<String, bool> _optimistic = {};
-
-  /// v90c: per-key in-flight tracking. We allow parallel PATCHes across
-  /// different keys — the user can flip three switches in rapid succession
-  /// and each one runs its own request without blocking the others.
-  /// Re-tapping the SAME key while it's in flight is ignored.
   final Set<String> _busy = {};
+  DateTime _lastSuccessSnack = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Throttles the success snackbar so a fast sequence of toggles shows
-  /// one calm confirmation instead of stacking five.
-  DateTime _lastSuccessSnack =
-      DateTime.fromMillisecondsSinceEpoch(0);
-
-  /// Drop overrides whose server value has caught up to (or differs from)
-  /// our optimistic guess. Called after every fresh fetch.
   void _reconcile(NotificationSettingsSnapshot fresh) {
     if (_optimistic.isEmpty) return;
     final next = <String, bool>{};
@@ -67,8 +47,6 @@ class _NotificationSettingsScreenState
 
     _optimistic.forEach((key, value) {
       if (!serverMatchesOverride(key, value)) {
-        // Server hasn't acknowledged yet — keep the override so the
-        // switch doesn't flicker back to the old value mid-flight.
         next[key] = value;
       }
     });
@@ -125,8 +103,6 @@ class _NotificationSettingsScreenState
     }
   }
 
-  /// Reads the current server-truth value for a key. Used to remember
-  /// what to revert to on failure. Returns `null` if the key is unknown.
   bool? _readServerValue(String key) {
     final snap = ref.read(notificationSettingsProvider).valueOrNull;
     if (snap == null) return null;
@@ -142,8 +118,6 @@ class _NotificationSettingsScreenState
     return null;
   }
 
-  /// Show a calm "تم حفظ إعدادات الإشعارات" snackbar at most once every
-  /// ~1.5 s, so a rapid flurry of toggles doesn't stack confirmations.
   void _maybeShowSuccessSnack(ScaffoldMessengerState messenger) {
     final now = DateTime.now();
     if (now.difference(_lastSuccessSnack).inMilliseconds < 1500) return;
@@ -160,7 +134,6 @@ class _NotificationSettingsScreenState
   Widget build(BuildContext context) {
     final settings = ref.watch(notificationSettingsProvider);
 
-    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -168,54 +141,57 @@ class _NotificationSettingsScreenState
         backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
         actions: [
-          AppRefreshButton(
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded,
+                color: ZynColors.primary700),
+            tooltip: 'تحديث',
             onPressed: () => ref.invalidate(notificationSettingsProvider),
           ),
         ],
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
         child: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async =>
-              ref.invalidate(notificationSettingsProvider),
-          child: settings.when(
-            loading: () => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              children: const [
-                AppLoading(message: 'جارٍ تحميل الإعدادات...'),
-              ],
+          child: RefreshIndicator(
+            color: ZynColors.primary500,
+            onRefresh: () async =>
+                ref.invalidate(notificationSettingsProvider),
+            child: settings.when(
+              loading: () => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                children: const [
+                  AppLoading(message: 'جارٍ تحميل الإعدادات...'),
+                ],
+              ),
+              error: (err, _) => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(ZynSpacing.lg),
+                children: [
+                  AppErrorState(
+                    error: err is ApiException
+                        ? err
+                        : ApiException(
+                            message: 'تعذّر تحميل الإعدادات.',
+                            kind: ApiErrorKind.unknown,
+                          ),
+                    onRetry: () =>
+                        ref.invalidate(notificationSettingsProvider),
+                  ),
+                ],
+              ),
+              data: (s) {
+                _reconcile(s);
+                return _Body(
+                  snapshot: s,
+                  optimistic: _optimistic,
+                  busy: _busy,
+                  onPatch: _patchOne,
+                );
+              },
             ),
-            error: (err, _) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              children: [
-                AppErrorState(
-                  error: err is ApiException
-                      ? err
-                      : ApiException(
-                          message: 'تعذّر تحميل الإعدادات.',
-                          kind: ApiErrorKind.unknown,
-                        ),
-                  onRetry: () =>
-                      ref.invalidate(notificationSettingsProvider),
-                ),
-              ],
-            ),
-            data: (s) {
-              // Drop overrides whose server-side truth has caught up.
-              _reconcile(s);
-              return _Body(
-                snapshot: s,
-                optimistic: _optimistic,
-                busy: _busy,
-                onPatch: _patchOne,
-              );
-            },
           ),
         ),
-        ),  // close DecoratedBox child SafeArea (v100)
       ),
     );
   }
@@ -241,17 +217,24 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.xxl,
+      ),
       children: [
         _ScopeBanner(scope: snapshot.scope),
-        const SizedBox(height: 12),
+        const SizedBox(height: ZynSpacing.md),
         _MasterCard(
           enabled: _value(
-              'notifications_enabled', snapshot.notificationsMasterEnabled),
+            'notifications_enabled',
+            snapshot.notificationsMasterEnabled,
+          ),
           busy: busy.contains('notifications_enabled'),
           onChanged: (v) => onPatch('notifications_enabled', v),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: ZynSpacing.md),
         _ChannelsCard(
           telegram: snapshot.telegram,
           sms: snapshot.sms,
@@ -264,7 +247,7 @@ class _Body extends StatelessWidget {
           onPatch: onPatch,
         ),
         if (snapshot.sectionSwitches.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
           _SectionsCard(
             switches: snapshot.sectionSwitches,
             effective: (s) => _value(s.enabledKey, s.enabled),
@@ -272,7 +255,6 @@ class _Body extends StatelessWidget {
             onPatch: onPatch,
           ),
         ],
-        const SizedBox(height: 24),
       ],
     );
   }
@@ -280,6 +262,7 @@ class _Body extends StatelessWidget {
 
 class _ScopeBanner extends StatelessWidget {
   const _ScopeBanner({required this.scope});
+
   final String scope;
 
   @override
@@ -291,24 +274,24 @@ class _ScopeBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        color: ZynColors.primary50,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
         border: Border.all(
-          color: AppTheme.indigoBright.withValues(alpha: 0.25),
+          color: ZynColors.primary500.withValues(alpha: 0.30),
         ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline,
-              color: AppTheme.indigoPrimary, size: 16),
+          const Icon(Icons.info_outline_rounded,
+              color: ZynColors.primary700, size: 17),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               style: const TextStyle(
-                color: AppTheme.indigoPrimary,
+                color: ZynColors.primary700,
                 fontSize: 12.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 height: 1.5,
               ),
             ),
@@ -332,25 +315,37 @@ class _MasterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      elevated: true,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        gradient: ZynGradients.glossSurface(tint: ZynColors.primary500),
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.med(),
+      ),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 40,
+            height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppTheme.indigoSoft,
-              borderRadius: BorderRadius.circular(10),
+              gradient: ZynGradients.iconFill(ZynColors.primary500),
+              borderRadius: BorderRadius.circular(ZynRadii.inner),
+              boxShadow: ZynShadows.iconGlow(ZynColors.primary500),
             ),
             child: const Icon(
               Icons.notifications_active_outlined,
-              color: AppTheme.indigoPrimary,
+              color: Colors.white,
               size: 20,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: ZynSpacing.md),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,7 +353,7 @@ class _MasterCard extends StatelessWidget {
                 Text(
                   'تفعيل الإشعارات',
                   style: TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
@@ -367,20 +362,16 @@ class _MasterCard extends StatelessWidget {
                 Text(
                   'مفتاح رئيسي يوقف كل قنوات الإشعارات عند إغلاقه.',
                   style: TextStyle(
-                    color: AppTheme.faintMuted,
+                    color: ZynColors.muted,
                     fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    height: 1.55,
+                    fontWeight: FontWeight.w400,
+                    height: 1.5,
                   ),
                 ),
               ],
             ),
           ),
-          _SwitchOrSpinner(
-            value: enabled,
-            busy: busy,
-            onChanged: onChanged,
-          ),
+          _SwitchOrSpinner(value: enabled, busy: busy, onChanged: onChanged),
         ],
       ),
     );
@@ -410,46 +401,37 @@ class _ChannelsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'قنوات الإشعار',
             style: TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 14,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: ZynSpacing.sm),
           _ChannelRow(
             label: 'تيليجرام',
-            settingKey: 'telegram_enabled',
             channel: telegram,
             value: telegramEffective,
             busy: busy.contains('telegram_enabled'),
             onChanged: (v) => onPatch('telegram_enabled', v),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: ZynSpacing.sm),
           _ChannelRow(
             label: 'الرسائل القصيرة SMS',
-            settingKey: 'sms_enabled',
             channel: sms,
             value: smsEffective,
             busy: busy.contains('sms_enabled'),
             onChanged: (v) => onPatch('sms_enabled', v),
           ),
-          // v101 Phase D — Push notifications channel row.
-          // `configured` here means "the mobile app has registered at
-          // least one FCM token for this account" — which the user
-          // achieves by simply opening the app on a phone after
-          // granting the notification permission. Until then the
-          // toggle is greyed via the standard `_ChannelRow` rendering.
-          const SizedBox(height: 8),
+          const SizedBox(height: ZynSpacing.sm),
           _ChannelRow(
             label: 'الإشعارات الفورية (Push)',
-            settingKey: 'push_enabled',
             channel: push,
             value: pushEffective,
             busy: busy.contains('push_enabled'),
@@ -464,7 +446,6 @@ class _ChannelsCard extends StatelessWidget {
 class _ChannelRow extends StatelessWidget {
   const _ChannelRow({
     required this.label,
-    required this.settingKey,
     required this.channel,
     required this.value,
     required this.busy,
@@ -472,23 +453,16 @@ class _ChannelRow extends StatelessWidget {
   });
 
   final String label;
-  // ignore: unused_element_parameter
-  final String settingKey;
   final NotificationChannelStatus channel;
-
-  /// v90c: effective (optimistic) value to render. Falls back to the
-  /// server value at the parent level when no override is present.
   final bool value;
   final bool busy;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final configuredColor = channel.configured
-        ? AppTheme.success
-        : AppTheme.faintMuted;
-    final configuredLabel =
-        channel.configured ? 'مهيأة' : 'غير مهيأة';
+    final configuredColor =
+        channel.configured ? ZynColors.success : ZynColors.muted;
+    final configuredLabel = channel.configured ? 'مهيأة' : 'غير مهيأة';
     return Row(
       children: [
         Expanded(
@@ -498,18 +472,18 @@ class _ChannelRow extends StatelessWidget {
               Text(
                 label,
                 style: const TextStyle(
-                  color: AppTheme.ink,
+                  color: ZynColors.ink,
                   fontSize: 13.5,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 4),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: configuredColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(ZynRadii.pill),
                   border: Border.all(
                     color: configuredColor.withValues(alpha: 0.30),
                   ),
@@ -545,9 +519,6 @@ class _SectionsCard extends StatelessWidget {
   });
 
   final List<NotificationSectionSwitch> switches;
-
-  /// v90c: parent-supplied resolver that returns the effective (possibly
-  /// optimistic) value for a given section switch.
   final bool Function(NotificationSectionSwitch s) effective;
   final Set<String> busy;
   final void Function(String key, bool value) onPatch;
@@ -565,19 +536,19 @@ class _SectionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'فئات الإشعارات',
             style: TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 14,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: ZynSpacing.sm),
           for (final s in switches) ...[
             _SectionRow(
               label: _sectionLabels[s.sectionId] ?? s.sectionId,
@@ -587,7 +558,7 @@ class _SectionsCard extends StatelessWidget {
             ),
             if (s != switches.last)
               const Divider(
-                color: AppTheme.line,
+                color: ZynColors.lineSoft,
                 height: 12,
                 thickness: 1,
               ),
@@ -621,7 +592,7 @@ class _SectionRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -638,10 +609,6 @@ class _SectionRow extends StatelessWidget {
   }
 }
 
-/// v90c: switch with an inline "جارٍ الحفظ" pill while a PATCH is in
-/// flight. The switch itself stays visible and reflects the optimistic
-/// value passed in, mirroring the v90b loads pattern. `onChanged: null`
-/// while busy prevents a double-tap on the same row.
 class _SwitchOrSpinner extends StatelessWidget {
   const _SwitchOrSpinner({
     required this.value,
@@ -660,7 +627,7 @@ class _SwitchOrSpinner extends StatelessWidget {
       children: [
         Switch(
           value: value,
-          activeThumbColor: AppTheme.indigoPrimary,
+          activeThumbColor: ZynColors.primary500,
           onChanged: busy ? null : onChanged,
         ),
         if (busy)
@@ -670,13 +637,13 @@ class _SwitchOrSpinner extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: AppTheme.indigoSoft,
-                borderRadius: BorderRadius.circular(999),
+                color: ZynColors.primary50,
+                borderRadius: BorderRadius.circular(ZynRadii.pill),
               ),
               child: const Text(
                 'جارٍ الحفظ',
                 style: TextStyle(
-                  color: AppTheme.indigoPrimary,
+                  color: ZynColors.primary700,
                   fontSize: 9,
                   fontWeight: FontWeight.w800,
                 ),
@@ -684,6 +651,31 @@ class _SwitchOrSpinner extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
+      child: child,
     );
   }
 }

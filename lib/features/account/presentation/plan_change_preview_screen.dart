@@ -1,4 +1,4 @@
-/// v91 — mobile plan-change preview/confirm screen.
+/// v102 DS v1 — mobile plan-change preview/confirm screen.
 ///
 /// Mirrors the web `subscriber_plan_change_preview.html` flow:
 ///   1. Fetch `/api/mobile/account/plan-change/preview?plan_id=…`.
@@ -22,7 +22,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/api/api_exception.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/design/zyn_components.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../data/account_models.dart';
@@ -30,10 +31,7 @@ import '../data/account_repository.dart';
 import '../data/plan_change_models.dart';
 
 class PlanChangePreviewScreen extends ConsumerStatefulWidget {
-  const PlanChangePreviewScreen({
-    super.key,
-    required this.targetPlan,
-  });
+  const PlanChangePreviewScreen({super.key, required this.targetPlan});
 
   final AvailablePlan targetPlan;
 
@@ -87,9 +85,7 @@ class _PlanChangePreviewScreenState
       if (result.needsPayment && result.caseId != null) {
         await _handlePaymentRequired(result);
       } else if (result.isApplied) {
-        _showSuccessAndPop(
-          'تم تطبيق تغيير الخطة بنجاح.',
-        );
+        _showSuccessAndPop('تم تطبيق تغيير الخطة بنجاح.');
       } else if (result.isBlocked) {
         _showError(_arabicBlockedReason(result.blockedReason));
       } else {
@@ -102,9 +98,7 @@ class _PlanChangePreviewScreenState
       if (!mounted) return;
       _showError('حدث خطأ غير متوقّع. الرجاء المحاولة مجدداً.');
     } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -118,18 +112,13 @@ class _PlanChangePreviewScreenState
         _showError('تعذّر فتح صفحة الدفع.');
         return;
       }
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
+      final launched = await launchUrl(uri,
+          mode: LaunchMode.externalApplication);
       if (!mounted) return;
       if (!launched) {
         _showError('تعذّر فتح صفحة الدفع.');
         return;
       }
-      // Inform the subscriber and bounce them back to the account
-      // screen — the pending-invoice banner there will let them
-      // resume the payment if they need to.
       _showSuccessAndPop(
         'تم فتح صفحة الدفع. أكمل الدفع لإتمام تغيير الخطة.',
       );
@@ -143,11 +132,10 @@ class _PlanChangePreviewScreenState
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
-        backgroundColor: const Color(0xFF059669),
+        backgroundColor: ZynColors.success,
         content: Text(message),
         duration: const Duration(seconds: 4),
       ));
-    // Signal the caller to refresh + close this screen.
     Navigator.of(context).pop(true);
   }
 
@@ -155,7 +143,7 @@ class _PlanChangePreviewScreenState
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
-        backgroundColor: const Color(0xFFDC2626),
+        backgroundColor: ZynColors.danger,
         content: Text(message),
       ));
   }
@@ -195,13 +183,11 @@ class _PlanChangePreviewScreenState
   }
 
   String _arabicBlockedReason(String? reason) {
-    return _arabicApiError(
-      ApiException(
-        message: '',
-        kind: ApiErrorKind.validation,
-        code: reason,
-      ),
-    );
+    return _arabicApiError(ApiException(
+      message: '',
+      kind: ApiErrorKind.validation,
+      code: reason,
+    ));
   }
 
   Future<bool?> _showConfirmDialog(
@@ -213,100 +199,102 @@ class _PlanChangePreviewScreenState
         : 'لا يوجد مبلغ مستحق.';
     final daysLine =
         'الأيام بعد التغيير: ${scenario.targetDays} يوماً على ${preview.targetPlanLabel}.';
-    final extraWarning = (preview.policyKind == 'upgrade' && mode == 'reduced_days')
-        ? 'ملاحظة: ستحصل على أيام أقل من رصيدك الحالي.'
-        : null;
+    final extraWarning =
+        (preview.policyKind == 'upgrade' && mode == 'reduced_days')
+            ? 'ملاحظة: ستحصل على أيام أقل من رصيدك الحالي.'
+            : null;
     return showDialog<bool>(
       context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('تأكيد تغيير الخطة'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(daysLine),
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد تغيير الخطة'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(daysLine),
+            const SizedBox(height: 8),
+            Text(amountLine),
+            if (extraWarning != null) ...[
               const SizedBox(height: 8),
-              Text(amountLine),
-              if (extraWarning != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  extraWarning,
-                  style: const TextStyle(
-                    color: Color(0xFFB45309),
-                    fontWeight: FontWeight.w700,
-                  ),
+              Text(
+                extraWarning,
+                style: const TextStyle(
+                  color: ZynColors.warning,
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
+              ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('إلغاء'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('تأكيد'),
-            ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('تأكيد'),
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('تغيير الخطة'),
-        ),
-        body: FutureBuilder<PlanChangePreview>(
-          future: _previewFuture,
-          builder: (ctx, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const AppLoading(message: 'جاري حساب الأيام...');
-            }
-            if (snap.hasError) {
-              final exc = snap.error;
-              final apiExc = exc is ApiException
-                  ? exc
-                  : ApiException(
-                      message: 'تعذّر تحميل تفاصيل تغيير الخطة.',
-                      kind: ApiErrorKind.unknown,
-                    );
-              return AppErrorState(
-                error: apiExc,
-                onRetry: _refresh,
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text('تغيير الخطة'),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+      ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
+        child: SafeArea(
+          child: FutureBuilder<PlanChangePreview>(
+            future: _previewFuture,
+            builder: (ctx, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const AppLoading(message: 'جاري حساب الأيام...');
+              }
+              if (snap.hasError) {
+                final exc = snap.error;
+                final apiExc = exc is ApiException
+                    ? exc
+                    : ApiException(
+                        message: 'تعذّر تحميل تفاصيل تغيير الخطة.',
+                        kind: ApiErrorKind.unknown,
+                      );
+                return AppErrorState(
+                  error: apiExc,
+                  onRetry: _refresh,
+                );
+              }
+              final preview = snap.data!;
+              if (preview.isBlocked) {
+                return _BlockedView(
+                  arabicMessage: _arabicBlockedReason(preview.blockedReason),
+                );
+              }
+              return RefreshIndicator(
+                color: ZynColors.primary500,
+                onRefresh: _refresh,
+                child: _PreviewBody(
+                  preview: preview,
+                  submitting: _submitting,
+                  onConfirm: (mode) => _onConfirm(preview, mode),
+                ),
               );
-            }
-            final preview = snap.data!;
-            if (preview.isBlocked) {
-              return _BlockedView(
-                blockedReason: preview.blockedReason!,
-                arabicMessage: _arabicBlockedReason(preview.blockedReason),
-              );
-            }
-            return RefreshIndicator(
-              onRefresh: _refresh,
-              child: _PreviewBody(
-                preview: preview,
-                submitting: _submitting,
-                onConfirm: (mode) => _onConfirm(preview, mode),
-              ),
-            );
-          },
+            },
+          ),
         ),
       ),
     );
   }
 }
 
-// ─── Body widgets ────────────────────────────────────────────────────
-
+// ─── Body ────────────────────────────────────────────────────────
 
 class _PreviewBody extends StatelessWidget {
   const _PreviewBody({
@@ -323,23 +311,28 @@ class _PreviewBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final policy = preview.policyKind;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.xxl,
+      ),
       children: [
-        _PolicyHero(policy: policy, preview: preview),
-        const SizedBox(height: 14),
+        _PolicyHero(policy: policy),
+        const SizedBox(height: ZynSpacing.md),
         _DecisionExplainer(preview: preview),
-        const SizedBox(height: 14),
+        const SizedBox(height: ZynSpacing.md),
         _SituationSummary(preview: preview),
-        const SizedBox(height: 14),
+        const SizedBox(height: ZynSpacing.md),
         if (policy == 'downgrade') ...[
-          _IneligibleSameDurationCard(preview: preview),
-          const SizedBox(height: 12),
+          const _IneligibleSameDurationCard(),
+          const SizedBox(height: ZynSpacing.md),
           _ScenarioCard(
             preview: preview,
             scenario: preview.reducedDays,
             isPrimary: true,
             ctaLabel: 'تحويل إلى أيام أكثر',
-            ctaColor: const Color(0xFF059669),
+            ctaColor: ZynColors.success,
             submitting: submitting,
             onConfirm: () => onConfirm('reduced_days'),
             title: 'تحويل قيمتي إلى أيام أكثر',
@@ -357,7 +350,7 @@ class _PreviewBody extends StatelessWidget {
             ctaLabel: preview.sameDuration.amount > 0
                 ? 'إنشاء طلب دفع للفرق'
                 : 'تطبيق الآن',
-            ctaColor: const Color(0xFFEA580C),
+            ctaColor: ZynColors.warning,
             submitting: submitting,
             onConfirm: () => onConfirm('same_duration'),
             title: 'الخيار أ — إبقاء أيامي مع دفع الفرق',
@@ -367,13 +360,13 @@ class _PreviewBody extends StatelessWidget {
                 '(${preview.sameDuration.amount.toStringAsFixed(2)} ${preview.currency}) '
                 'لإتمام التحويل. الخطة تُطبَّق بعد الدفع.',
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
           _ScenarioCard(
             preview: preview,
             scenario: preview.reducedDays,
             isPrimary: true,
             ctaLabel: 'تطبيق مع أيام أقل',
-            ctaColor: const Color(0xFF059669),
+            ctaColor: ZynColors.success,
             submitting: submitting,
             onConfirm: () => onConfirm('reduced_days'),
             title: 'الخيار ب — أيام أقل بدون دفع إضافي',
@@ -388,7 +381,7 @@ class _PreviewBody extends StatelessWidget {
             scenario: preview.sameDuration,
             isPrimary: true,
             ctaLabel: 'تطبيق التحويل',
-            ctaColor: const Color(0xFF6366F1),
+            ctaColor: ZynColors.primary500,
             submitting: submitting,
             onConfirm: () => onConfirm('same_duration'),
             title: 'تحويل مكافئ',
@@ -397,72 +390,64 @@ class _PreviewBody extends StatelessWidget {
                 'الخطتان متقاربتان في السعر اليومي — يتم التحويل مباشرة بدون دفع وبدون تعديل في الأيام.',
           ),
         ],
-        const SizedBox(height: 18),
-        _HelpHint(),
+        const SizedBox(height: ZynSpacing.lg),
+        const _HelpHint(),
       ],
     );
   }
 }
 
 class _PolicyHero extends StatelessWidget {
-  const _PolicyHero({required this.policy, required this.preview});
+  const _PolicyHero({required this.policy});
+
   final String policy;
-  final PlanChangePreview preview;
 
   @override
   Widget build(BuildContext context) {
-    final color = policy == 'downgrade'
-        ? const Color(0xFF059669)
-        : policy == 'upgrade'
-            ? const Color(0xFFEA580C)
-            : const Color(0xFF6366F1);
-    final icon = policy == 'downgrade'
-        ? '↓'
-        : policy == 'upgrade'
-            ? '↑'
-            : '↔';
-    final title = policy == 'downgrade'
-        ? 'الانتقال إلى خطة أرخص — أيام أكثر'
-        : policy == 'upgrade'
-            ? 'الانتقال إلى خطة أعلى — اختر طريقة الانتقال'
-            : 'تغيير الخطة';
-    final subtitle = policy == 'downgrade'
-        ? 'تُحوَّل قيمتك المتبقّية إلى أيام إضافية على الخطة الجديدة. لا يتم إرجاع أي مبلغ.'
-        : policy == 'upgrade'
-            ? 'احتفظ بأيامك وادفع الفرق، أو خذ أياماً أقل دون أي مبلغ إضافي.'
-            : 'تحويل مباشر بدون دفع وبدون تعديل في الأيام.';
+    final (color, icon, title, subtitle) = switch (policy) {
+      'downgrade' => (
+          ZynColors.success,
+          Icons.south_rounded,
+          'الانتقال إلى خطة أرخص — أيام أكثر',
+          'تُحوَّل قيمتك المتبقّية إلى أيام إضافية على الخطة الجديدة. لا يتم إرجاع أي مبلغ.'
+        ),
+      'upgrade' => (
+          ZynColors.warning,
+          Icons.north_rounded,
+          'الانتقال إلى خطة أعلى — اختر طريقة الانتقال',
+          'احتفظ بأيامك وادفع الفرق، أو خذ أياماً أقل دون أي مبلغ إضافي.'
+        ),
+      _ => (
+          ZynColors.primary500,
+          Icons.swap_horiz_rounded,
+          'تغيير الخطة',
+          'تحويل مباشر بدون دفع وبدون تعديل في الأيام.'
+        ),
+    };
+
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.16), color.withValues(alpha: 0.04)],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
+        gradient: ZynGradients.glossSurface(tint: color),
+        borderRadius: BorderRadius.circular(ZynRadii.xl),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+        boxShadow: ZynShadows.soft(tint: color),
       ),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(ZynSpacing.lg),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(14),
-            ),
+            width: 48,
+            height: 48,
             alignment: Alignment.center,
-            child: Text(
-              icon,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-              ),
+            decoration: BoxDecoration(
+              gradient: ZynGradients.iconFill(color),
+              borderRadius: BorderRadius.circular(ZynRadii.inner),
+              boxShadow: ZynShadows.iconGlow(color),
             ),
+            child: Icon(icon, color: Colors.white, size: 24),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: ZynSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -470,16 +455,20 @@ class _PolicyHero extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    color: ZynColors.ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    height: 1.3,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   subtitle,
                   style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.5,
+                    color: ZynColors.inkSoft,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w400,
+                    height: 1.55,
                   ),
                 ),
               ],
@@ -493,16 +482,17 @@ class _PolicyHero extends StatelessWidget {
 
 class _DecisionExplainer extends StatelessWidget {
   const _DecisionExplainer({required this.preview});
+
   final PlanChangePreview preview;
 
   @override
   Widget build(BuildContext context) {
     final policy = preview.policyKind;
     final color = policy == 'downgrade'
-        ? const Color(0xFF059669)
+        ? ZynColors.success
         : policy == 'upgrade'
-            ? const Color(0xFFEA580C)
-            : const Color(0xFF6366F1);
+            ? ZynColors.warning
+            : ZynColors.primary500;
     final perDay =
         preview.reducedDays.extra.targetPerDayPrice?.toStringAsFixed(4) ?? '—';
     final remainingValue =
@@ -517,39 +507,45 @@ class _DecisionExplainer extends StatelessWidget {
                 'أكثر من السعر اليومي لخطتك الحالية. لو احتفظت بأيامك ستدفع الفرق، '
                 'أو تأخذ أياماً أقل دون دفع. حتى الخطة ذات السعر الكلي الأقل قد تكون "أغلى في اليوم" لو كانت دورتها أقصر.'
             : 'الخطتان متقاربتان في السعر اليومي، فالتحويل مباشر.';
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 4,
-              height: 64,
+
+    return _Card(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 4,
+            decoration: BoxDecoration(
               color: color,
-              margin: const EdgeInsets.only(left: 10),
+              borderRadius: BorderRadius.circular(2),
             ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '💡 كيف يتم حساب الأيام',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                    ),
+          ),
+          const SizedBox(width: ZynSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'كيف يتم حساب الأيام',
+                  style: TextStyle(
+                    color: ZynColors.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    hint,
-                    style: const TextStyle(fontSize: 13, height: 1.6),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  hint,
+                  style: const TextStyle(
+                    color: ZynColors.inkSoft,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w400,
+                    height: 1.65,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -557,54 +553,54 @@ class _DecisionExplainer extends StatelessWidget {
 
 class _SituationSummary extends StatelessWidget {
   const _SituationSummary({required this.preview});
+
   final PlanChangePreview preview;
 
   @override
   Widget build(BuildContext context) {
     final s = preview.sameDuration;
-    return AppCard(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: GridView.count(
-          crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 2.4,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _KpiTile(
-              label: 'الخطة الحالية',
-              value: preview.currentPlanLabel,
-              sub:
-                  '${s.currentPlanPrice.toStringAsFixed(2)} ${preview.currency} / ${s.cycleDaysCurrent} يوم',
-            ),
-            _KpiTile(
-              label: 'الخطة المطلوبة',
-              value: preview.targetPlanLabel,
-              sub:
-                  '${s.targetPlanPrice.toStringAsFixed(2)} ${preview.currency} / ${s.cycleDaysTarget} يوم',
-            ),
-            _KpiTile(
-              label: 'الأيام المتبقّية',
-              value: '${preview.remainingDays}',
-              sub: 'على الخطة الحالية',
-            ),
-            _KpiTile(
-              label: 'قيمة المتبقّي',
-              value:
-                  '${s.currentRemainingValue.toStringAsFixed(2)} ${preview.currency}',
-              sub: 'محسوبة بالتناسب',
-            ),
-          ],
-        ),
+    return _Card(
+      child: GridView.count(
+        crossAxisCount: 2,
+        mainAxisSpacing: ZynSpacing.sm,
+        crossAxisSpacing: ZynSpacing.sm,
+        childAspectRatio: 2.0,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          _KpiTile(
+            label: 'الخطة الحالية',
+            value: preview.currentPlanLabel,
+            sub:
+                '${s.currentPlanPrice.toStringAsFixed(2)} ${preview.currency} / ${s.cycleDaysCurrent} يوم',
+          ),
+          _KpiTile(
+            label: 'الخطة المطلوبة',
+            value: preview.targetPlanLabel,
+            sub:
+                '${s.targetPlanPrice.toStringAsFixed(2)} ${preview.currency} / ${s.cycleDaysTarget} يوم',
+          ),
+          _KpiTile(
+            label: 'الأيام المتبقّية',
+            value: '${preview.remainingDays}',
+            sub: 'على الخطة الحالية',
+          ),
+          _KpiTile(
+            label: 'قيمة المتبقّي',
+            value:
+                '${s.currentRemainingValue.toStringAsFixed(2)} ${preview.currency}',
+            sub: 'محسوبة بالتناسب',
+          ),
+        ],
       ),
     );
   }
 }
 
 class _KpiTile extends StatelessWidget {
-  const _KpiTile({required this.label, required this.value, required this.sub});
+  const _KpiTile(
+      {required this.label, required this.value, required this.sub});
+
   final String label;
   final String value;
   final String sub;
@@ -614,9 +610,9 @@ class _KpiTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: ZynColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(ZynRadii.tile),
+        border: Border.all(color: ZynColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -624,8 +620,8 @@ class _KpiTile extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(
-              fontSize: 11,
-              color: Color(0xFF64748B),
+              color: ZynColors.muted,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
             ),
@@ -634,9 +630,10 @@ class _KpiTile extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF0F172A),
+              color: ZynColors.ink,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              height: 1.3,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -645,8 +642,9 @@ class _KpiTile extends StatelessWidget {
           Text(
             sub,
             style: const TextStyle(
+              color: ZynColors.inkSoft,
               fontSize: 11,
-              color: Color(0xFF475569),
+              fontWeight: FontWeight.w500,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -689,43 +687,47 @@ class _ScenarioCard extends StatelessWidget {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: ZynColors.surface,
+            borderRadius: BorderRadius.circular(ZynRadii.xl),
             border: Border.all(
               color: isPrimary
-                  ? ctaColor.withValues(alpha: 0.5)
-                  : const Color(0xFFE2E8F0),
-              width: isPrimary ? 1.5 : 1.0,
+                  ? ctaColor.withValues(alpha: 0.45)
+                  : ZynColors.line,
+              width: isPrimary ? 1.5 : 1,
             ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: isPrimary
-                ? [
-                    BoxShadow(
-                      color: ctaColor.withValues(alpha: 0.16),
-                      blurRadius: 22,
-                      offset: const Offset(0, 12),
-                    ),
-                  ]
-                : null,
+            boxShadow:
+                isPrimary ? ZynShadows.med(tint: ctaColor) : ZynShadows.soft(),
           ),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(
+            ZynSpacing.lg,
+            ZynSpacing.lg,
+            ZynSpacing.lg,
+            ZynSpacing.lg,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
+                  color: ZynColors.ink,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 description,
-                style: const TextStyle(fontSize: 13, height: 1.5),
+                style: const TextStyle(
+                  color: ZynColors.inkSoft,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w400,
+                  height: 1.55,
+                ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: ZynSpacing.md),
               _ScenarioFacts(scenario: scenario, preview: preview),
-              const SizedBox(height: 14),
+              const SizedBox(height: ZynSpacing.md),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -734,12 +736,13 @@ class _ScenarioCard extends StatelessWidget {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(ZynRadii.inner),
                     ),
                     textStyle: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                     ),
+                    elevation: 0,
                   ),
                   onPressed: submitting ? null : onConfirm,
                   child: submitting
@@ -762,17 +765,18 @@ class _ScenarioCard extends StatelessWidget {
             top: -10,
             right: 18,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: ctaColor,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(ZynRadii.pill),
               ),
               child: Text(
                 tag,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: 0.3,
                 ),
               ),
@@ -785,6 +789,7 @@ class _ScenarioCard extends StatelessWidget {
 
 class _ScenarioFacts extends StatelessWidget {
   const _ScenarioFacts({required this.scenario, required this.preview});
+
   final PlanChangeScenario scenario;
   final PlanChangePreview preview;
 
@@ -798,22 +803,17 @@ class _ScenarioFacts extends StatelessWidget {
         '${scenario.currentRemainingValue.toStringAsFixed(2)} ${preview.currency}',
       ],
     ];
-    if (scenario.amount > 0.001) {
-      rows.add([
-        'المبلغ المستحق',
-        '+${scenario.amount.toStringAsFixed(2)} ${preview.currency}',
-      ]);
-    } else {
-      rows.add([
-        'المبلغ المستحق',
-        '0.00 ${preview.currency}',
-      ]);
-    }
+    rows.add([
+      'المبلغ المستحق',
+      scenario.amount > 0.001
+          ? '+${scenario.amount.toStringAsFixed(2)} ${preview.currency}'
+          : '0.00 ${preview.currency}',
+    ]);
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: ZynColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(ZynRadii.tile),
+        border: Border.all(color: ZynColors.line),
       ),
       padding: const EdgeInsets.all(10),
       child: Column(
@@ -827,21 +827,23 @@ class _ScenarioFacts extends StatelessWidget {
                     child: Text(
                       r[0],
                       style: const TextStyle(
+                        color: ZynColors.inkSoft,
                         fontSize: 12.5,
-                        color: Color(0xFF475569),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
                   Text(
                     r[1],
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
                       color: r[0] == 'المبلغ المستحق'
                           ? (scenario.amount > 0
-                              ? const Color(0xFFD97706)
-                              : const Color(0xFF059669))
-                          : const Color(0xFF0F172A),
+                              ? ZynColors.warning
+                              : ZynColors.success)
+                          : ZynColors.ink,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                 ],
@@ -854,38 +856,38 @@ class _ScenarioFacts extends StatelessWidget {
 }
 
 class _IneligibleSameDurationCard extends StatelessWidget {
-  const _IneligibleSameDurationCard({required this.preview});
-  final PlanChangePreview preview;
+  const _IneligibleSameDurationCard();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(ZynSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFCBD5E1),
-          style: BorderStyle.solid,
-          width: 1,
-        ),
+        color: ZynColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(ZynRadii.tile),
+        border: Border.all(color: ZynColors.line),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Text(
             'خيار غير متاح: نفس الأيام مع رصيد',
             style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF64748B),
+              color: ZynColors.muted,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
             ),
           ),
           SizedBox(height: 6),
           Text(
             'هذا المسار غير مُتاح للنزول إلى خطة أرخص. '
             'بدلاً من إرجاع المبلغ، تُحوَّل قيمتك المتبقّية إلى أيام إضافية على الخطة الجديدة (الخيار أدناه).',
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF475569), height: 1.5),
+            style: TextStyle(
+              color: ZynColors.inkSoft,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              height: 1.55,
+            ),
           ),
         ],
       ),
@@ -894,13 +896,16 @@ class _IneligibleSameDurationCard extends StatelessWidget {
 }
 
 class _HelpHint extends StatelessWidget {
+  const _HelpHint();
+
   @override
   Widget build(BuildContext context) {
     return const Text(
-      '💬 لست متأكداً؟ تواصل مع الدعم قبل التأكيد — الفريق يرحب بمساعدتك.',
+      'لست متأكداً؟ تواصل مع الدعم قبل التأكيد — الفريق يرحب بمساعدتك.',
       style: TextStyle(
-        fontSize: 12.5,
-        color: Color(0xFF64748B),
+        color: ZynColors.muted,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
       ),
       textAlign: TextAlign.center,
     );
@@ -908,41 +913,78 @@ class _HelpHint extends StatelessWidget {
 }
 
 class _BlockedView extends StatelessWidget {
-  const _BlockedView({
-    required this.blockedReason,
-    required this.arabicMessage,
-  });
-  final String blockedReason;
+  const _BlockedView({required this.arabicMessage});
+
   final String arabicMessage;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(ZynSpacing.xxl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.info_outline,
-                color: Color(0xFF64748B), size: 56),
-            const SizedBox(height: 14),
+            Container(
+              width: 72,
+              height: 72,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: ZynColors.muted.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.info_outline,
+                color: ZynColors.muted,
+                size: 36,
+              ),
+            ),
+            const SizedBox(height: ZynSpacing.md),
             Text(
               arabicMessage,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 15,
+                color: ZynColors.ink,
+                fontSize: 14.5,
                 fontWeight: FontWeight.w700,
                 height: 1.6,
               ),
             ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('العودة'),
+            const SizedBox(height: ZynSpacing.lg),
+            ZynButton(
+              label: 'العودة',
+              variant: ZynButtonVariant.secondary,
+              expand: false,
+              onTap: () => Navigator.of(context).pop(),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
+      child: child,
     );
   }
 }
