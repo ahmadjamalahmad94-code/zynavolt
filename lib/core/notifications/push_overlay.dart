@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
 import '../../app/app_theme.dart';
+import '../../features/notifications/state/notifications_controller.dart';
 import 'push_service.dart';
 
 /// v101 Phase D — wraps the app's `MaterialApp.router` `builder:` so
@@ -37,17 +38,28 @@ class _PushOverlayState extends ConsumerState<PushOverlay> {
   @override
   Widget build(BuildContext context) {
     // Banner: surface foreground messages as a tappable SnackBar.
+    // Also nudges the Notifications inbox controller so the new
+    // event appears in the list immediately instead of waiting up
+    // to 60 s for the next silent poll.
     ref.listen<AsyncValue<PushBanner>>(pushBannerStreamProvider, (prev, next) {
-      next.whenOrNull(data: _showBannerSnack);
+      next.whenOrNull(data: (banner) {
+        _showBannerSnack(banner);
+        _refreshNotificationsInbox();
+      });
     });
 
     // Tap handling: route to the screen named in `data['route']`,
     // falling back to the in-app notifications inbox when the payload
-    // doesn't carry a hint.
+    // doesn't carry a hint. A tap also nudges the inbox so the new
+    // event is fresh by the time the user lands on the Notifications
+    // tab (the natural fallback destination).
     ref.listen<AsyncValue<Map<String, String>>>(
       pushTapStreamProvider,
       (prev, next) {
-        next.whenOrNull(data: _routeForTap);
+        next.whenOrNull(data: (data) {
+          _routeForTap(data);
+          _refreshNotificationsInbox();
+        });
       },
     );
 
@@ -55,6 +67,20 @@ class _PushOverlayState extends ConsumerState<PushOverlay> {
       key: _messengerKey,
       child: widget.child,
     );
+  }
+
+  /// Tells the notifications inbox controller to silent-refresh from
+  /// the backend. Called whenever a push arrives or is tapped so the
+  /// inbox doesn't lag behind the system tray. Best-effort — if the
+  /// controller hasn't been mounted yet (e.g. the user has never
+  /// opened the Notifications tab) the call is a no-op via the
+  /// provider's lazy semantics.
+  void _refreshNotificationsInbox() {
+    try {
+      ref.read(notificationsControllerProvider.notifier).silentRefresh();
+    } catch (_) {
+      // Controller may not exist yet; not an error.
+    }
   }
 
   void _showBannerSnack(PushBanner banner) {
