@@ -6,7 +6,12 @@ plugins {
 }
 
 android {
-    namespace = "ps.solardeye.solardeye_mobile"
+    // v101 — renamed from `ps.solardeye.solardeye_mobile` to align with
+    // the Zynavolt brand. The Android applicationId is the unique
+    // identity on Google Play and on devices, and Firebase Cloud
+    // Messaging keys off it, so this had to be settled before
+    // publishing or generating google-services.json.
+    namespace = "com.zynavolt.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,10 +25,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "ps.solardeye.solardeye_mobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.zynavolt.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

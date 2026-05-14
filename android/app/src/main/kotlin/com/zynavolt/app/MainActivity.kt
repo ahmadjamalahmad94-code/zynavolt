@@ -1,4 +1,4 @@
-package ps.solardeye.solardeye_mobile
+package com.zynavolt.app
 
 import io.flutter.embedding.android.FlutterActivity
 

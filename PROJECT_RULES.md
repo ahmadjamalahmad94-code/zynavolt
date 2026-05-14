@@ -566,3 +566,9 @@ When a rule changes:
 * **2026-05-14** — Added §8.1 (`AutoRefreshScope` + canonical cadence
   table) for v101 auto-refresh foundation. Home / Battery Lab at 30 s,
   Devices / Notifications at 60 s. All timers pause on background.
+* **2026-05-14** — Android `applicationId` + `namespace` renamed
+  `ps.solardeye.solardeye_mobile` → `com.zynavolt.app` for Firebase
+  registration and Play Store identity. Done before publishing —
+  applicationId is permanent post-publish. The internal Dart package
+  name (`pubspec.yaml: name:`) is still `solardeye_mobile` and only
+  affects test imports — kept as-is to avoid churning 28 test files.
