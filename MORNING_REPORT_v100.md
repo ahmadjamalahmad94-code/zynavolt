@@ -4,6 +4,10 @@
 **Branches:** `main` (web + mobile)
 **Status:** Mobile commits local · Web commits pushed to `main`
 
+> **See also:** [PROJECT_RULES.md](PROJECT_RULES.md) — the canonical
+> tagged rules index (design / removal / addition / workflow /
+> branding). Everything that recurs across reports lives there now.
+
 ---
 
 ## TL;DR (read this first)
