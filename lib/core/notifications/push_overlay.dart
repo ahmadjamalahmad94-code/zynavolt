@@ -297,20 +297,26 @@ class _BannerWidgetState extends State<_BannerWidget>
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: widget.onClose,
-                      icon: const Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: 20,
+                    // Plain InkWell instead of IconButton because the
+                    // banner renders above the MaterialApp's Navigator
+                    // (no Overlay ancestor), and IconButton's default
+                    // `tooltip` argument creates a Tooltip widget that
+                    // requires an Overlay — throwing "No Overlay widget
+                    // found" the first time the user taps. Using a plain
+                    // InkWell avoids the dependency entirely.
+                    InkResponse(
+                      onTap: widget.onClose,
+                      radius: 20,
+                      containedInkWell: false,
+                      child: const SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                      tooltip: 'إغلاق',
-                      visualDensity: VisualDensity.compact,
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
-                      ),
-                      padding: EdgeInsets.zero,
                     ),
                   ],
                 ),
