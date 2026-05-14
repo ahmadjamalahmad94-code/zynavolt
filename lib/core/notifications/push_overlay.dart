@@ -12,23 +12,30 @@ import 'push_service.dart';
 /// v101 Phase D — wraps the app's `MaterialApp.router` `builder:` so
 /// every screen automatically gets:
 ///
-///   1. An in-app banner overlay that appears when a push arrives in
-///      the foreground (Android FCM does not draw the system tray
-///      for foreground messages by default; this fills the gap).
+///   1. An in-app banner that appears when a push arrives in the
+///      foreground (Android FCM does not draw the system tray for
+///      foreground messages by default; this fills the gap).
 ///   2. A side-effect listener that consumes
 ///      [pushTapStreamProvider] events and routes the user to the
 ///      screen named in the push's `data.route` payload.
 ///
-/// Both behaviours are passive — they sit between `MaterialApp.router`
-/// and the actual page tree without affecting layout.
+/// Implementation note — banner rendering history
+/// ----------------------------------------------
+/// First pass used `ScaffoldMessenger` + `SnackBar`. That was
+/// unreliable inside the nested-messenger setup that
+/// `MaterialApp.router` already creates: the SnackBar's `duration`
+/// was ignored and the snack stayed on screen until the app was
+/// killed.
 ///
-/// Implementation note: an earlier draft used `ScaffoldMessenger` +
-/// `SnackBar`. That was unreliable inside the nested-messenger setup
-/// (`MaterialApp.router` already creates one; ours wrapping it on top
-/// caused the `duration` to be ignored and the snackbar to stay on
-/// screen until the app was killed). The current implementation
-/// drives an [OverlayEntry] with an explicit [Timer] so the dismiss
-/// is fully deterministic regardless of any messenger nesting.
+/// Second pass tried `OverlayEntry` via `Overlay.maybeOf(...)`. That
+/// also failed: PushOverlay sits ABOVE the Navigator that owns the
+/// Overlay, so `Overlay.maybeOf(rootOverlay: true)` returned null
+/// and the banner never appeared at all.
+///
+/// Current approach: a plain `Stack` with `widget.child` as the
+/// base layer and a state-driven `_BannerWidget` overlaid on top.
+/// No Messenger, no Overlay — visibility is just a setState +
+/// Timer pair, which is impossible to misroute.
 class PushOverlay extends ConsumerStatefulWidget {
   const PushOverlay({super.key, required this.child});
 
@@ -39,19 +46,20 @@ class PushOverlay extends ConsumerStatefulWidget {
 }
 
 class _PushOverlayState extends ConsumerState<PushOverlay> {
-  /// Used to find the nearest Overlay above us so the banner floats
-  /// above the routed page tree without depending on a Scaffold.
-  final GlobalKey _overlayHostKey = GlobalKey();
+  /// Need a context that's a descendant of GoRouter so deep-link
+  /// taps can call `GoRouter.of(...).go(...)`. Captured from the
+  /// `Builder` we slip in below `widget.child`.
+  final GlobalKey _navContextKey = GlobalKey();
 
-  OverlayEntry? _entry;
+  PushBanner? _activeBanner;
   Timer? _autoDismiss;
+
+  static const Duration _bannerDuration = Duration(seconds: 5);
 
   @override
   void dispose() {
     _autoDismiss?.cancel();
     _autoDismiss = null;
-    _entry?.remove();
-    _entry = null;
     super.dispose();
   }
 
@@ -83,9 +91,26 @@ class _PushOverlayState extends ConsumerState<PushOverlay> {
       },
     );
 
-    // KeyedSubtree gives us a stable ancestor for the Overlay lookup
-    // so the banner's OverlayEntry has somewhere to render.
-    return KeyedSubtree(key: _overlayHostKey, child: widget.child);
+    return Stack(
+      children: [
+        // KeyedSubtree captures a context inside the Navigator so we
+        // can resolve GoRouter on tap.
+        Builder(
+          key: _navContextKey,
+          builder: (_) => widget.child,
+        ),
+        if (_activeBanner != null)
+          _BannerWidget(
+            banner: _activeBanner!,
+            onTap: () {
+              final captured = _activeBanner!.data;
+              _dismissBanner();
+              _routeForTap(captured);
+            },
+            onClose: _dismissBanner,
+          ),
+      ],
+    );
   }
 
   /// Tells the notifications inbox controller to silent-refresh from
@@ -103,48 +128,32 @@ class _PushOverlayState extends ConsumerState<PushOverlay> {
   }
 
   void _showBanner(PushBanner banner) {
-    final ctx = _overlayHostKey.currentContext;
-    if (ctx == null || !mounted) return;
-    final overlay = Overlay.maybeOf(ctx, rootOverlay: true);
-    if (overlay == null) return;
-
-    // Tear down any banner currently on screen so a new push always
-    // wins, instead of stacking on top of the previous one.
+    if (!mounted) return;
     _autoDismiss?.cancel();
-    _entry?.remove();
-    _entry = null;
-
-    final entry = OverlayEntry(
-      builder: (_) => _BannerWidget(
-        banner: banner,
-        onTap: () {
-          _dismissBanner();
-          _routeForTap(banner.data);
-        },
-        onClose: _dismissBanner,
-      ),
-    );
-    overlay.insert(entry);
-    _entry = entry;
-    _autoDismiss = Timer(const Duration(seconds: 5), _dismissBanner);
+    setState(() {
+      _activeBanner = banner;
+    });
+    _autoDismiss = Timer(_bannerDuration, _dismissBanner);
   }
 
   void _dismissBanner() {
     _autoDismiss?.cancel();
     _autoDismiss = null;
-    _entry?.remove();
-    _entry = null;
+    if (!mounted) return;
+    setState(() {
+      _activeBanner = null;
+    });
   }
 
   void _routeForTap(Map<String, String> data) {
     final route = _resolveRoute(data);
     if (route == null) return;
-    final navContext = _overlayHostKey.currentContext;
-    if (navContext == null || !mounted) return;
+    final ctx = _navContextKey.currentContext;
+    if (ctx == null || !mounted) return;
     // Use go() rather than push(): from a tap we want the destination
     // to *replace* whatever ephemeral screen the user was on (e.g.,
     // a half-open BottomSheet doesn't make sense as a back-target).
-    GoRouter.of(navContext).go(route);
+    GoRouter.of(ctx).go(route);
   }
 
   /// Map FCM `data` payload to a router path.
