@@ -23,8 +23,9 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
     // v101 — Google Services plugin for Firebase. `apply false` here so
     // each module that actually needs it (only `:app` for now) opts in
-    // via its own build.gradle.kts.
-    id("com.google.gms.google-services") version "4.4.2" apply false
+    // via its own build.gradle.kts. 4.4.4 is what the Firebase Console
+    // setup wizard recommends as of the project creation date.
+    id("com.google.gms.google-services") version "4.4.4" apply false
 }
 
 include(":app")
