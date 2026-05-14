@@ -3,6 +3,23 @@ import 'package:flutter/material.dart';
 import '../../../../core/design/zyn_tokens.dart';
 import '../../../loads_recommendations/data/loads_recommendations_models.dart';
 
+/// Mobile-side sanitiser for backend reason strings.
+///
+/// The Heavy v10.5.x dispatcher emits reasons like
+/// "الفائض المتوقع كافٍ (1500 و)" where `و` is the Arabic
+/// abbreviation for "واط". The single-letter form is ambiguous
+/// under some fonts (it reads as Latin `g`), so we expand it to
+/// the full word before rendering. Backend-side fix isn't an
+/// option per owner's mobile-only constraint on this pass.
+///
+/// Public so future widgets that consume the same backend strings
+/// can apply the same defensive replacement.
+String sanitizeReason(String raw) {
+  // ` و)` is the suffix the dispatcher always emits; replacing
+  // it keeps any future English-only reason intact.
+  return raw.replaceAll(' و)', ' واط)');
+}
+
 /// v102 DS v1 — bottom sheet showing the full allow/deny list.
 ///
 /// Opened from the two summary tiles inside the Suggestions
@@ -177,7 +194,7 @@ class _LoadRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '${item.powerW.toStringAsFixed(0)} و',
+                      '${item.powerW.toStringAsFixed(0)} واط',
                       style: TextStyle(
                         color: tone,
                         fontSize: 11.5,
@@ -191,7 +208,7 @@ class _LoadRow extends StatelessWidget {
                 if (item.reason.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
-                    item.reason,
+                    sanitizeReason(item.reason),
                     style: const TextStyle(
                       color: ZynColors.muted,
                       fontSize: 11.5,

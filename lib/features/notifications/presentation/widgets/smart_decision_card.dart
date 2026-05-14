@@ -148,15 +148,26 @@ class _DecisionBody extends StatelessWidget {
             ],
           ),
           if (advice.detail.isNotEmpty) ...[
-            const SizedBox(height: ZynSpacing.md),
+            const SizedBox(height: ZynSpacing.sm),
+            // Owner-tuned: drop the nested tinted box (it read as
+            // "box inside box" against the white card). The detail
+            // now sits inline below the headline, with a hair of
+            // start-edge tone-colour to keep the visual link to
+            // the card's accent without a heavy container.
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                10,
+                2,
+                0,
+                2,
               ),
               decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(ZynRadii.tile),
+                border: BorderDirectional(
+                  start: BorderSide(
+                    color: tone.withValues(alpha: 0.45),
+                    width: 2,
+                  ),
+                ),
               ),
               child: Text(
                 advice.detail,

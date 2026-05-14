@@ -350,9 +350,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             const SmartDecisionCard(),
             const SizedBox(height: ZynSpacing.md),
             const LoadsRecommendationsStrip(),
-            const SizedBox(height: ZynSpacing.md),
-          ],
-          if ((grouped[bucket] ?? const []).isEmpty)
+            // Suggestion-classified notifications (if any)
+            // render BELOW the Smart Decision + Loads strip.
+            // No mini-empty here — the section already carries
+            // two persistent content blocks (decision + loads)
+            // so claiming "لا اقتراحات جديدة" would contradict
+            // what's on screen.
+            if ((grouped[bucket] ?? const []).isNotEmpty) ...[
+              const SizedBox(height: ZynSpacing.md),
+              for (final n in grouped[bucket]!) ...[
+                NotifTile(
+                  notification: n,
+                  bucket: bucket,
+                  onTap: () => _openDetailSheet(n, bucket),
+                ),
+                const SizedBox(height: ZynSpacing.sm),
+              ],
+            ],
+          ] else if ((grouped[bucket] ?? const []).isEmpty)
             NotifMiniEmpty(bucket: bucket)
           else
             for (final n in grouped[bucket]!) ...[

@@ -6,25 +6,24 @@ import '../../../loads_recommendations/data/loads_recommendations_models.dart';
 import '../../../loads_recommendations/data/loads_recommendations_repository.dart';
 import 'loads_list_sheet.dart';
 
-/// v102 DS v1 — "اقتراح الأحمال" sub-strip inside the
-/// Suggestions section.
+/// v102 DS v1 — "اقتراح الأحمال" sub-strip.
 ///
 /// Pulls `GET /api/mobile/loads/recommendations` via
-/// [loadsRecommendationsProvider]. Renders two side-by-side
-/// cards:
-///   * مسموح الآن — green, lists up to 3 allowed loads as chips,
-///     count badge, "اضغط للكل" affordance.
-///   * غير مسموح الآن — red, same layout for the denied set.
+/// [loadsRecommendationsProvider]. Renders ONE of three layouts
+/// based on the bucket counts:
 ///
-/// Tapping a card opens [LoadsListSheet] with the FULL list for
-/// that bucket.
+///   * Mixed (both allowed and denied non-empty) → two
+///     side-by-side cards.
+///   * All allowed (denied empty) → single full-width "كل
+///     الأحمال مسموحة الآن" card.
+///   * All denied (allowed empty) → single full-width "لا أحمال
+///     مسموحة الآن" card.
 ///
-/// Async branches handled honestly:
-///   * Loading → calm skeleton matching the strip dimensions.
-///   * Unavailable (no reading / weather) → compact line under
-///     the section header explaining the wait.
-///   * Available + zero loads → a single line tile inviting the
-///     user to register loads.
+/// This avoids the awkward "empty bucket next to a full bucket"
+/// state where the empty side reads as broken UI.
+///
+/// Tap on any card → opens [LoadsListSheet] with the FULL list
+/// for that bucket.
 class LoadsRecommendationsStrip extends ConsumerWidget {
   const LoadsRecommendationsStrip({super.key});
 
@@ -120,6 +119,37 @@ class _StripBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final allowed = snap.allowed;
     final denied = snap.denied;
+    final allAllowed = denied.isEmpty && allowed.isNotEmpty;
+    final allDenied = allowed.isEmpty && denied.isNotEmpty;
+
+    if (allAllowed) {
+      return _BucketCard(
+        tone: ZynColors.success,
+        toneSoft: ZynColors.successSoft,
+        icon: Icons.check_circle_outline_rounded,
+        title: 'كل الأحمال مسموحة الآن',
+        items: allowed,
+        powerSubtitle: _formatPower(snap.totals.allowedPowerW),
+        wide: true,
+        onTap: () =>
+            _openSheet(context, allowed, allowed: true),
+      );
+    }
+
+    if (allDenied) {
+      return _BucketCard(
+        tone: ZynColors.danger,
+        toneSoft: ZynColors.dangerSoft,
+        icon: Icons.do_not_disturb_alt_rounded,
+        title: 'لا أحمال مسموحة الآن',
+        items: denied,
+        powerSubtitle: _formatPower(snap.totals.deniedPowerW),
+        wide: true,
+        onTap: () =>
+            _openSheet(context, denied, allowed: false),
+      );
+    }
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -132,7 +162,9 @@ class _StripBody extends StatelessWidget {
               title: 'مسموح الآن',
               items: allowed,
               powerSubtitle: _formatPower(snap.totals.allowedPowerW),
-              onTap: () => _openSheet(context, allowed, allowed: true),
+              wide: false,
+              onTap: () =>
+                  _openSheet(context, allowed, allowed: true),
             ),
           ),
           const SizedBox(width: ZynSpacing.sm),
@@ -144,7 +176,9 @@ class _StripBody extends StatelessWidget {
               title: 'غير مسموح الآن',
               items: denied,
               powerSubtitle: _formatPower(snap.totals.deniedPowerW),
-              onTap: () => _openSheet(context, denied, allowed: false),
+              wide: false,
+              onTap: () =>
+                  _openSheet(context, denied, allowed: false),
             ),
           ),
         ],
@@ -152,21 +186,11 @@ class _StripBody extends StatelessWidget {
     );
   }
 
-  /// Format a power total in watts to a compact label. Owner asked
-  /// the cards to "show totals briefly" — we render a single
-  /// metric per bucket alongside the count badge: "≈ 1.3 kW" when
-  /// over 1 kW, "≈ 750 W" otherwise. Empty buckets get an empty
-  /// string so the card layout doesn't reserve a useless line.
-  String _formatPower(double watts) {
-    if (watts <= 0) return '';
-    if (watts >= 1000) {
-      return '≈ ${(watts / 1000).toStringAsFixed(1)} ك.و';
-    }
-    return '≈ ${watts.toStringAsFixed(0)} و';
-  }
-
-  void _openSheet(BuildContext context, List<LoadItem> items,
-      {required bool allowed}) {
+  void _openSheet(
+    BuildContext context,
+    List<LoadItem> items, {
+    required bool allowed,
+  }) {
     if (items.isEmpty) return;
     showModalBottomSheet<void>(
       context: context,
@@ -175,6 +199,19 @@ class _StripBody extends StatelessWidget {
       backgroundColor: ZynColors.surface,
       builder: (_) => LoadsListSheet(items: items, allowed: allowed),
     );
+  }
+
+  /// Owner-tuned: never use the ambiguous `و` glyph (mistaken for
+  /// Latin `g`). Full Arabic words read clearly under any font:
+  ///   * ≥ 1000 W → "≈ 1.3 كيلوواط"
+  ///   * > 0      → "≈ 40 واط"
+  ///   * 0        → empty (the card already says "لا أحمال…")
+  String _formatPower(double watts) {
+    if (watts <= 0) return '';
+    if (watts >= 1000) {
+      return '≈ ${(watts / 1000).toStringAsFixed(1)} كيلوواط';
+    }
+    return '≈ ${watts.toStringAsFixed(0)} واط';
   }
 }
 
@@ -186,6 +223,7 @@ class _BucketCard extends StatelessWidget {
     required this.title,
     required this.items,
     required this.powerSubtitle,
+    required this.wide,
     required this.onTap,
   });
 
@@ -194,15 +232,19 @@ class _BucketCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final List<LoadItem> items;
-
-  /// Compact totals string for this bucket — e.g. "≈ 1.3 ك.و" or
-  /// "≈ 700 و". Empty when the bucket has zero items (the card
-  /// already says "لا أحمال…" so the subtitle would be redundant).
   final String powerSubtitle;
+
+  /// `true` when this card is the only one on screen (the empty
+  /// sibling was hidden). Lets the layout show more preview chips
+  /// since there's more horizontal room.
+  final bool wide;
 
   final VoidCallback onTap;
 
-  static const int _previewCount = 3;
+  /// Preview chip count differs between wide and compact layouts.
+  /// In wide mode the user sees roughly twice as much before the
+  /// "عرض الكل" footer.
+  int get _previewCount => wide ? 6 : 3;
 
   @override
   Widget build(BuildContext context) {
@@ -250,9 +292,9 @@ class _BucketCard extends StatelessWidget {
                         children: [
                           Text(
                             title,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: ZynColors.ink,
-                              fontSize: 12.5,
+                              fontSize: wide ? 14 : 12.5,
                               fontWeight: FontWeight.w800,
                               height: 1.2,
                             ),
@@ -269,8 +311,9 @@ class _BucketCard extends StatelessWidget {
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w700,
                                   height: 1.2,
-                                  fontFeatures:
-                                      const [FontFeature.tabularFigures()],
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
                                 ),
                               ),
                             ),
@@ -284,8 +327,7 @@ class _BucketCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: tone,
-                        borderRadius:
-                            BorderRadius.circular(ZynRadii.pill),
+                        borderRadius: BorderRadius.circular(ZynRadii.pill),
                       ),
                       child: Text(
                         '${items.length}',
@@ -302,10 +344,11 @@ class _BucketCard extends StatelessWidget {
                 ),
                 const SizedBox(height: ZynSpacing.sm),
                 if (items.isEmpty)
+                  // Reachable only in degenerate cases — both
+                  // `wide` layouts handle their own empty copy
+                  // upstream by switching cards.
                   Text(
-                    title == 'مسموح الآن'
-                        ? 'لا أحمال مسموحة الآن.'
-                        : 'لا أحمال يُنصح بتأجيلها.',
+                    'لا أحمال في هذه الفئة الآن.',
                     style: const TextStyle(
                       color: ZynColors.muted,
                       fontSize: 11.5,
@@ -313,35 +356,41 @@ class _BucketCard extends StatelessWidget {
                       height: 1.4,
                     ),
                   )
-                else ...[
-                  for (final it in preview) ...[
-                    _NameChip(text: it.name, tone: tone),
-                    const SizedBox(height: 4),
-                  ],
-                  if (overflow > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        '+ $overflow — اضغط للكل',
-                        style: TextStyle(
-                          color: tone,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    )
-                  else if (items.length <= _previewCount)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 2),
-                      child: Text(
-                        'اضغط للتفاصيل',
-                        style: TextStyle(
-                          color: ZynColors.muted,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                else if (wide)
+                  // Wide mode: chips lay out in a Wrap so two
+                  // short names share a row.
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final it in preview)
+                        _NameChip(text: it.name, tone: tone, compact: true),
+                    ],
+                  )
+                else
+                  // Compact mode: one chip per row, stacked.
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final it in preview) ...[
+                        _NameChip(text: it.name, tone: tone, compact: false),
+                        const SizedBox(height: 4),
+                      ],
+                    ],
+                  ),
+                if (items.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    overflow > 0
+                        ? 'عرض الكل ($overflow أخرى)'
+                        : 'عرض التفاصيل',
+                    style: TextStyle(
+                      color: tone,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
                     ),
+                  ),
                 ],
               ],
             ),
@@ -353,15 +402,25 @@ class _BucketCard extends StatelessWidget {
 }
 
 class _NameChip extends StatelessWidget {
-  const _NameChip({required this.text, required this.tone});
+  const _NameChip({
+    required this.text,
+    required this.tone,
+    required this.compact,
+  });
 
   final String text;
   final Color tone;
 
+  /// `true` → chip sizes to its content (used in wide Wrap layout
+  /// so multiple chips can share a row).
+  /// `false` → chip fills the column width (compact stacked
+  /// layout).
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
+      width: compact ? null : double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: ZynColors.surface,
