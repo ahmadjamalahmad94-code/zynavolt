@@ -6,22 +6,21 @@ import '../../../app/app_theme.dart';
 
 /// Bottom-nav shell hosting the five top-level tabs.
 ///
-/// v99f — visual redesign per the owner's reference image:
-///   * 4 flat icon+label tabs live in the bar (two on each side).
-///   * The "الرئيسية" (Home) tab is rendered as a large FLOATING
-///     circular indigo button that sits ABOVE the bar — the visual
-///     focal point of the nav.
-///   * `extendBody: true` lets the floating button overlap the
-///     content area cleanly.
+/// v102 — Reactive floating-bubble design (owner's reference image
+/// 2026-05-14): the selected tab's icon rides on a floating white
+/// circle that sits ABOVE the bar; the bar itself has a smooth
+/// circular notch cut into its top edge under the bubble. As the
+/// user switches tabs, the bubble and the notch glide along the
+/// bar to the new tab's centre with an eased animation. Unselected
+/// tabs render as flat icon+label stacks inside the bar.
+///
+/// Earlier v99f used a permanent Home FAB at the centre; this
+/// supersedes it.
 class HomeShell extends StatelessWidget {
   const HomeShell({super.key, required this.child});
 
   final Widget child;
 
-  /// Tab definitions. The order here is the navigation index order;
-  /// the FAB-style centre slot is always tab index 0 (Home), and the
-  /// four flat slots in the bar are indices 1..4. The bar widget
-  /// arranges them with two on each side of the centre button.
   static const List<_Tab> _tabs = [
     _Tab(
       label: 'الرئيسية',
@@ -68,13 +67,12 @@ class HomeShell extends StatelessWidget {
     final index = _indexFor(location);
 
     return Scaffold(
-      // v99f — `extendBody: true` allows the floating Home button to
-      // overlap the bottom of the page content without clipping. The
-      // bar widget itself paints an opaque white background so the
-      // content underneath the bar stays hidden as expected.
+      // `extendBody: true` lets the floating bubble overlap the bottom
+      // of the page content cleanly; the bar's clipper paints opaque
+      // white so the area behind the bar itself stays hidden.
       extendBody: true,
       body: child,
-      bottomNavigationBar: _ZynavoltBottomNav(
+      bottomNavigationBar: _ZynBottomNav(
         selectedIndex: index,
         tabs: _tabs,
         onTabSelected: (i) => context.go(_tabs[i].route),
@@ -83,17 +81,8 @@ class HomeShell extends StatelessWidget {
   }
 }
 
-/// v99f — bottom nav with a floating centre Home button.
-///
-/// Layout:
-///   ╭──────────────────────────────────────╮
-///   │           ⦿  (floating Home)         │      ← 28 px overflow
-///   │ ┌──────┬──────┬──────┬──────┐        │
-///   │ │ Tab1 │ Tab2 │ Tab3 │ Tab4 │        │      ← 70 px bar
-///   │ └──────┴──────┴──────┴──────┘        │
-///   ╰──────────────────────────────────────╯
-class _ZynavoltBottomNav extends StatelessWidget {
-  const _ZynavoltBottomNav({
+class _ZynBottomNav extends StatefulWidget {
+  const _ZynBottomNav({
     required this.selectedIndex,
     required this.tabs,
     required this.onTabSelected,
@@ -103,133 +92,249 @@ class _ZynavoltBottomNav extends StatelessWidget {
   final List<_Tab> tabs;
   final ValueChanged<int> onTabSelected;
 
-  /// The Home tab is always the first entry (index 0). The four
-  /// flat slots are derived from the remaining tabs.
-  static const int _homeIndex = 0;
+  /// Tunables — keep these grouped so future visual tweaks don't
+  /// require reading the whole layout block.
+  static const double barHeight = 70;
+  static const double bubbleSize = 56;
+  static const double bubbleOverlap = 26;
+  static const double notchRadius = 34;
+  static const double barCornerRadius = 30;
 
-  /// FAB-style button geometry.
-  static const double _fabSize = 64;
-  static const double _fabOverflow = 28;
-  static const double _barHeight = 70;
+  @override
+  State<_ZynBottomNav> createState() => _ZynBottomNavState();
+}
+
+class _ZynBottomNavState extends State<_ZynBottomNav>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ac;
+  late Animation<double> _animatedPos;
+
+  @override
+  void initState() {
+    super.initState();
+    _ac = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _animatedPos =
+        AlwaysStoppedAnimation<double>(widget.selectedIndex.toDouble());
+  }
+
+  @override
+  void didUpdateWidget(covariant _ZynBottomNav oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex) {
+      _animatedPos = Tween<double>(
+        begin: _animatedPos.value,
+        end: widget.selectedIndex.toDouble(),
+      ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
+      _ac
+        ..value = 0
+        ..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ac.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Split the four "flat" tabs into a left half and a right half
-    // around the centre Home button. Two on each side so the bar
-    // reads symmetrically.
-    final flatTabs = [for (var i = 0; i < tabs.length; i++) if (i != _homeIndex) i];
-    final leftHalf = flatTabs.sublist(0, flatTabs.length ~/ 2);
-    final rightHalf = flatTabs.sublist(flatTabs.length ~/ 2);
-
-    final mediaPadding = MediaQuery.of(context).padding.bottom;
-    final totalHeight = _barHeight + _fabOverflow + mediaPadding;
+    final mediaPad = MediaQuery.of(context).padding.bottom;
+    final totalHeight =
+        _ZynBottomNav.barHeight + _ZynBottomNav.bubbleOverlap + mediaPad;
 
     return SizedBox(
       height: totalHeight,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.topCenter,
-        children: [
-          // Bar
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: _barHeight + mediaPadding,
-            child: _BarSurface(
-              tabs: tabs,
-              leftHalf: leftHalf,
-              rightHalf: rightHalf,
-              selectedIndex: selectedIndex,
-              onTabSelected: onTabSelected,
-              bottomPadding: mediaPadding,
-            ),
-          ),
-          // Centre floating Home button
-          Positioned(
-            top: 0,
-            child: _HomeFab(
-              size: _fabSize,
-              active: selectedIndex == _homeIndex,
-              icon: tabs[_homeIndex].iconActive,
-              onTap: () => onTabSelected(_homeIndex),
-            ),
-          ),
-        ],
+      child: AnimatedBuilder(
+        animation: _animatedPos,
+        builder: (context, _) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              // Convert the animated tab index (0..tabs.length-1) into
+              // the horizontal pixel position of that slot's centre.
+              // Slot width = full width / number of tabs. The RTL flip
+              // is handled by Directionality further up; we compute
+              // logical positions left-to-right here.
+              final slotWidth = constraints.maxWidth / widget.tabs.length;
+              final logicalCentre =
+                  (_animatedPos.value + 0.5) * slotWidth;
+              final isRtl = Directionality.of(context) == TextDirection.rtl;
+              final centreX = isRtl
+                  ? constraints.maxWidth - logicalCentre
+                  : logicalCentre;
+
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Bar surface with a circular notch carved out of the
+                  // top edge under the active tab's centre.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: _ZynBottomNav.barHeight + mediaPad,
+                    child: _NotchedBarSurface(
+                      notchCentreX: centreX,
+                      bottomPadding: mediaPad,
+                      child: Row(
+                        children: [
+                          for (int i = 0; i < widget.tabs.length; i++)
+                            Expanded(
+                              child: _FlatTab(
+                                tab: widget.tabs[i],
+                                active: widget.selectedIndex == i,
+                                onTap: () => widget.onTabSelected(i),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Floating bubble — same x as the notch, riding the
+                  // bar's top edge.
+                  Positioned(
+                    top: 0,
+                    left: centreX - _ZynBottomNav.bubbleSize / 2,
+                    width: _ZynBottomNav.bubbleSize,
+                    height: _ZynBottomNav.bubbleSize,
+                    child: _Bubble(
+                      icon: widget
+                          .tabs[widget.selectedIndex].iconActive,
+                      onTap: () => widget
+                          .onTabSelected(widget.selectedIndex),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
 }
 
-class _BarSurface extends StatelessWidget {
-  const _BarSurface({
-    required this.tabs,
-    required this.leftHalf,
-    required this.rightHalf,
-    required this.selectedIndex,
-    required this.onTabSelected,
+/// White bar with rounded ends + a circular notch cut into the top
+/// edge under the active tab. Uses [PhysicalShape] so the drop
+/// shadow follows the notch silhouette automatically.
+class _NotchedBarSurface extends StatelessWidget {
+  const _NotchedBarSurface({
+    required this.notchCentreX,
     required this.bottomPadding,
+    required this.child,
   });
 
-  final List<_Tab> tabs;
-  final List<int> leftHalf;
-  final List<int> rightHalf;
-  final int selectedIndex;
-  final ValueChanged<int> onTabSelected;
+  final double notchCentreX;
   final double bottomPadding;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(26),
-          topRight: Radius.circular(26),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, -6),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 3,
-            offset: const Offset(0, -1),
-          ),
-        ],
+    return PhysicalShape(
+      color: Colors.white,
+      elevation: 8,
+      shadowColor: AppTheme.indigoPrimary.withValues(alpha: 0.35),
+      clipper: _NotchedBarClipper(
+        notchCentreX: notchCentreX,
+        notchRadius: _ZynBottomNav.notchRadius,
+        cornerRadius: _ZynBottomNav.barCornerRadius,
       ),
-      padding: EdgeInsets.only(bottom: bottomPadding),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Left half — flat tabs
-          for (final i in leftHalf)
-            Expanded(
-              child: _FlatTab(
-                tab: tabs[i],
-                active: selectedIndex == i,
-                onTap: () => onTabSelected(i),
-              ),
-            ),
-          // Gap reserved for the floating Home button.
-          const SizedBox(width: 72),
-          // Right half — flat tabs
-          for (final i in rightHalf)
-            Expanded(
-              child: _FlatTab(
-                tab: tabs[i],
-                active: selectedIndex == i,
-                onTap: () => onTabSelected(i),
-              ),
-            ),
-        ],
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomPadding),
+        child: SizedBox(
+          height: _ZynBottomNav.barHeight,
+          child: child,
+        ),
       ),
     );
   }
 }
 
+class _NotchedBarClipper extends CustomClipper<Path> {
+  const _NotchedBarClipper({
+    required this.notchCentreX,
+    required this.notchRadius,
+    required this.cornerRadius,
+  });
+
+  final double notchCentreX;
+  final double notchRadius;
+  final double cornerRadius;
+
+  @override
+  Path getClip(Size size) {
+    final w = size.width;
+    final h = size.height;
+    final r = cornerRadius;
+    final nr = notchRadius;
+    final cx = notchCentreX.clamp(nr + r + 4, w - nr - r - 4);
+
+    // Smooth-edge offset — gives the notch's lips a gentle approach
+    // into the bar surface instead of a hard kink.
+    const lip = 8.0;
+
+    final p = Path();
+    // Start just after the top-left rounded corner.
+    p.moveTo(r, 0);
+    // Travel along the top edge to the start of the notch.
+    p.lineTo(cx - nr - lip, 0);
+    // Curve gently down into the notch's left lip.
+    p.quadraticBezierTo(cx - nr, 0, cx - nr + 2, 6);
+    // Arc the notch (a semicircle that scoops down into the bar).
+    p.arcToPoint(
+      Offset(cx + nr - 2, 6),
+      radius: Radius.circular(nr),
+      clockwise: false,
+    );
+    // Curve back up to the top edge after the notch.
+    p.quadraticBezierTo(cx + nr, 0, cx + nr + lip, 0);
+    // Continue along the top edge to the top-right corner.
+    p.lineTo(w - r, 0);
+    // Top-right rounded corner.
+    p.arcToPoint(
+      Offset(w, r),
+      radius: Radius.circular(r),
+    );
+    // Right edge.
+    p.lineTo(w, h - r);
+    // Bottom-right rounded corner.
+    p.arcToPoint(
+      Offset(w - r, h),
+      radius: Radius.circular(r),
+    );
+    // Bottom edge.
+    p.lineTo(r, h);
+    // Bottom-left rounded corner.
+    p.arcToPoint(
+      Offset(0, h - r),
+      radius: Radius.circular(r),
+    );
+    // Left edge.
+    p.lineTo(0, r);
+    // Top-left rounded corner — closes the shape.
+    p.arcToPoint(
+      Offset(r, 0),
+      radius: Radius.circular(r),
+    );
+    p.close();
+    return p;
+  }
+
+  @override
+  bool shouldReclip(covariant _NotchedBarClipper oldClipper) {
+    return oldClipper.notchCentreX != notchCentreX ||
+        oldClipper.notchRadius != notchRadius ||
+        oldClipper.cornerRadius != cornerRadius;
+  }
+}
+
+/// One slot inside the bar — icon stacked over label. The active
+/// slot hides its in-bar icon (the floating bubble carries the icon
+/// instead) and shows only the label so the visual weight matches
+/// the reference design.
 class _FlatTab extends StatelessWidget {
   const _FlatTab({
     required this.tab,
@@ -243,32 +348,37 @@ class _FlatTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        active ? AppTheme.indigoPrimary : AppTheme.faintMuted.withValues(alpha: 0.85);
+    final color = active
+        ? AppTheme.indigoPrimary
+        : AppTheme.faintMuted.withValues(alpha: 0.85);
     return Material(
       color: Colors.transparent,
-      child: InkWell(
+      child: InkResponse(
         onTap: onTap,
-        customBorder: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+        radius: 30,
+        highlightShape: BoxShape.rectangle,
+        containedInkWell: true,
+        child: SizedBox(
+          height: _ZynBottomNav.barHeight,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                active ? tab.iconActive : tab.iconInactive,
-                color: color,
-                size: 22,
+              // Reserve the icon's vertical slot for unselected tabs;
+              // selected tabs spend that slot under the floating
+              // bubble (which sits above the bar) and leave a gap so
+              // the label centres nicely below.
+              SizedBox(
+                height: 24,
+                child: active
+                    ? const SizedBox.shrink()
+                    : Icon(tab.iconInactive, color: color, size: 22),
               ),
               const SizedBox(height: 4),
               Text(
                 tab.label,
                 style: TextStyle(
                   color: color,
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: active ? FontWeight.w900 : FontWeight.w700,
                   letterSpacing: 0.1,
                 ),
@@ -283,60 +393,45 @@ class _FlatTab extends StatelessWidget {
   }
 }
 
-class _HomeFab extends StatelessWidget {
-  const _HomeFab({
-    required this.size,
-    required this.active,
-    required this.icon,
-    required this.onTap,
-  });
+/// The floating bubble that carries the active tab's icon and rides
+/// the notch in the bar. Tapping it (the same tab again) is a
+/// harmless re-fire of [_ZynBottomNav.onTabSelected].
+class _Bubble extends StatelessWidget {
+  const _Bubble({required this.icon, required this.onTap});
 
-  final double size;
-  final bool active;
   final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF6366F1),
-              Color(0xFF4338CA),
-            ],
-          ),
-          border: Border.all(
-            color: Colors.white,
-            width: 4,
-          ),
-          boxShadow: [
-            // Indigo glow
-            BoxShadow(
-              color: AppTheme.indigoPrimary.withValues(alpha: 0.50),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 6,
+      shadowColor: AppTheme.indigoPrimary.withValues(alpha: 0.40),
+      child: InkResponse(
+        onTap: onTap,
+        radius: _ZynBottomNav.bubbleSize / 2,
+        customBorder: const CircleBorder(),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            // Subtle inner gradient so the bubble doesn't look flat.
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white,
+                AppTheme.indigoSoft.withValues(alpha: 0.6),
+              ],
             ),
-            // Outer ambient
-            BoxShadow(
-              color: const Color(0xFF4338CA).withValues(alpha: 0.30),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Icon(
-          icon,
-          color: Colors.white,
-          size: 26,
+          ),
+          child: Icon(
+            icon,
+            color: AppTheme.indigoPrimary,
+            size: 26,
+          ),
         ),
       ),
     );
