@@ -448,7 +448,7 @@ class _ToolsGrid extends StatelessWidget {
     _ToolItem(
       icon: Icons.description_outlined,
       label: 'التقارير',
-      subtitle: 'تقارير قابلة للتنزيل — قيد التطوير.',
+      subtitle: 'ملخّصات الطاقة قابلة للتنزيل والمشاركة.',
       route: AppRoutes.reports,
       tone: ZynColors.warning,
     ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 
 import '../../../app/app_router.dart';
 import '../../../core/api/api_exception.dart';
@@ -10,14 +11,17 @@ import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../devices/state/selected_device_provider.dart';
 import '../data/reports_models.dart';
+import '../data/reports_pdf.dart';
 import '../data/reports_repository.dart';
 
-/// v102 DS v1 — التقارير.
+/// v102d — التقارير.
 ///
-/// Read-only summary over `/api/v1/devices/<id>/reports/summary`.
-/// Same `view`/`anchor` UI as Statistics; renders derived metrics
-/// (energy totals + source shares + averages). PDF/CSV export is
-/// web-only (honest note at the bottom).
+/// Read-only summary over `/api/v1/devices/<id>/reports/summary` +
+/// on-device PDF export. The "Share" CTA generates a styled
+/// Arabic A4 PDF (Alexandria font, RTL) and hands it to the system
+/// share / save sheet via `printing` — works without any backend
+/// changes; the share target (WhatsApp, Drive, Print, etc.) is
+/// chosen by the OS.
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -28,6 +32,7 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   String _view = 'day';
   DateTime _anchor = _todayDateOnly();
+  bool _exporting = false;
 
   static DateTime _todayDateOnly() {
     final n = DateTime.now();
@@ -57,6 +62,33 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   void _setView(String next) {
     if (next == _view) return;
     setState(() => _view = next);
+  }
+
+  Future<void> _exportPdf(ReportsSnapshot snapshot) async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final deviceName = ref.read(effectiveDeviceProvider)?.name ?? '';
+      final bytes = await ReportsPdfBuilder.generate(
+        snapshot: snapshot,
+        deviceName: deviceName,
+      );
+      final stamp = snapshot.anchor.isNotEmpty
+          ? snapshot.anchor.replaceAll(RegExp(r'[^0-9A-Za-z-]'), '')
+          : 'report';
+      final filename =
+          'zynavolt-${snapshot.view}-$stamp.pdf';
+      if (!mounted) return;
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('تعذّر إنشاء التقرير: $e')));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   @override
@@ -137,11 +169,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           _SharesCard(summary: s.summary),
           const SizedBox(height: ZynSpacing.md),
           _DerivedMetricsCard(summary: s.summary),
+          const SizedBox(height: ZynSpacing.lg),
+          ZynButton(
+            label: 'تنزيل التقرير ومشاركته (PDF)',
+            icon: Icons.picture_as_pdf_rounded,
+            busy: _exporting,
+            onTap: _exporting ? null : () => _exportPdf(s),
+          ),
         ],
         const SizedBox(height: ZynSpacing.md),
         const _StatisticsLink(),
-        const SizedBox(height: ZynSpacing.md),
-        const _HonestNote(),
       ],
     );
   }
@@ -628,24 +665,6 @@ class _StatisticsLink extends StatelessWidget {
   }
 }
 
-class _HonestNote extends StatelessWidget {
-  const _HonestNote();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'تنزيل التقارير بصيغة PDF أو CSV غير متاح على التطبيق بعد، ويمكن الوصول '
-      'إليه من نسخة الويب بنفس بيانات الدخول.',
-      style: TextStyle(
-        color: ZynColors.muted,
-        fontSize: 11.5,
-        fontWeight: FontWeight.w500,
-        height: 1.65,
-      ),
-      textAlign: TextAlign.center,
-    );
-  }
-}
 
 class _NoDeviceState extends StatelessWidget {
   const _NoDeviceState();
