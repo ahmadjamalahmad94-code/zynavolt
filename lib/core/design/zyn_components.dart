@@ -934,7 +934,7 @@ class _HeroWatermark extends CustomPainter {
     final haloPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          Colors.white.withValues(alpha: 0.10),
+          Colors.white.withValues(alpha: 0.06),
           Colors.white.withValues(alpha: 0.0),
         ],
       ).createShader(
@@ -943,11 +943,11 @@ class _HeroWatermark extends CustomPainter {
     canvas.drawCircle(Offset(sunCx, sunCy), sunR * 2.4, haloPaint);
 
     final sunPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.14);
+      ..color = Colors.white.withValues(alpha: 0.09);
     canvas.drawCircle(Offset(sunCx, sunCy), sunR, sunPaint);
 
     final rayPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.12)
+      ..color = Colors.white.withValues(alpha: 0.07)
       ..strokeWidth = 1.4
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -971,9 +971,9 @@ class _HeroWatermark extends CustomPainter {
     canvas.transform(_skew(skewX: -0.32, skewY: 0.16).storage);
 
     final panelPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.10);
+      ..color = Colors.white.withValues(alpha: 0.06);
     final cellPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.16)
+      ..color = Colors.white.withValues(alpha: 0.10)
       ..strokeWidth = 0.7
       ..style = PaintingStyle.stroke;
 
@@ -1012,7 +1012,7 @@ class _HeroWatermark extends CustomPainter {
       ..lineTo(w * 0.38, h * 0.46)
       ..close();
     final boltPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.08)
+      ..color = Colors.white.withValues(alpha: 0.05)
       ..style = PaintingStyle.fill;
     canvas.drawPath(boltPath, boltPaint);
   }
