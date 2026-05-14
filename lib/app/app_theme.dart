@@ -1,326 +1,231 @@
+// Zynavolt Mobile DS v1 — Material 3 theme glue.
+//
+// All visual tokens live in `lib/core/design/zyn_tokens.dart`.
+// This file's only job is to translate those tokens into a
+// `ThemeData` that Material widgets consume.
+//
+// Strict rule: do not introduce ad-hoc colours or sizes here.
+// Every value either comes from `ZynColors` / `ZynSpacing` /
+// `ZynRadii` / `ZynText`, or is a documented Material control
+// metric (e.g. minimum touch target).
+
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../core/state/font_pref.dart';
+import '../core/design/zyn_tokens.dart';
 
-/// SolarDeye theme tokens.
-///
-/// Distilled from `docs/design/v35_solardeye_ui_ux_consistency_system.md` in
-/// the backend repo. Mobile does not redesign — it consumes the same palette
-/// and converts concepts, not pixels.
+/// Backward-compatibility shim. Pre-DS-v1 screens import
+/// `AppTheme.indigoPrimary`, `AppTheme.softBg`, etc. We keep those
+/// symbol names here as aliases over [ZynColors] so existing files
+/// continue to build while screens migrate one by one. Add no NEW
+/// symbols here — new code reaches for [ZynColors] directly.
 class AppTheme {
   const AppTheme._();
 
-  // ── Palette (v35 §8.1) ───────────────────────────────────────────────
-  static const Color ink = Color(0xFF0F172A); // primary text
-  static const Color softInk = Color(0xFF1E293B);
-  static const Color muted = Color(0xFF475569);
-  static const Color faintMuted = Color(0xFF64748B);
-  static const Color line = Color(0xFFCBD5E1);
-  // v83: cooler page background — subtle indigo tint instead of flat near-
-  // white. Every screen picks this up via scaffoldBackgroundColor.
-  static const Color softBg = Color(0xFFF1F5FF);
-  static const Color surface = Color(0xFFFFFFFF);
+  // ── Aliases over the canonical palette ──────────────────────────
+  static const Color ink = ZynColors.ink;
+  static const Color softInk = ZynColors.inkSoft;
+  static const Color muted = ZynColors.muted;
+  static const Color faintMuted = ZynColors.faint;
+  static const Color line = ZynColors.line;
+  static const Color softBg = ZynColors.bg;
+  static const Color surface = ZynColors.surface;
+  static const Color indigoPrimary = ZynColors.primary700;
+  static const Color indigoBright = ZynColors.primary500;
+  static const Color indigoSoft = ZynColors.primary50;
+  static const Color violet = ZynColors.accent;
+  static const Color success = ZynColors.success;
+  static const Color warning = ZynColors.warning;
+  static const Color danger = ZynColors.danger;
+  static const Color cyan = ZynColors.cyan;
+  static const Color emerald = ZynColors.success;
+  static const Color amber = ZynColors.warning;
 
-  static const Color indigoPrimary = Color(0xFF4338CA);
-  static const Color indigoBright = Color(0xFF6366F1);
-  static const Color indigoSoft = Color(0xFFEEF2FF);
-  static const Color violet = Color(0xFF7C3AED);
-
-  static const Color success = Color(0xFF16A34A);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color danger = Color(0xFFDC2626);
-
-  // v83: accent palette — used sparingly for visual variety on chips,
-  // category tags, and small status pills. The core stays indigo/violet.
-  static const Color cyan = Color(0xFF06B6D4);
-  static const Color emerald = Color(0xFF10B981);
-  static const Color amber = Color(0xFFF59E0B); // alias of warning
-
-  // ── Radii (v35 §8.4) ─────────────────────────────────────────────────
-  static const double radiusInput = 10;
-  // v83: softer card corner (12 → 14) for a more premium / glassy feel.
-  // Every AppCard in the app picks this up; pre-existing screens look
-  // marginally rounder without behavior changes.
-  static const double radiusCard = 14;
-  static const double radiusHero = 16;
-  static const double radiusGlass = 18;
-
-  // ── Sizing (v35 §4.1) ────────────────────────────────────────────────
-  /// Standard form control height — 42 dp mirrors the 42 px web rule.
+  // ── Aliases over geometry ───────────────────────────────────────
+  static const double radiusInput = ZynRadii.inner;
+  static const double radiusCard = ZynRadii.card;
+  static const double radiusHero = ZynRadii.xl;
+  static const double radiusGlass = ZynRadii.xl;
   static const double formControlHeight = 42;
 
-  // ── v58 design-system tokens ─────────────────────────────────────────
-  //
-  // Additive only. Every existing token above is unchanged so screens
-  // already in production keep working. The tokens below let new and
-  // refreshed screens (v58→v80) share one consistent visual language
-  // instead of each screen re-inventing spacing / shadow / gradient
-  // constants inline.
-
-  // Spacing scale — 4 dp grid. Use these instead of magic numbers in
-  // SizedBox / EdgeInsets where possible.
   static const double space2 = 2;
-  static const double space4 = 4;
+  static const double space4 = ZynSpacing.xs;
   static const double space6 = 6;
-  static const double space8 = 8;
+  static const double space8 = ZynSpacing.sm;
   static const double space10 = 10;
-  static const double space12 = 12;
+  static const double space12 = ZynSpacing.md;
   static const double space14 = 14;
-  static const double space16 = 16;
-  static const double space20 = 20;
-  static const double space24 = 24;
-  static const double space32 = 32;
+  static const double space16 = ZynSpacing.lg;
+  static const double space20 = ZynSpacing.xl;
+  static const double space24 = ZynSpacing.xxl;
+  static const double space32 = ZynSpacing.xxxl;
 
-  // Soft shadows for elevated cards / hero surfaces. Indigo-tinted so
-  // they harmonise with the brand instead of looking like a generic grey
-  // drop-shadow. v83: bumped intensity so depth is actually visible on
-  // a real device.
-  static List<BoxShadow> softShadow = [
-    BoxShadow(
-      color: indigoPrimary.withValues(alpha: 0.08),
-      blurRadius: 14,
-      offset: const Offset(0, 5),
-    ),
-  ];
+  // ── Aliases over shadows / gradients ────────────────────────────
+  static List<BoxShadow> get softShadow => ZynShadows.soft();
+  static List<BoxShadow> get liftedShadow => ZynShadows.med();
+  static List<BoxShadow> glossShadow({Color? tint}) =>
+      ZynShadows.med(tint: tint);
+  static LinearGradient glossSurface({
+    Color? tint,
+    double tintAlpha = 0.05,
+  }) =>
+      ZynGradients.glossSurface(tint: tint, tintAlpha: tintAlpha);
 
-  static List<BoxShadow> liftedShadow = [
-    BoxShadow(
-      color: indigoPrimary.withValues(alpha: 0.14),
-      blurRadius: 26,
-      offset: const Offset(0, 10),
-    ),
-  ];
+  static const LinearGradient brandGradient = ZynColors.brandHero;
+  static const LinearGradient pageBackdropGradient = ZynColors.pageBackdrop;
 
-  /// v99d — glossy "premium" shadow stack used by the Home screen's
-  /// redesigned cards (battery / production / insights / split tiles).
-  /// Two layers: a close shadow that defines the card edge, plus a
-  /// soft diffuse that gives the floating-glass feel.
-  static List<BoxShadow> glossShadow({Color? tint}) {
-    final base = tint ?? indigoPrimary;
-    return [
-      BoxShadow(
-        color: base.withValues(alpha: 0.10),
-        blurRadius: 8,
-        offset: const Offset(0, 3),
-      ),
-      BoxShadow(
-        color: base.withValues(alpha: 0.18),
-        blurRadius: 22,
-        offset: const Offset(0, 10),
-      ),
-    ];
-  }
-
-  /// v99d — vertical white→tinted gradient used on the new "glass
-  /// card" surfaces so the cards have subtle depth instead of being
-  /// flat white sheets.
-  static LinearGradient glossSurface({Color? tint, double tintAlpha = 0.04}) {
-    final base = tint ?? indigoPrimary;
-    return LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Colors.white,
-        base.withValues(alpha: tintAlpha),
-      ],
-    );
-  }
-
-  // Brand gradients. The full-saturation `brandGradient` is for hero /
-  // accent surfaces; the pale variant matches Home/Splash backdrop.
-  static const LinearGradient brandGradient = LinearGradient(
-    begin: Alignment.topRight,
-    end: Alignment.bottomLeft,
-    colors: [indigoPrimary, indigoBright],
-  );
-
-  static const LinearGradient pageBackdropGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [
-      Color(0xFFE0E7FF),
-      Color(0xFFF1F5FF),
-      Color(0xFFF8FAFC),
-    ],
-    stops: [0.0, 0.35, 0.85],
-  );
-
-  // Glass surface — semi-transparent white over the page backdrop, with
-  // a subtle border. For cards that sit on top of the gradient backdrop.
   static Color get glassSurface => Colors.white.withValues(alpha: 0.96);
-  static Color get glassBorder => line;
+  static Color get glassBorder => ZynColors.line;
 
-  /// v100-fonts — `light()` now accepts an optional [AppFontPref]
-  /// so the Settings screen can swap the entire app's typeface at
-  /// runtime. The default (`AppFontPref.alexandria`) preserves the
-  /// pre-v100 behaviour, so any caller that doesn't pass a font
-  /// keeps rendering exactly as before.
-  static ThemeData light({AppFontPref? font}) {
-    final activeFont = font ?? AppFontPref.alexandria;
+  // ── Theme builder ────────────────────────────────────────────────
+  //
+  // Almarai is the canonical typeface for the entire app. Wired via
+  // `google_fonts` so we don't have to ship .ttf files in the bundle
+  // (the package fetches and caches on first launch). After all
+  // existing screens migrate to ZynText / ZynComponents we can
+  // optionally bundle Almarai locally and drop the dependency.
+  static ThemeData light() {
     const colorScheme = ColorScheme.light(
-      primary: indigoPrimary,
+      primary: ZynColors.primary700,
       onPrimary: Colors.white,
-      secondary: violet,
+      secondary: ZynColors.accent,
       onSecondary: Colors.white,
-      surface: surface,
-      onSurface: ink,
-      error: danger,
+      surface: ZynColors.surface,
+      onSurface: ZynColors.ink,
+      error: ZynColors.danger,
       onError: Colors.white,
-      outline: line,
+      outline: ZynColors.line,
     );
 
-    // v95 → v100-fonts: Arabic typography is now ALWAYS configured
-    // through `AppFontPref.applyToTextTheme(...)` so the bundled
-    // Alexandria + every google_fonts variant flow through the same
-    // path. Setting `fontFamily` on the raw `ThemeData` is preserved
-    // for Alexandria (so Material's auto-cascade still works) but
-    // skipped for google_fonts variants — those provide their own
-    // family strings via the `apply(...)` helper below.
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: softBg,
-      fontFamily: activeFont == AppFontPref.alexandria ? 'Alexandria' : null,
+      scaffoldBackgroundColor: ZynColors.bg,
     );
 
-    // Apply the active font to `primaryTextTheme` (used by app-bar
-    // titles, dark surfaces, etc.) and to the main `textTheme` in
-    // the copyWith block below.
-    final styledPrimaryTextTheme =
-        activeFont.applyToTextTheme(base.primaryTextTheme);
+    final almaraiText = GoogleFonts.almaraiTextTheme(
+      base.textTheme.apply(bodyColor: ZynColors.ink, displayColor: ZynColors.ink),
+    );
+    final almaraiPrimaryText =
+        GoogleFonts.almaraiTextTheme(base.primaryTextTheme);
 
     return base.copyWith(
-      primaryTextTheme: styledPrimaryTextTheme,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: surface,
-        foregroundColor: ink,
+      textTheme: almaraiText.copyWith(
+        bodySmall: almaraiText.bodySmall?.copyWith(
+          color: ZynColors.faint,
+          fontSize: 12,
+        ),
+        labelSmall: almaraiText.labelSmall?.copyWith(
+          color: ZynColors.muted,
+          fontSize: 12,
+        ),
+      ),
+      primaryTextTheme: almaraiPrimaryText,
+      appBarTheme: AppBarTheme(
+        backgroundColor: ZynColors.surface,
+        foregroundColor: ZynColors.ink,
         elevation: 0,
         centerTitle: true,
-        // v82: bumped to 19, tightened letterSpacing for richer feel
-        // across all screens. Arabic still renders cleanly; the spacing
-        // only really shows on Latin tokens (Zynavolt, units).
-        titleTextStyle: TextStyle(
-          color: ink,
+        titleTextStyle: GoogleFonts.almarai(
+          color: ZynColors.ink,
           fontSize: 19,
           fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
+          letterSpacing: 0.2,
         ),
       ),
       cardTheme: CardThemeData(
-        color: surface,
+        color: ZynColors.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radiusCard),
-          side: const BorderSide(color: line, width: 1),
+          borderRadius: BorderRadius.circular(ZynRadii.card),
+          side: const BorderSide(color: ZynColors.line, width: 1),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surface,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        fillColor: ZynColors.surface,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: ZynSpacing.md,
+          vertical: ZynSpacing.sm + 2,
+        ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusInput),
-          borderSide: const BorderSide(color: line),
+          borderRadius: BorderRadius.circular(ZynRadii.inner),
+          borderSide: const BorderSide(color: ZynColors.line),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusInput),
-          borderSide: const BorderSide(color: line),
+          borderRadius: BorderRadius.circular(ZynRadii.inner),
+          borderSide: const BorderSide(color: ZynColors.line),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusInput),
-          borderSide: const BorderSide(color: indigoBright, width: 2),
+          borderRadius: BorderRadius.circular(ZynRadii.inner),
+          borderSide: const BorderSide(color: ZynColors.primary500, width: 2),
         ),
-        labelStyle: const TextStyle(
-          color: muted,
+        labelStyle: GoogleFonts.almarai(
+          color: ZynColors.muted,
           fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
-        helperStyle: const TextStyle(
-          color: faintMuted,
+        helperStyle: GoogleFonts.almarai(
+          color: ZynColors.faint,
           fontSize: 12,
         ),
-        errorStyle: const TextStyle(
-          color: danger,
+        errorStyle: GoogleFonts.almarai(
+          color: ZynColors.danger,
           fontSize: 12,
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: indigoPrimary,
+          backgroundColor: ZynColors.primary700,
           foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(formControlHeight + 4),
+          minimumSize: const Size.fromHeight(46),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radiusInput),
+            borderRadius: BorderRadius.circular(ZynRadii.inner),
           ),
-          // v82: softened from w800 → w700, added letterSpacing for a
-          // more refined CTA feel without sacrificing readability.
-          textStyle: const TextStyle(
+          textStyle: GoogleFonts.almarai(
             fontSize: 15,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
+            letterSpacing: 0.2,
           ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: indigoPrimary,
-          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          foregroundColor: ZynColors.primary700,
+          textStyle: GoogleFonts.almarai(fontWeight: FontWeight.w700),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface,
-        // v84: stronger indicator pill — full-saturation indigo accent
-        // instead of the pale wash that was easy to miss on a real device.
-        indicatorColor: indigoBright,
+        backgroundColor: ZynColors.surface,
+        indicatorColor: ZynColors.primary500,
         labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) {
           final selected = states.contains(WidgetState.selected);
-          return TextStyle(
+          return GoogleFonts.almarai(
             fontSize: 11.5,
             fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
-            color: selected ? indigoPrimary : ink,
+            color: selected ? ZynColors.primary700 : ZynColors.ink,
             letterSpacing: 0.2,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? Colors.white : muted,
+            color: selected ? Colors.white : ZynColors.muted,
             size: 22,
           );
         }),
-        // v84: a touch taller — gives the indicator pill more breathing
-        // room and the icons more weight on a real device.
         height: 68,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        // v84: stronger separation between body and bottom nav. Bumps
-        // the tonal contrast on screens where the gradient backdrop sits
-        // right above the nav.
-        surfaceTintColor: surface,
-        shadowColor: indigoPrimary.withValues(alpha: 0.18),
+        surfaceTintColor: ZynColors.surface,
+        shadowColor: ZynColors.primary500.withValues(alpha: 0.18),
         elevation: 6,
       ),
-      dividerTheme: const DividerThemeData(color: line, thickness: 1, space: 1),
-      // v100-fonts — text theme now flows through the active font.
-      // First we colour-map (`apply(bodyColor:, displayColor:)`),
-      // then the active `AppFontPref` swaps the family across every
-      // entry. The two `bodySmall` / `labelSmall` overrides keep
-      // the colour-distinct caption styles but resolve their font
-      // dynamically too (so the picker's preview affects the whole
-      // typography scale, not just the body / display lines).
-      textTheme: activeFont
-          .applyToTextTheme(
-            base.textTheme.apply(bodyColor: ink, displayColor: ink),
-          )
-          .copyWith(
-            bodySmall: activeFont.toTextStyle(
-              base: const TextStyle(color: faintMuted, fontSize: 12),
-            ),
-            labelSmall: activeFont.toTextStyle(
-              base: const TextStyle(color: muted, fontSize: 12),
-            ),
-          ),
+      dividerTheme: const DividerThemeData(
+        color: ZynColors.line,
+        thickness: 1,
+        space: 1,
+      ),
     );
   }
 }

@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/notifications/push_overlay.dart';
 import '../core/notifications/push_service.dart';
 import '../core/state/auto_refresh.dart';
-import '../core/state/font_pref.dart';
 import '../core/state/time_format_provider.dart';
 import 'app_config.dart';
 import 'app_router.dart';
@@ -23,10 +22,9 @@ class SolarDeyeApp extends ConsumerWidget {
     // before this watch returns will use the default (12-hour),
     // then re-rendering after hydration picks up the saved value.
     ref.watch(timeFormatPrefProvider);
-    // v100-fonts — watch the font preference so changing it from
-    // the Settings card rebuilds `MaterialApp.router` with a fresh
-    // theme that uses the new typeface app-wide.
-    final activeFont = ref.watch(appFontPrefProvider);
+    // v102 DS v1 — Almarai is the canonical typeface, wired via
+    // `app_theme.dart` directly (google_fonts). The pre-DS-v1 font
+    // picker has been removed.
     // v101 — mount the shared AppLifecycle observer once, here at
     // the root, so every screen using AutoRefreshScope can react to
     // foreground / background transitions. Without this watch the
@@ -42,7 +40,7 @@ class SolarDeyeApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Zynavolt',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(font: activeFont),
+      theme: AppTheme.light(),
       locale: const Locale(AppConfig.defaultLocale),
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
