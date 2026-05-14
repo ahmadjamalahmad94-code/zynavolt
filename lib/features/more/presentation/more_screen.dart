@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_config.dart';
 import '../../../app/app_router.dart';
-import '../../../app/build_info.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
@@ -190,86 +189,88 @@ class _ProfileSummaryCard extends StatelessWidget {
         ? '—'
         : (user!.fullName.isNotEmpty ? user!.fullName : user!.username);
     final initials = _initialsFrom(name);
-    final role = user?.role ?? '—';
-    final email = user?.email ?? '';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
         ZynSpacing.md,
-        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.md,
         ZynSpacing.md,
       ),
       decoration: BoxDecoration(
         color: ZynColors.surface,
         borderRadius: BorderRadius.circular(ZynRadii.xl),
         border: Border.all(color: ZynColors.line, width: 1),
-        boxShadow: ZynShadows.med(),
+        boxShadow: ZynShadows.soft(),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _Avatar(initials: initials),
-              const SizedBox(width: ZynSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        color: ZynColors.ink,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        height: 1.25,
-                        letterSpacing: -0.2,
+          _Avatar(
+            initials: initials,
+            showActiveDot: activeDeviceName != null,
+          ),
+          const SizedBox(width: ZynSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: ZynColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    height: 1.25,
+                    letterSpacing: -0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  activeDeviceName != null
+                      ? 'الجهاز النشط'
+                      : 'لم يتم اختيار جهاز',
+                  style: const TextStyle(
+                    color: ZynColors.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                  ),
+                ),
+                if (activeDeviceName != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.solar_power_outlined,
+                        color: ZynColors.primary700,
+                        size: 13,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (email.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        email,
-                        style: const TextStyle(
-                          color: ZynColors.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          height: 1.3,
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          activeDeviceName!,
+                          style: const TextStyle(
+                            color: ZynColors.primary700,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            height: 1.3,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textDirection: TextDirection.ltr,
                       ),
                     ],
-                  ],
-                ),
-              ),
-              _EditButton(onTap: onEditTap),
-            ],
+                  ),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: ZynSpacing.md),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              ZynChip(
-                icon: Icons.shield_outlined,
-                text: role,
-                tone: ZynColors.primary500,
-              ),
-              if (activeDeviceName != null)
-                ZynChip(
-                  icon: Icons.solar_power_outlined,
-                  text: activeDeviceName!,
-                  tone: ZynColors.success,
-                ),
-            ],
-          ),
+          _EditButton(onTap: onEditTap),
         ],
       ),
     );
@@ -290,7 +291,42 @@ class _ProfileSummaryCard extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.initials});
+  const _Avatar({required this.initials, this.showActiveDot = false});
+
+  final String initials;
+  final bool showActiveDot;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          _AvatarCircle(initials: initials),
+          if (showActiveDot)
+            Positioned(
+              right: 0,
+              bottom: 2,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: ZynColors.success,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ZynColors.surface, width: 2),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvatarCircle extends StatelessWidget {
+  const _AvatarCircle({required this.initials});
 
   final String initials;
 
@@ -306,7 +342,7 @@ class _Avatar extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [ZynColors.primary500, ZynColors.primary700],
         ),
-        borderRadius: BorderRadius.circular(ZynRadii.xl),
+        shape: BoxShape.circle,
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.22),
           width: 1,
@@ -339,29 +375,26 @@ class _EditButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v102d — chevron in a tinted rounded square, mirroring the
+    // owner's reference design (tap-to-open-profile affordance).
     return Material(
       color: Colors.transparent,
-      shape: const CircleBorder(),
-      child: InkResponse(
+      borderRadius: BorderRadius.circular(ZynRadii.inner),
+      child: InkWell(
         onTap: onTap,
-        radius: 22,
-        customBorder: const CircleBorder(),
+        borderRadius: BorderRadius.circular(ZynRadii.inner),
         child: Container(
-          width: 38,
-          height: 38,
+          width: 36,
+          height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: ZynColors.primary50,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: ZynColors.primary500.withValues(alpha: 0.30),
-              width: 0.8,
-            ),
+            borderRadius: BorderRadius.circular(ZynRadii.inner),
           ),
           child: const Icon(
-            Icons.edit_outlined,
+            Icons.chevron_left_rounded,
             color: ZynColors.primary700,
-            size: 18,
+            size: 22,
           ),
         ),
       ),
@@ -380,50 +413,58 @@ class _ToolsGrid extends StatelessWidget {
     _ToolItem(
       icon: Icons.person_outline_rounded,
       label: 'الملف الشخصي',
+      subtitle: 'عرض وتعديل بياناتك الأساسية.',
       route: AppRoutes.profile,
       tone: ZynColors.primary500,
     ),
     _ToolItem(
+      icon: Icons.bolt_rounded,
+      label: 'الأحمال',
+      subtitle: 'عرض الأحمال المستهلكة لديك.',
+      route: AppRoutes.loads,
+      tone: ZynColors.success,
+    ),
+    _ToolItem(
       icon: Icons.workspace_premium_rounded,
-      label: 'الحساب والاشتراك',
+      label: 'الاشتراك',
+      subtitle: 'إدارة خطة الاشتراك وحدود الاستخدام.',
       route: AppRoutes.account,
       tone: ZynColors.accent,
     ),
     _ToolItem(
       icon: Icons.support_agent_rounded,
-      label: 'الدعم والمراسلات',
+      label: 'الدعم',
+      subtitle: 'فتح تذكرة أو متابعة المحادثات.',
       route: AppRoutes.support,
       tone: ZynColors.info,
     ),
     _ToolItem(
-      icon: Icons.bolt_rounded,
-      label: 'الأحمال',
-      route: AppRoutes.loads,
-      tone: ZynColors.warning,
-    ),
-    _ToolItem(
       icon: Icons.bar_chart_rounded,
       label: 'الإحصاءات',
+      subtitle: 'ملخّصات الإنتاج والاستهلاك يوميًا.',
       route: AppRoutes.statistics,
       tone: ZynColors.primary700,
     ),
     _ToolItem(
       icon: Icons.description_outlined,
       label: 'التقارير',
+      subtitle: 'تقارير قابلة للتنزيل — قيد التطوير.',
       route: AppRoutes.reports,
-      tone: ZynColors.muted,
+      tone: ZynColors.warning,
     ),
     _ToolItem(
       icon: Icons.science_outlined,
       label: 'مختبر البطارية',
+      subtitle: 'تحليلات SOC، الجهد، والمدخل الخارجي.',
       route: AppRoutes.batteryLab,
-      tone: ZynColors.success,
+      tone: ZynColors.cyan,
     ),
     _ToolItem(
       icon: Icons.settings_outlined,
       label: 'إعدادات التطبيق',
+      subtitle: 'لغة التطبيق، الإشعارات، وضبط الاتصال.',
       route: AppRoutes.settings,
-      tone: ZynColors.inkSoft,
+      tone: ZynColors.primary700,
     ),
   ];
 
@@ -435,9 +476,12 @@ class _ToolsGrid extends StatelessWidget {
       itemCount: _items.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: ZynSpacing.md,
-        crossAxisSpacing: ZynSpacing.md,
-        childAspectRatio: 1.55,
+        mainAxisSpacing: ZynSpacing.sm,
+        crossAxisSpacing: ZynSpacing.sm,
+        // v102d — wider/shorter tiles per owner reference: icon
+        // on the leading edge, title + small description stacked
+        // beside it.
+        childAspectRatio: 2.35,
       ),
       itemBuilder: (_, i) {
         final it = _items[i];
@@ -451,12 +495,14 @@ class _ToolItem {
   const _ToolItem({
     required this.icon,
     required this.label,
+    required this.subtitle,
     required this.route,
     required this.tone,
   });
 
   final IconData icon;
   final String label;
+  final String subtitle;
   final String route;
   final Color tone;
 }
@@ -469,6 +515,10 @@ class _ToolTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v102d — softer, shorter tile. Icon as a soft-tinted rounded
+    // square on the leading edge (right in RTL), title + small
+    // description stacked beside it. No gradient fills or glow on
+    // the icon — calmer than v102b's filled glyph.
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(ZynRadii.card),
@@ -480,42 +530,55 @@ class _ToolTile extends StatelessWidget {
             color: ZynColors.surface,
             borderRadius: BorderRadius.circular(ZynRadii.card),
             border: Border.all(color: ZynColors.line, width: 1),
-            boxShadow: ZynShadows.soft(tint: item.tone),
+            boxShadow: ZynShadows.soft(),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              ZynSpacing.md,
-              ZynSpacing.md,
-              ZynSpacing.md,
-              ZynSpacing.md,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 38,
+                  height: 38,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    gradient: ZynGradients.iconFill(item.tone),
+                    color: item.tone.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(ZynRadii.inner),
-                    boxShadow: ZynShadows.iconGlow(item.tone),
                   ),
-                  child: Icon(item.icon, color: Colors.white, size: 20),
+                  child: Icon(item.icon, color: item.tone, size: 18),
                 ),
-                const SizedBox(height: ZynSpacing.sm),
-                Text(
-                  item.label,
-                  style: const TextStyle(
-                    color: ZynColors.ink,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    height: 1.25,
-                    letterSpacing: -0.1,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        item.label,
+                        style: const TextStyle(
+                          color: ZynColors.ink,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          letterSpacing: -0.1,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.subtitle,
+                        style: const TextStyle(
+                          color: ZynColors.muted,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -803,6 +866,9 @@ class _AboutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v102d — compact "معلومات النظام" row matching the owner's
+    // reference: three columns (version + platform + backend
+    // hostname) with small mono icons.
     return Container(
       decoration: BoxDecoration(
         color: ZynColors.surface,
@@ -811,20 +877,141 @@ class _AboutCard extends StatelessWidget {
         boxShadow: ZynShadows.soft(),
       ),
       padding: const EdgeInsets.fromLTRB(
-        ZynSpacing.lg,
         ZynSpacing.md,
-        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.md,
         ZynSpacing.md,
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _KeyValue(label: 'إصدار التطبيق', value: AppConfig.appVersion),
-          _KeyValue(label: 'وسم الإصدار', value: BuildInfo.label),
-          _KeyValue(label: 'المنصة', value: AppConfig.appPlatform),
-          _KeyValue(label: 'الواجهة الخلفية', value: AppConfig.apiBaseUrl),
+          Row(
+            children: [
+              const Icon(
+                Icons.computer_outlined,
+                color: ZynColors.muted,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'معلومات النظام',
+                style: TextStyle(
+                  color: ZynColors.ink,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: ZynSpacing.sm),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: _SystemInfoCell(
+                    icon: Icons.local_offer_outlined,
+                    label: 'نسخة التطبيق',
+                    value: AppConfig.appVersion,
+                  ),
+                ),
+                const _CellDivider(),
+                Expanded(
+                  child: _SystemInfoCell(
+                    icon: Icons.smartphone_outlined,
+                    label: 'المنصة',
+                    value: _platformLabel(AppConfig.appPlatform),
+                  ),
+                ),
+                const _CellDivider(),
+                Expanded(
+                  child: _SystemInfoCell(
+                    icon: Icons.dns_outlined,
+                    label: 'الواجهة الخلفية',
+                    value: _backendShortLabel(AppConfig.apiBaseUrl),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  String _platformLabel(String raw) {
+    if (raw.isEmpty) return '—';
+    return raw[0].toUpperCase() + raw.substring(1);
+  }
+
+  String _backendShortLabel(String url) {
+    if (url.isEmpty) return '—';
+    final stripped = url
+        .replaceFirst(RegExp(r'^https?://'), '')
+        .replaceAll(RegExp(r'/+$'), '');
+    final host = stripped.split('/').first;
+    return host.split(':').first;
+  }
+}
+
+class _SystemInfoCell extends StatelessWidget {
+  const _SystemInfoCell({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, color: ZynColors.muted, size: 16),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            color: ZynColors.muted,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            height: 1.3,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            color: ZynColors.ink,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            height: 1.3,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+}
+
+class _CellDivider extends StatelessWidget {
+  const _CellDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      color: ZynColors.lineSoft,
     );
   }
 }
