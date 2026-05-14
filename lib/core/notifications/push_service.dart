@@ -39,6 +39,22 @@ import '../state/app_session.dart';
 /// `/api/mobile/account/push-token`. The backend already exposed
 /// the equivalent endpoints under `/api/v1/notifications/...`, so
 /// we use those instead of duplicating.
+/// A push message surfaced by the foreground listener so the UI can
+/// render an in-app banner. We don't expose the raw `RemoteMessage`
+/// outside this file because it isn't const-friendly and carries a
+/// lot of platform metadata screens don't care about.
+class PushBanner {
+  const PushBanner({
+    required this.title,
+    required this.body,
+    required this.data,
+  });
+
+  final String title;
+  final String body;
+  final Map<String, String> data;
+}
+
 class PushService {
   PushService(this._ref);
 
@@ -48,6 +64,23 @@ class PushService {
 
   StreamSubscription<String>? _tokenRefreshSub;
   StreamSubscription<RemoteMessage>? _foregroundSub;
+  StreamSubscription<RemoteMessage>? _openedAppSub;
+
+  /// v101 Phase D — broadcast stream of incoming foreground messages.
+  /// `pushBannerStreamProvider` exposes this to UI scaffolding so the
+  /// root widget can show a SnackBar / overlay when a push arrives
+  /// while the user is in the app.
+  final StreamController<PushBanner> _bannerController =
+      StreamController<PushBanner>.broadcast();
+  Stream<PushBanner> get bannerStream => _bannerController.stream;
+
+  /// v101 Phase D — broadcast stream of "user tapped a push" events
+  /// (whether from the system tray with the app backgrounded, or via
+  /// the in-app banner). Carries the FCM `data` payload so the
+  /// router can read `data['route']` and navigate.
+  final StreamController<Map<String, String>> _tapController =
+      StreamController<Map<String, String>>.broadcast();
+  Stream<Map<String, String>> get tapStream => _tapController.stream;
 
   /// Latest known token. `null` while we haven't fetched it yet, or
   /// when the user has revoked notification permission.
@@ -118,9 +151,39 @@ class PushService {
           '[push:fg] ${message.notification?.title} :: ${message.data}',
         );
       }
-      // TODO(v102): bubble through a Riverpod provider so the
-      // Notifications inbox can refresh and a banner can appear.
+      _emitBanner(message);
     });
+
+    // v101 Phase D — taps that bring a backgrounded app to the
+    // foreground. Cold-start taps are handled separately via
+    // `getInitialMessage` below.
+    _openedAppSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      _emitTap(message);
+    });
+
+    // v101 Phase D — tap that launched the app from a fully terminated
+    // state. Fired once, right after Firebase init completes.
+    final initial = await _fcm.getInitialMessage();
+    if (initial != null) {
+      _emitTap(initial);
+    }
+  }
+
+  void _emitBanner(RemoteMessage message) {
+    final notif = message.notification;
+    if (notif == null) return;
+    final title = notif.title ?? '';
+    final body = notif.body ?? '';
+    if (title.isEmpty && body.isEmpty) return;
+    final data = <String, String>{};
+    message.data.forEach((k, v) => data[k] = v.toString());
+    _bannerController.add(PushBanner(title: title, body: body, data: data));
+  }
+
+  void _emitTap(RemoteMessage message) {
+    final data = <String, String>{};
+    message.data.forEach((k, v) => data[k] = v.toString());
+    _tapController.add(data);
   }
 
   /// Register the current FCM token with the backend, but ONLY when
@@ -198,8 +261,23 @@ class PushService {
   Future<void> dispose() async {
     await _tokenRefreshSub?.cancel();
     await _foregroundSub?.cancel();
+    await _openedAppSub?.cancel();
+    await _bannerController.close();
+    await _tapController.close();
   }
 }
+
+/// Stream of in-app banner triggers from foreground messages.
+/// Watched by `PushBannerHost` which renders a transient SnackBar.
+final pushBannerStreamProvider = StreamProvider<PushBanner>((ref) {
+  return ref.watch(pushServiceProvider).bannerStream;
+});
+
+/// Stream of "user tapped a notification" payloads. Watched by the
+/// router so taps deep-link into the relevant screen.
+final pushTapStreamProvider = StreamProvider<Map<String, String>>((ref) {
+  return ref.watch(pushServiceProvider).tapStream;
+});
 
 /// Mounts a single [PushService] for the app's lifetime. Watched
 /// from `solar_deye_app.dart` so the bootstrap kicks off on the

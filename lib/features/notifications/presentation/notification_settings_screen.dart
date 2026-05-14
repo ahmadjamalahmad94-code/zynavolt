@@ -58,6 +58,7 @@ class _NotificationSettingsScreenState
       }
       if (key == 'telegram_enabled') return fresh.telegram.enabled == override;
       if (key == 'sms_enabled') return fresh.sms.enabled == override;
+      if (key == 'push_enabled') return fresh.push.enabled == override;
       for (final s in fresh.sectionSwitches) {
         if (s.enabledKey == key) return s.enabled == override;
       }
@@ -134,6 +135,7 @@ class _NotificationSettingsScreenState
     }
     if (key == 'telegram_enabled') return snap.telegram.enabled;
     if (key == 'sms_enabled') return snap.sms.enabled;
+    if (key == 'push_enabled') return snap.push.enabled;
     for (final s in snap.sectionSwitches) {
       if (s.enabledKey == key) return s.enabled;
     }
@@ -253,9 +255,11 @@ class _Body extends StatelessWidget {
         _ChannelsCard(
           telegram: snapshot.telegram,
           sms: snapshot.sms,
+          push: snapshot.push,
           telegramEffective:
               _value('telegram_enabled', snapshot.telegram.enabled),
           smsEffective: _value('sms_enabled', snapshot.sms.enabled),
+          pushEffective: _value('push_enabled', snapshot.push.enabled),
           busy: busy,
           onPatch: onPatch,
         ),
@@ -387,16 +391,20 @@ class _ChannelsCard extends StatelessWidget {
   const _ChannelsCard({
     required this.telegram,
     required this.sms,
+    required this.push,
     required this.telegramEffective,
     required this.smsEffective,
+    required this.pushEffective,
     required this.busy,
     required this.onPatch,
   });
 
   final NotificationChannelStatus telegram;
   final NotificationChannelStatus sms;
+  final NotificationChannelStatus push;
   final bool telegramEffective;
   final bool smsEffective;
+  final bool pushEffective;
   final Set<String> busy;
   final void Function(String key, bool value) onPatch;
 
@@ -431,6 +439,21 @@ class _ChannelsCard extends StatelessWidget {
             value: smsEffective,
             busy: busy.contains('sms_enabled'),
             onChanged: (v) => onPatch('sms_enabled', v),
+          ),
+          // v101 Phase D — Push notifications channel row.
+          // `configured` here means "the mobile app has registered at
+          // least one FCM token for this account" — which the user
+          // achieves by simply opening the app on a phone after
+          // granting the notification permission. Until then the
+          // toggle is greyed via the standard `_ChannelRow` rendering.
+          const SizedBox(height: 8),
+          _ChannelRow(
+            label: 'الإشعارات الفورية (Push)',
+            settingKey: 'push_enabled',
+            channel: push,
+            value: pushEffective,
+            busy: busy.contains('push_enabled'),
+            onChanged: (v) => onPatch('push_enabled', v),
           ),
         ],
       ),

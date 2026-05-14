@@ -4,6 +4,7 @@ import '../../features/auth/data/auth_models.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../api/api_client.dart';
 import '../api/api_exception.dart';
+import '../notifications/push_service.dart';
 import '../storage/secure_token_storage.dart';
 
 /// Coarse auth phase that drives the router. The unknown phase exists so we
@@ -158,6 +159,17 @@ class AppSessionController extends StateNotifier<AppSessionState> {
   }
 
   Future<void> signOut() async {
+    // v101 Phase D — revoke the FCM token on the backend BEFORE we
+    // drop local tokens. Order matters: once we clear secure storage
+    // the ApiClient loses its bearer and the DELETE would 401. The
+    // call itself is best-effort (failure is logged, not thrown) so
+    // a flaky connection during logout still completes the local
+    // cleanup below.
+    try {
+      await _ref.read(pushServiceProvider).revokeOnBackend();
+    } catch (_) {
+      // Push service failures must never block logout.
+    }
     try {
       final refresh = await _storage.readRefreshToken();
       if (refresh != null && refresh.isNotEmpty) {

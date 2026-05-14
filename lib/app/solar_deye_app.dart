@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/notifications/push_overlay.dart';
 import '../core/notifications/push_service.dart';
 import '../core/state/auto_refresh.dart';
 import '../core/state/font_pref.dart';
@@ -50,9 +51,16 @@ class SolarDeyeApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       builder: (context, child) {
+        // v101 Phase D — PushOverlay sits between MaterialApp.router
+        // and the page content. It owns a ScaffoldMessenger that
+        // shows in-app banners for foreground push messages, and
+        // listens to push-tap events to deep-link into the relevant
+        // screen. Both behaviours are passive and add no layout.
         return Directionality(
           textDirection: TextDirection.rtl,
-          child: child ?? const SizedBox.shrink(),
+          child: PushOverlay(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
       routerConfig: router,

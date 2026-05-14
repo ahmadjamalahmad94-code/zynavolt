@@ -59,6 +59,7 @@ class NotificationSettingsSnapshot {
     required this.notificationsMasterEnabled,
     required this.telegram,
     required this.sms,
+    required this.push,
     required this.sectionSwitches,
   });
 
@@ -128,6 +129,13 @@ class NotificationSettingsSnapshot {
       sms: NotificationChannelStatus.fromJson(
         (channels['sms'] as Map?)?.cast<String, dynamic>(),
       ),
+      // v101 Phase D — push channel. `enabled` reflects the master
+      // `push_enabled` toggle the user controls from Settings;
+      // `configured` is true once the mobile app has registered at
+      // least one FCM token for this user.
+      push: NotificationChannelStatus.fromJson(
+        (channels['push'] as Map?)?.cast<String, dynamic>(),
+      ),
       sectionSwitches: switches,
     );
   }
@@ -138,5 +146,6 @@ class NotificationSettingsSnapshot {
   final bool notificationsMasterEnabled;
   final NotificationChannelStatus telegram;
   final NotificationChannelStatus sms;
+  final NotificationChannelStatus push;
   final List<NotificationSectionSwitch> sectionSwitches;
 }
