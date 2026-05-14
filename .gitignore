@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# v101 — Firebase secrets defense-in-depth.
+# `google-services.json` (in android/app/) IS expected to be tracked
+# — it carries the project_id + a public Firebase API key, both safe
+# to publish.
+# Service-account JSONs (used server-side to send FCM messages) are
+# private cryptographic credentials and must NEVER live inside this
+# repo, even by accident. The pattern below catches Firebase's
+# `*-firebase-adminsdk-*.json` naming convention.
+**/*-firebase-adminsdk-*.json
+**/serviceAccountKey.json
+**/firebase-service-account*.json
