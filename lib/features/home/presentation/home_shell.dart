@@ -14,9 +14,23 @@ import '../../../app/app_theme.dart';
 /// bar to the new tab's centre with an eased animation. Unselected
 /// tabs render as flat icon+label stacks inside the bar.
 ///
+/// v102+ — global popup-dismiss guard. Any modal sheet / dialog /
+/// popup opened from a routed screen (without `useRootNavigator:
+/// true`) lives on the shell's inner navigator. When the user
+/// navigates between tabs (or any in-shell route change), the
+/// guard pops every `PopupRoute` on top of the current page so a
+/// sheet from one tab can't bleed across to another. Two hookups:
+///
+///   * tab tap → synchronous pop BEFORE `context.go(...)` so the
+///     user never sees the old popup on the new tab even for a
+///     single frame;
+///   * any location change detected during `build` → a deferred
+///     pop via `addPostFrameCallback` as a backstop for non-tab
+///     navigation (push, go from inside a sheet, etc.).
+///
 /// Earlier v99f used a permanent Home FAB at the centre; this
 /// supersedes it.
-class HomeShell extends StatelessWidget {
+class HomeShell extends StatefulWidget {
   const HomeShell({super.key, required this.child});
 
   final Widget child;
@@ -54,11 +68,37 @@ class HomeShell extends StatelessWidget {
     ),
   ];
 
+  @override
+  State<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends State<HomeShell> {
+  /// Last location we rendered against. Compared on every build
+  /// so we can detect any in-shell route change and dismiss
+  /// modals on a post-frame callback.
+  String? _lastLocation;
+
   int _indexFor(String location) {
-    for (var i = 0; i < _tabs.length; i++) {
-      if (location.startsWith(_tabs[i].route)) return i;
+    for (var i = 0; i < HomeShell._tabs.length; i++) {
+      if (location.startsWith(HomeShell._tabs[i].route)) return i;
     }
     return 0;
+  }
+
+  /// Pops every PopupRoute (bottom sheets, dialogs, modals) from
+  /// the shell's inner navigator while leaving page routes
+  /// untouched. Safe to call without checking — if there's
+  /// nothing to pop the predicate stops immediately.
+  void _dismissAnyOpenPopups() {
+    shellNavigatorKey.currentState
+        ?.popUntil((route) => route is! PopupRoute);
+  }
+
+  void _onTabSelected(int i) {
+    // Synchronous dismiss BEFORE navigation so the new tab never
+    // even briefly renders behind a stale sheet from the old one.
+    _dismissAnyOpenPopups();
+    context.go(HomeShell._tabs[i].route);
   }
 
   @override
@@ -66,16 +106,27 @@ class HomeShell extends StatelessWidget {
     final location = GoRouterState.of(context).matchedLocation;
     final index = _indexFor(location);
 
+    // Backstop: any location change (push, replace, programmatic
+    // go from inside a sheet, etc.) that wasn't routed through
+    // `_onTabSelected` still triggers a popup dismissal once the
+    // current frame finishes painting.
+    if (_lastLocation != null && _lastLocation != location) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _dismissAnyOpenPopups();
+      });
+    }
+    _lastLocation = location;
+
     return Scaffold(
       // `extendBody: true` lets the floating bubble overlap the bottom
       // of the page content cleanly; the bar's clipper paints opaque
       // white so the area behind the bar itself stays hidden.
       extendBody: true,
-      body: child,
+      body: widget.child,
       bottomNavigationBar: _ZynBottomNav(
         selectedIndex: index,
-        tabs: _tabs,
-        onTabSelected: (i) => context.go(_tabs[i].route),
+        tabs: HomeShell._tabs,
+        onTabSelected: _onTabSelected,
       ),
     );
   }

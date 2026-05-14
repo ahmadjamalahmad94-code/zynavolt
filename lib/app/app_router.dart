@@ -27,6 +27,18 @@ import '../features/support/presentation/support_create_case_screen.dart';
 import '../features/support/presentation/support_screen.dart';
 import '../features/weather/presentation/weather_screen.dart';
 
+/// v102 — shared key for the shell's inner Navigator.
+///
+/// The shell (HomeShell) hosts its tab pages inside this
+/// navigator, and any bottom-sheet / dialog / modal opened from
+/// a routed screen (without `useRootNavigator: true`) lives on
+/// the same navigator. Exposing the key lets HomeShell dismiss
+/// every PopupRoute on top of the current tab's page when the
+/// user navigates somewhere else — preventing a sheet from
+/// bleeding across pages.
+final GlobalKey<NavigatorState> shellNavigatorKey =
+    GlobalKey<NavigatorState>(debugLabel: 'shellNavigator');
+
 class AppRoutes {
   const AppRoutes._();
   static const String splash = '/splash';
@@ -237,6 +249,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const SupportScreen(),
       ),
       ShellRoute(
+        navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => HomeShell(child: child),
         routes: [
           GoRoute(
