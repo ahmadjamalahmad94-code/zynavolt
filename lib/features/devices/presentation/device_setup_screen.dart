@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
@@ -114,7 +114,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
   Widget build(BuildContext context) {
     final providers = ref.watch(deviceProvidersListProvider);
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: ZynColors.bg,
       appBar: AppBar(title: const Text('إكمال إعداد المزوّد')),
       body: SafeArea(
         child: providers.when(
@@ -161,7 +161,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
               const Text(
                 'لا توجد حقول إعداد متاحة لهذا المزوّد',
                 style: TextStyle(
-                  color: AppTheme.ink,
+                  color: ZynColors.ink,
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                 ),
@@ -172,7 +172,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                 'إعداد قابلة للتعبئة من التطبيق حالياً. تواصل مع الدعم '
                 'إذا كنت بحاجة إلى تكوين خاص.',
                 style: const TextStyle(
-                  color: AppTheme.softInk,
+                  color: ZynColors.inkSoft,
                   fontSize: 12.5,
                   height: 1.7,
                 ),
@@ -235,7 +235,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
             ],
             const SizedBox(height: 16),
             SizedBox(
-              height: AppTheme.formControlHeight,
+              height: 46.0,
               child: FilledButton.icon(
                 onPressed: _submitting ? null : () => _submit(option),
                 icon: _submitting
@@ -279,13 +279,13 @@ class _Header extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppTheme.indigoSoft,
+                    color: ZynColors.primary50,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     option.supportTierLabel,
                     style: const TextStyle(
-                      color: AppTheme.indigoPrimary,
+                      color: ZynColors.primary700,
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                     ),
@@ -296,7 +296,7 @@ class _Header extends StatelessWidget {
                 child: Text(
                   option.displayName,
                   style: const TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
@@ -309,7 +309,7 @@ class _Header extends StatelessWidget {
             Text(
               'الجهاز: $deviceName',
               style: const TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -320,7 +320,7 @@ class _Header extends StatelessWidget {
             Text(
               option.notesAr,
               style: const TextStyle(
-                color: AppTheme.muted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 height: 1.55,
@@ -341,14 +341,14 @@ class _HonestNote extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.warning.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.warning.withValues(alpha: 0.30)),
+        color: ZynColors.warning.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.warning.withValues(alpha: 0.30)),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, color: AppTheme.warning, size: 16),
+          Icon(Icons.info_outline, color: ZynColors.warning, size: 16),
           SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -356,7 +356,7 @@ class _HonestNote extends StatelessWidget {
               'أوّل عملية مزامنة فعلية مع المزوّد. عندها تتحوّل الحالة '
               'إلى «متصل» تلقائياً.',
               style: TextStyle(
-                color: AppTheme.warning,
+                color: ZynColors.warning,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.6,
@@ -380,7 +380,7 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(
-          color: AppTheme.faintMuted,
+          color: ZynColors.muted,
           fontSize: 11.5,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.4,
@@ -416,7 +416,7 @@ class _FieldEditor extends StatelessWidget {
         hintText: spec.required ? 'مطلوب' : 'اختياري',
         prefixIcon: Icon(
           isSecret ? Icons.lock_outline : Icons.short_text,
-          color: isSecret ? AppTheme.warning : AppTheme.indigoPrimary,
+          color: isSecret ? ZynColors.warning : ZynColors.primary700,
         ),
         suffixIcon: isSecret
             ? IconButton(
@@ -448,20 +448,20 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.danger.withValues(alpha: 0.30)),
+        color: ZynColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.danger.withValues(alpha: 0.30)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: AppTheme.danger, size: 16),
+          const Icon(Icons.error_outline, color: ZynColors.danger, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.danger,
+                color: ZynColors.danger,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.55,

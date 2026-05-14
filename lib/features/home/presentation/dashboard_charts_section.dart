@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../dashboard/data/chart_range.dart';
 import '../../dashboard/data/dashboard_models.dart';
@@ -67,12 +67,12 @@ class _DashboardChartsSectionState extends State<DashboardChartsSection> {
                 height: 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppTheme.indigoSoft,
+                  color: ZynColors.primary50,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.show_chart,
-                  color: AppTheme.indigoPrimary,
+                  color: ZynColors.primary700,
                   size: 18,
                 ),
               ),
@@ -84,7 +84,7 @@ class _DashboardChartsSectionState extends State<DashboardChartsSection> {
                     Text(
                       'الإنتاج عبر الزمن',
                       style: TextStyle(
-                        color: AppTheme.ink,
+                        color: ZynColors.ink,
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
@@ -93,7 +93,7 @@ class _DashboardChartsSectionState extends State<DashboardChartsSection> {
                     Text(
                       'اختر النطاق الزمني والتاريخ لعرض الإنتاج المتاح.',
                       style: TextStyle(
-                        color: AppTheme.faintMuted,
+                        color: ZynColors.muted,
                         fontSize: 11.5,
                         height: 1.55,
                       ),
@@ -148,7 +148,7 @@ class _RangeSelector extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
+        color: ZynColors.primary50,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -199,13 +199,13 @@ class _RangeChip extends StatelessWidget {
             height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: active ? AppTheme.indigoPrimary : Colors.transparent,
+              color: active ? ZynColors.primary700 : Colors.transparent,
               borderRadius: BorderRadius.circular(9),
             ),
             child: Text(
               label,
               style: TextStyle(
-                color: active ? Colors.white : AppTheme.indigoPrimary,
+                color: active ? Colors.white : ZynColors.primary700,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.2,
@@ -241,9 +241,9 @@ class _DateNavigator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: ZynColors.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.line),
+        border: Border.all(color: ZynColors.line),
       ),
       child: Row(
         children: [
@@ -260,7 +260,7 @@ class _DateNavigator extends StatelessWidget {
                   label,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.3,
@@ -272,7 +272,7 @@ class _DateNavigator extends StatelessWidget {
                     child: Text(
                       'النطاق الحالي',
                       style: TextStyle(
-                        color: AppTheme.success,
+                        color: ZynColors.success,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -308,7 +308,7 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled ? AppTheme.indigoPrimary : AppTheme.line;
+    final color = enabled ? ZynColors.primary700 : ZynColors.line;
     return Tooltip(
       message: tooltip,
       child: Material(
@@ -368,10 +368,10 @@ class _AggregateBody extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
+        color: ZynColors.primary50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppTheme.indigoBright.withValues(alpha: 0.25),
+          color: ZynColors.primary500.withValues(alpha: 0.25),
         ),
       ),
       child: Column(
@@ -380,7 +380,7 @@ class _AggregateBody extends StatelessWidget {
           Text(
             _title,
             style: const TextStyle(
-              color: AppTheme.indigoPrimary,
+              color: ZynColors.primary700,
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.3,
@@ -394,7 +394,7 @@ class _AggregateBody extends StatelessWidget {
               Text(
                 _formatKwh(value),
                 style: const TextStyle(
-                  color: AppTheme.ink,
+                  color: ZynColors.ink,
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
                   height: 1.1,
@@ -405,7 +405,7 @@ class _AggregateBody extends StatelessWidget {
               const Text(
                 'kWh',
                 style: TextStyle(
-                  color: AppTheme.muted,
+                  color: ZynColors.muted,
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
@@ -416,7 +416,7 @@ class _AggregateBody extends StatelessWidget {
           Text(
             _disclaimer,
             style: const TextStyle(
-              color: AppTheme.softInk,
+              color: ZynColors.inkSoft,
               fontSize: 11.5,
               height: 1.6,
               fontWeight: FontWeight.w600,
@@ -436,9 +436,9 @@ class _ChartsEmptyState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
       decoration: BoxDecoration(
-        color: AppTheme.softBg,
+        color: ZynColors.bg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.line),
+        border: Border.all(color: ZynColors.line),
       ),
       child: Row(
         children: [
@@ -447,13 +447,13 @@ class _ChartsEmptyState extends StatelessWidget {
             height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppTheme.surface,
+              color: ZynColors.surface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.line),
+              border: Border.all(color: ZynColors.line),
             ),
             child: const Icon(
               Icons.info_outline,
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               size: 18,
             ),
           ),
@@ -462,7 +462,7 @@ class _ChartsEmptyState extends StatelessWidget {
             child: Text(
               'لا توجد بيانات كافية لعرض المخطط لهذا التاريخ.',
               style: TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 12.5,
                 height: 1.6,
                 fontWeight: FontWeight.w700,

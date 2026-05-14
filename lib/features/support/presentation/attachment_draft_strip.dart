@@ -1,7 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/multipart_file_spec.dart';
 import '../data/support_models.dart';
 
@@ -77,12 +77,12 @@ class AttachmentDraftStrip extends StatelessWidget {
         Row(
           children: [
             const Icon(Icons.attach_file_outlined,
-                size: 16, color: AppTheme.muted),
+                size: 16, color: ZynColors.muted),
             const SizedBox(width: 6),
             const Text(
               'مرفقات (اختياري)',
               style: TextStyle(
-                color: AppTheme.muted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -106,7 +106,7 @@ class AttachmentDraftStrip extends StatelessWidget {
             child: Text(
               'يدعم النظام PDF وصور وWord وExcel وCSV وZIP حتى 10 ميغابايت لكل ملف.',
               style: TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
                 height: 1.55,
@@ -182,15 +182,15 @@ class _DraftChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
+        color: ZynColors.primary50,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.indigoBright.withValues(alpha: 0.30)),
+        border: Border.all(color: ZynColors.primary500.withValues(alpha: 0.30)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.insert_drive_file_outlined,
-              size: 14, color: AppTheme.indigoPrimary),
+              size: 14, color: ZynColors.primary700),
           const SizedBox(width: 4),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 160),
@@ -199,7 +199,7 @@ class _DraftChip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: AppTheme.indigoPrimary,
+                color: ZynColors.primary700,
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
@@ -210,7 +210,7 @@ class _DraftChip extends StatelessWidget {
             Text(
               sizeLabel,
               style: const TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
@@ -221,7 +221,7 @@ class _DraftChip extends StatelessWidget {
             radius: 14,
             onTap: enabled ? onRemove : null,
             child: const Icon(Icons.close,
-                size: 14, color: AppTheme.faintMuted),
+                size: 14, color: ZynColors.muted),
           ),
         ],
       ),

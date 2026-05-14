@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 
 /// Bottom-nav shell hosting the five top-level tabs.
 ///
@@ -287,7 +287,7 @@ class _NotchedBarSurface extends StatelessWidget {
     return PhysicalShape(
       color: Colors.white,
       elevation: 8,
-      shadowColor: AppTheme.indigoPrimary.withValues(alpha: 0.35),
+      shadowColor: ZynColors.primary700.withValues(alpha: 0.35),
       clipper: _NotchedBarClipper(
         notchCentreX: notchCentreX,
         notchRadius: _ZynBottomNav.notchRadius,
@@ -400,8 +400,8 @@ class _FlatTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = active
-        ? AppTheme.indigoPrimary
-        : AppTheme.faintMuted.withValues(alpha: 0.85);
+        ? ZynColors.primary700
+        : ZynColors.muted.withValues(alpha: 0.85);
     return Material(
       color: Colors.transparent,
       child: InkResponse(
@@ -459,7 +459,7 @@ class _Bubble extends StatelessWidget {
       color: Colors.white,
       shape: const CircleBorder(),
       elevation: 6,
-      shadowColor: AppTheme.indigoPrimary.withValues(alpha: 0.40),
+      shadowColor: ZynColors.primary700.withValues(alpha: 0.40),
       child: InkResponse(
         onTap: onTap,
         radius: _ZynBottomNav.bubbleSize / 2,
@@ -474,13 +474,13 @@ class _Bubble extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: [
                 Colors.white,
-                AppTheme.indigoSoft.withValues(alpha: 0.6),
+                ZynColors.primary50.withValues(alpha: 0.6),
               ],
             ),
           ),
           child: Icon(
             icon,
-            color: AppTheme.indigoPrimary,
+            color: ZynColors.primary700,
             size: 26,
           ),
         ),

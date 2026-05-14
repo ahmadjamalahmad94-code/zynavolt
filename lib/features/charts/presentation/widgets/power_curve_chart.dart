@@ -1,7 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_theme.dart';
+import '../../../../core/design/zyn_tokens.dart';
 import '../../data/energy_chart_models.dart';
 import 'chart_palette.dart';
 
@@ -67,7 +67,7 @@ class PowerCurveChart extends StatelessWidget {
               drawVerticalLine: false,
               horizontalInterval: stepY,
               getDrawingHorizontalLine: (_) => FlLine(
-                color: AppTheme.line.withValues(alpha: 0.45),
+                color: ZynColors.line.withValues(alpha: 0.45),
                 strokeWidth: 1,
                 dashArray: const [4, 5],
               ),
@@ -106,7 +106,7 @@ class PowerCurveChart extends StatelessWidget {
                       child: Text(
                         '$pct',
                         style: TextStyle(
-                          color: AppTheme.faintMuted
+                          color: ZynColors.muted
                               .withValues(alpha: 0.85),
                           fontSize: 9.5,
                           fontWeight: FontWeight.w600,
@@ -127,7 +127,7 @@ class PowerCurveChart extends StatelessWidget {
                     child: Text(
                       _fmtKwh(value),
                       style: const TextStyle(
-                        color: AppTheme.faintMuted,
+                        color: ZynColors.muted,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -150,7 +150,7 @@ class PowerCurveChart extends StatelessWidget {
                       child: Text(
                         _shortLabel(samples[i].label),
                         style: const TextStyle(
-                          color: AppTheme.faintMuted,
+                          color: ZynColors.muted,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
@@ -165,7 +165,7 @@ class PowerCurveChart extends StatelessWidget {
               handleBuiltInTouches: true,
               touchTooltipData: LineTouchTooltipData(
                 getTooltipColor: (_) =>
-                    AppTheme.ink.withValues(alpha: 0.93),
+                    ZynColors.ink.withValues(alpha: 0.93),
                 tooltipRoundedRadius: 12,
                 tooltipPadding: const EdgeInsets.symmetric(
                   horizontal: 12,

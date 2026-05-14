@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/app_theme.dart';
+import '../design/zyn_tokens.dart';
 import '../api/api_exception.dart';
 
 /// Unified error widget. Pass any [ApiException] and the widget picks an
@@ -41,7 +41,7 @@ class AppErrorState extends StatelessWidget {
               error.message,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 height: 1.55,
@@ -53,7 +53,7 @@ class AppErrorState extends StatelessWidget {
                 error.code!,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: AppTheme.faintMuted,
+                  color: ZynColors.muted,
                   fontSize: 11,
                   letterSpacing: 0.4,
                 ),
@@ -77,23 +77,23 @@ Color _toneFor(ApiErrorKind kind) {
   switch (kind) {
     case ApiErrorKind.network:
     case ApiErrorKind.timeout:
-      return AppTheme.warning;
+      return ZynColors.warning;
     case ApiErrorKind.unauthorized:
     case ApiErrorKind.forbidden:
-      return AppTheme.danger;
+      return ZynColors.danger;
     case ApiErrorKind.validation:
     case ApiErrorKind.conflict:
-      return AppTheme.warning;
+      return ZynColors.warning;
     case ApiErrorKind.rateLimited:
-      return AppTheme.warning;
+      return ZynColors.warning;
     case ApiErrorKind.server:
     case ApiErrorKind.decode:
     case ApiErrorKind.unknown:
-      return AppTheme.danger;
+      return ZynColors.danger;
     case ApiErrorKind.notFound:
-      return AppTheme.faintMuted;
+      return ZynColors.muted;
     case ApiErrorKind.cancelled:
-      return AppTheme.faintMuted;
+      return ZynColors.muted;
   }
 }
 

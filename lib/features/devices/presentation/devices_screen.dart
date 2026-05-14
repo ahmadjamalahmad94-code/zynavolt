@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/state/auto_refresh.dart';
 // v100 — app_card import removed; the redesigned tile uses a
@@ -45,7 +45,7 @@ class DevicesScreen extends ConsumerWidget {
             borderRadius: BorderRadius.circular(999),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.indigoPrimary.withValues(alpha: 0.45),
+                color: ZynColors.primary700.withValues(alpha: 0.45),
                 blurRadius: 18,
                 offset: const Offset(0, 8),
               ),
@@ -75,11 +75,11 @@ class DevicesScreen extends ConsumerWidget {
         ),
         body: DecoratedBox(
           decoration: const BoxDecoration(
-            gradient: AppTheme.pageBackdropGradient,
+            gradient: ZynColors.pageBackdrop,
           ),
           child: SafeArea(
             child: RefreshIndicator(
-              color: AppTheme.indigoPrimary,
+              color: ZynColors.primary700,
               onRefresh: () async => ref.invalidate(devicesListProvider),
               child: devices.when(
                 loading: () => ListView(
@@ -168,7 +168,7 @@ class _DeviceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // v100 — glossy gradient tile with a filled gradient icon glyph.
-    final accent = isSelected ? AppTheme.indigoPrimary : AppTheme.indigoBright;
+    final accent = isSelected ? ZynColors.primary700 : ZynColors.primary500;
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(18),
@@ -189,7 +189,7 @@ class _DeviceTile extends StatelessWidget {
             border: Border.all(
               color: isSelected
                   ? accent.withValues(alpha: 0.45)
-                  : AppTheme.line,
+                  : ZynColors.line,
               width: isSelected ? 1.4 : 1,
             ),
             boxShadow: [
@@ -247,7 +247,7 @@ class _DeviceTile extends StatelessWidget {
                             child: Text(
                               device.name.isNotEmpty ? device.name : '—',
                               style: const TextStyle(
-                                color: AppTheme.ink,
+                                color: ZynColors.ink,
                                 fontSize: 14.5,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: -0.1,
@@ -265,7 +265,7 @@ class _DeviceTile extends StatelessWidget {
                       Text(
                         device.deviceType.toUpperCase(),
                         style: const TextStyle(
-                          color: AppTheme.faintMuted,
+                          color: ZynColors.muted,
                           fontSize: 10.5,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.6,
@@ -296,7 +296,7 @@ class _ActivePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppTheme.indigoPrimary,
+        color: ZynColors.primary700,
         borderRadius: BorderRadius.circular(999),
       ),
       child: const Text(
@@ -320,7 +320,7 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ok = active && status.toLowerCase() == 'ok';
-    final color = ok ? AppTheme.success : AppTheme.faintMuted;
+    final color = ok ? ZynColors.success : ZynColors.muted;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(

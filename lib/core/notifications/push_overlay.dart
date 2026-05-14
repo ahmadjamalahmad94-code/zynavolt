@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
-import '../../app/app_theme.dart';
+import '../design/zyn_tokens.dart';
 import '../../features/notifications/state/notifications_controller.dart';
 import 'push_service.dart';
 
@@ -242,17 +242,17 @@ class _BannerWidgetState extends State<_BannerWidget>
             color: Colors.transparent,
             child: InkWell(
               onTap: widget.onTap,
-              borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+              borderRadius: BorderRadius.circular(ZynRadii.card),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topRight,
                     end: Alignment.bottomLeft,
-                    colors: [AppTheme.indigoPrimary, AppTheme.indigoBright],
+                    colors: [ZynColors.primary700, ZynColors.primary500],
                   ),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-                  boxShadow: AppTheme.liftedShadow,
+                  borderRadius: BorderRadius.circular(ZynRadii.card),
+                  boxShadow: ZynShadows.med(),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_theme.dart';
+import '../../../../core/design/zyn_tokens.dart';
 import '../../data/energy_chart_models.dart';
 import 'chart_palette.dart';
 
@@ -88,7 +88,7 @@ class _LegendItem extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            color: AppTheme.muted,
+            color: ZynColors.muted,
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
           ),
@@ -97,7 +97,7 @@ class _LegendItem extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(
-            color: AppTheme.ink,
+            color: ZynColors.ink,
             fontSize: 12.5,
             fontWeight: FontWeight.w900,
             letterSpacing: 0.1,

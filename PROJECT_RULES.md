@@ -25,15 +25,28 @@ changes — never let conventions live only in commit messages.
 
 ---
 
-## 1. Design system v100 — `#design`
+## 1. Design system v102 (DS v1) — `#design`
 
 The single source of design vocabulary lives in
 `lib/core/design/`. Two files, never edit them inline in screens:
 
 ```
 lib/core/design/zyn_tokens.dart      — colors, spacing, radii, shadows, typography
-lib/core/design/zyn_components.dart  — ZynCard, ZynActionTile, ZynChip, ZynButton, …
+lib/core/design/zyn_components.dart  — ZynPage, ZynCard, ZynActionTile, ZynButton, …
 ```
+
+**Canonical tokens** — every screen and widget pulls from `ZynColors`,
+`ZynSpacing`, `ZynRadii`, `ZynShadows`, `ZynGradients`, `ZynText`. The
+pre-DS-v1 `AppTheme.indigoPrimary` / `AppTheme.softBg` / etc. aliases
+in `lib/app/app_theme.dart` still resolve (they're `@Deprecated`
+shims pointing at `ZynColors`), but new code MUST import
+`core/design/zyn_tokens.dart` and reach for the canonical names —
+no AppTheme references in new screens.
+
+**Typography**: Almarai is the canonical typeface, wired globally in
+`AppTheme.light()` via `google_fonts.GoogleFonts.almaraiTextTheme(...)`.
+Every TextStyle inherits it automatically — never set `fontFamily`
+manually in widgets. (The v100 font picker trial has been retired.)
 
 ### 1.1 Eight SaaS-app design principles
 (distilled from Linear / Stripe / Mercury / Cash App / Revolut / Tesla /
@@ -57,30 +70,36 @@ Notion — full description in `zyn_tokens.dart` header)
 
 ### 1.2 Page shell pattern — every new screen `#design` `#addition`
 
-```dart
-return Scaffold(
-  backgroundColor: Colors.transparent,
-  appBar: AppBar(
-    title: const Text('...'),
-    backgroundColor: Colors.transparent,   // page gradient flows under it
-    scrolledUnderElevation: 0,             // no surface tint on scroll
-    actions: [...],
-  ),
-  body: DecoratedBox(
-    decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
-    child: SafeArea(
-      child: <body>,
-    ),
-  ),
-);
-```
-
-**Or** use the canonical helper:
+Prefer the canonical helper:
 
 ```dart
 return ZynPage(
-  appBar: AppBar(...),
+  appBar: AppBar(
+    title: const Text('...'),
+    backgroundColor: Colors.transparent,
+    scrolledUnderElevation: 0,
+  ),
   child: <body>,
+);
+```
+
+For non-scrolling or list-based bodies that need a `RefreshIndicator`
+inside, drop down to the long form:
+
+```dart
+return Scaffold(
+  backgroundColor: Colors.transparent,
+  appBar: AppBar(...),
+  body: DecoratedBox(
+    decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
+    child: SafeArea(
+      child: RefreshIndicator(
+        color: ZynColors.primary500,
+        onRefresh: () async => ref.invalidate(myProvider),
+        child: <body>,
+      ),
+    ),
+  ),
 );
 ```
 
@@ -109,67 +128,113 @@ ZynActionTile(
 )
 ```
 
-### 1.4 Hero card pattern — dark navy `#design`
+### 1.4 Hero card patterns — `#design`
 
-For prominent surfaces (login brand panel, More hero, Battery Lab
-state hero):
+Three canonical hero variants:
 
 ```dart
+// Dark navy — More profile, Account identity, Home dashboard
 Container(
-  decoration: zynHeroOuterDecoration(radius: 24),
+  decoration: zynNavyHeroDecoration(radius: ZynRadii.hero),
   child: ClipRRect(
-    borderRadius: BorderRadius.circular(24),
+    borderRadius: BorderRadius.circular(ZynRadii.hero),
     child: DecoratedBox(
-      decoration: const BoxDecoration(gradient: ZynColors.heroGradient),
-      child: Stack(children: [
-        // 1. radial bloom in a corner (cyan/indigo/violet variants)
-        // 2. top hairline specular sheen
-        // 3. content padded inside
-      ]),
+      decoration: const BoxDecoration(gradient: ZynColors.navyHero),
+      child: ...,
     ),
   ),
+);
+
+// Sky blue — Weather hero
+Container(
+  decoration: BoxDecoration(
+    gradient: ZynColors.skyHero,
+    borderRadius: BorderRadius.circular(ZynRadii.hero),
+    boxShadow: ZynShadows.med(tint: ZynColors.primary500),
+  ),
+  child: ...,
+);
+
+// Brand primary — login CTA panels (rare, once per screen max)
+Container(
+  decoration: BoxDecoration(
+    gradient: ZynColors.brandHero,
+    borderRadius: BorderRadius.circular(ZynRadii.hero),
+    boxShadow: ZynShadows.hero(),
+  ),
+  child: ...,
 );
 ```
 
 ### 1.5 Floating-pill button pattern `#design`
 
-Wrap any FAB in a shadow `Container` so the indigo halo lifts the
+Wrap any FAB in a shadow `Container` so the primary halo lifts the
 button off the page (used in Devices, Loads, Support):
 
 ```dart
 Container(
   decoration: BoxDecoration(
-    borderRadius: BorderRadius.circular(999),
+    borderRadius: BorderRadius.circular(ZynRadii.pill),
     boxShadow: [BoxShadow(
-      color: AppTheme.indigoPrimary.withValues(alpha: 0.45),
-      blurRadius: 18, offset: const Offset(0, 8),
+      color: ZynColors.primary500.withValues(alpha: 0.40),
+      blurRadius: 16, offset: const Offset(0, 8),
     )],
   ),
   child: FloatingActionButton.extended(
-    backgroundColor: AppTheme.indigoPrimary,
-    elevation: 0,                       // we own the shadow above
+    backgroundColor: ZynColors.primary700,
+    foregroundColor: Colors.white,
+    elevation: 0,
     icon: const Icon(Icons.add_rounded),
-    label: const Text('...', style: TextStyle(fontWeight: FontWeight.w900)),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+    label: const Text('...', style: TextStyle(fontWeight: FontWeight.w800)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(ZynRadii.pill),
+    ),
     onPressed: () { ... },
   ),
 );
 ```
 
+### 1.7 Popup-dismiss guard pattern — `#design` `#workflow`
+
+Bottom sheets, dialogs, and modals opened from a routed screen live
+on the shell's inner navigator (`shellNavigatorKey`). To keep them
+from bleeding across tabs, `HomeShell` runs a two-layer dismiss:
+
+1. **Synchronous** — `_onTabSelected` calls
+   `shellNavigatorKey.currentState?.popUntil((route) => route is! PopupRoute)`
+   BEFORE `context.go(...)`, so the new tab never renders behind a
+   stale sheet from the old one.
+2. **Backstop** — any in-shell location change detected during
+   `build()` schedules the same `popUntil` on
+   `WidgetsBinding.instance.addPostFrameCallback`, which catches
+   non-tab navigation (push, replace, go-from-inside-a-sheet).
+
+The `shellNavigatorKey` is the single top-level
+`GlobalKey<NavigatorState>` exported from `lib/app/app_router.dart`
+and passed to `ShellRoute(navigatorKey: shellNavigatorKey, ...)`.
+Never create a second key — every sheet opened with
+`showModalBottomSheet(context, ...)` (no `useRootNavigator: true`)
+gets caught by this single guard.
+
 ### 1.6 Forbidden visual patterns `#design`
 
-* ❌ Flat `Container(color: AppTheme.softBg)` page bodies — must use
-  `pageBackdropGradient`.
-* ❌ Hard-coded hex colours in screen widgets — use `AppTheme.*` /
-  `ZynColors.*` / a tone parameter.
+* ❌ Flat `Container(color: ZynColors.bg)` page bodies — must use
+  `ZynColors.pageBackdrop` (or wrap in `ZynPage`).
+* ❌ Hard-coded hex colours (`Color(0xFFXXXXXX)`) in screen widgets
+  — use `ZynColors.*` / a tone parameter.
 * ❌ Magic spacing numbers — use `ZynSpacing.*` (`xs`, `sm`, `md`,
   `lg`, `xl`, `xxl`, `xxxl`).
+* ❌ `AppTheme.*` references in new code — use the canonical
+  `ZynColors.*` / `ZynRadii.*` / etc. The AppTheme aliases are
+  deprecated shims kept only so old screens keep building.
 * ❌ `Card()` widget — always `ZynCard` or hand-rolled `Container`
-  with `zynGlassCardDecoration(...)`.
+  with `zynGlassCardDecoration(...)` / `ZynShadows.soft()`.
 * ❌ `Icon(Icons.foo)` without a colour token — pass an explicit
   colour from the design system.
 * ❌ `Text('123 W')` without `fontFeatures: [FontFeature.tabularFigures()]`
   on numeric values — they jitter on hourly updates otherwise.
+* ❌ Setting `fontFamily:` manually — Almarai is wired globally;
+  reaching for another family inside a widget breaks consistency.
 
 ---
 
@@ -572,3 +637,11 @@ When a rule changes:
   applicationId is permanent post-publish. The internal Dart package
   name (`pubspec.yaml: name:`) is still `solardeye_mobile` and only
   affects test imports — kept as-is to avoid churning 28 test files.
+* **2026-05-14** — v102 DS v1 sweep landed. Phase 3.A (Weather), 3.B
+  (More + all sub-screens), 3.C (Home + Devices + Onboarding + this
+  rules update) migrated every reachable screen onto `ZynColors` /
+  `ZynRadii` / `ZynShadows` / `ZynSpacing` + Almarai. Battery Lab is
+  intentionally excluded from the rebuild. AppTheme.* references
+  remain only in deprecated alias paths inside `app_theme.dart` for
+  build compatibility — new code must import `core/design/zyn_tokens.dart`
+  directly. Added §1.7 (popup-dismiss guard pattern).

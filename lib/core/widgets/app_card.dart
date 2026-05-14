@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/app_theme.dart';
+import '../design/zyn_tokens.dart';
 
 /// Soft, calm card surface — the mobile analogue of the web `.ns-card`
 /// pattern from v35 §2.3. Default radius/padding mirrors the form-step card
@@ -11,9 +11,9 @@ class AppCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.margin = EdgeInsets.zero,
-    this.radius = AppTheme.radiusCard,
-    this.borderColor = AppTheme.line,
-    this.background = AppTheme.surface,
+    this.radius = ZynRadii.card,
+    this.borderColor = ZynColors.line,
+    this.background = ZynColors.surface,
     this.elevated = false,
   });
 
@@ -24,7 +24,7 @@ class AppCard extends StatelessWidget {
   final Color borderColor;
   final Color background;
 
-  /// v58: when true, the card adopts the [AppTheme.softShadow] elevation
+  /// v58: when true, the card adopts the [ZynShadows.soft()] elevation
   /// for hero / featured surfaces. Default `false` preserves the flat
   /// look of every existing screen so older callers don't accidentally
   /// pick up a new visual treatment.
@@ -43,7 +43,7 @@ class AppCard extends StatelessWidget {
         color: background,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: borderColor, width: 1),
-        boxShadow: elevated ? AppTheme.softShadow : null,
+        boxShadow: elevated ? ZynShadows.soft() : null,
       ),
       child: Padding(padding: padding, child: child),
     );

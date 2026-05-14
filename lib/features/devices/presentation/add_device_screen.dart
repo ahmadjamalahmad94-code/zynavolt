@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_error_state.dart';
@@ -111,7 +111,7 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
   Widget build(BuildContext context) {
     final providers = ref.watch(deviceProvidersListProvider);
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: ZynColors.bg,
       appBar: AppBar(title: const Text('إضافة جهاز')),
       body: SafeArea(
         child: providers.when(
@@ -168,7 +168,7 @@ class _AddDeviceScreenState extends ConsumerState<AddDeviceScreen> {
             ],
             const SizedBox(height: 18),
             SizedBox(
-              height: AppTheme.formControlHeight,
+              height: 46.0,
               child: FilledButton.icon(
                 onPressed: _submitting ? null : _submit,
                 icon: _submitting
@@ -202,22 +202,22 @@ class _IntroNote extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.indigoBright.withValues(alpha: 0.25)),
+        color: ZynColors.primary50,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.primary500.withValues(alpha: 0.25)),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.info_outline,
-              color: AppTheme.indigoPrimary, size: 16),
+              color: ZynColors.primary700, size: 16),
           SizedBox(width: 8),
           Expanded(
             child: Text(
               'سيُنشأ الجهاز بحالة «بحاجة إلى إعداد». تُكمل بيانات الاتصال '
               'بالمزوّد لاحقاً من الموقع.',
               style: TextStyle(
-                color: AppTheme.indigoPrimary,
+                color: ZynColors.primary700,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.6,
@@ -252,7 +252,7 @@ class _ProviderPicker extends StatelessWidget {
           const Text(
             'المزوّد',
             style: TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 14,
               fontWeight: FontWeight.w800,
             ),
@@ -261,7 +261,7 @@ class _ProviderPicker extends StatelessWidget {
           const Text(
             'اختر مزوّد بيانات الجهاز.',
             style: TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 12,
               fontWeight: FontWeight.w600,
               height: 1.55,
@@ -313,7 +313,7 @@ class _DropdownLine extends StatelessWidget {
             option.displayName,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
@@ -324,7 +324,7 @@ class _DropdownLine extends StatelessWidget {
           Text(
             '· ${option.supportTierLabel}',
             style: const TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 11.5,
               fontWeight: FontWeight.w700,
             ),
@@ -345,7 +345,7 @@ class _SelectedProviderNote extends StatelessWidget {
   Widget build(BuildContext context) {
     final required = option.requiredFields;
     return AppCard(
-      background: AppTheme.softBg,
+      background: ZynColors.bg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -356,13 +356,13 @@ class _SelectedProviderNote extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppTheme.indigoSoft,
+                    color: ZynColors.primary50,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     option.supportTierLabel,
                     style: const TextStyle(
-                      color: AppTheme.indigoPrimary,
+                      color: ZynColors.primary700,
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                     ),
@@ -373,7 +373,7 @@ class _SelectedProviderNote extends StatelessWidget {
                 child: Text(
                   option.displayName,
                   style: const TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -386,7 +386,7 @@ class _SelectedProviderNote extends StatelessWidget {
             Text(
               option.notesAr,
               style: const TextStyle(
-                color: AppTheme.muted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 height: 1.6,
@@ -398,7 +398,7 @@ class _SelectedProviderNote extends StatelessWidget {
             const Text(
               'سوف تحتاج هذه البيانات لاحقاً عند إكمال الإعداد على الموقع:',
               style: TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w700,
                 height: 1.55,
@@ -427,7 +427,7 @@ class _FieldChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tone = secret ? AppTheme.warning : AppTheme.indigoPrimary;
+    final tone = secret ? ZynColors.warning : ZynColors.primary700;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -565,20 +565,20 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.danger.withValues(alpha: 0.30)),
+        color: ZynColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.danger.withValues(alpha: 0.30)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: AppTheme.danger, size: 16),
+          const Icon(Icons.error_outline, color: ZynColors.danger, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.danger,
+                color: ZynColors.danger,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.55,

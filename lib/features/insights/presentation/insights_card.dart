@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../data/insights_models.dart';
@@ -70,10 +70,10 @@ class _InsightsAvailableCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [Colors.white, Color(0xFFF8FBFF)],
         ),
-        border: Border.all(color: AppTheme.line, width: 1),
+        border: Border.all(color: ZynColors.line, width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.06),
+            color: ZynColors.primary700.withValues(alpha: 0.06),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -151,7 +151,7 @@ class _InsightsHeader extends StatelessWidget {
           child: Text(
             'توصيات ذكية',
             style: TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 15,
               fontWeight: FontWeight.w900,
               letterSpacing: -0.2,
@@ -170,7 +170,7 @@ class _InsightsHeader extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -216,9 +216,9 @@ class _SunsetBlock extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.softBg,
+        color: ZynColors.bg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.line),
+        border: Border.all(color: ZynColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -230,7 +230,7 @@ class _SunsetBlock extends StatelessWidget {
                 // appropriate at night and still reads as "solar
                 // arc" during the day.
                 Icons.nightlight_outlined,
-                color: AppTheme.indigoPrimary,
+                color: ZynColors.primary700,
                 size: 14,
               ),
               const SizedBox(width: 6),
@@ -240,7 +240,7 @@ class _SunsetBlock extends StatelessWidget {
                 // already past it.
                 isNight ? 'الشمس غائبة' : 'الغروب',
                 style: const TextStyle(
-                  color: AppTheme.muted,
+                  color: ZynColors.muted,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w800,
                 ),
@@ -255,7 +255,7 @@ class _SunsetBlock extends StatelessWidget {
                 Text(
                   sunset,
                   style: const TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.3,
@@ -271,7 +271,7 @@ class _SunsetBlock extends StatelessWidget {
             Text(
               'الإنتاج الفعّال يقترب من $effective.',
               style: const TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
                 height: 1.5,
@@ -288,13 +288,13 @@ class _SunsetBlock extends StatelessWidget {
             Row(
               children: [
                 const Icon(Icons.battery_charging_full_outlined,
-                    color: AppTheme.success, size: 14),
+                    color: ZynColors.success, size: 14),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'الوقت المتوقّع لاكتمال الشحن: ${_formatHours(ttf)}',
                     style: const TextStyle(
-                      color: AppTheme.softInk,
+                      color: ZynColors.inkSoft,
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                     ),
@@ -305,16 +305,16 @@ class _SunsetBlock extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppTheme.success.withValues(alpha: 0.12),
+                      color: ZynColors.success.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
-                        color: AppTheme.success.withValues(alpha: 0.30),
+                        color: ZynColors.success.withValues(alpha: 0.30),
                       ),
                     ),
                     child: const Text(
                       'قبل الغروب',
                       style: TextStyle(
-                        color: AppTheme.success,
+                        color: ZynColors.success,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w900,
                       ),
@@ -328,7 +328,7 @@ class _SunsetBlock extends StatelessWidget {
             Text(
               prediction.verdict!,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 height: 1.55,
@@ -340,7 +340,7 @@ class _SunsetBlock extends StatelessWidget {
             Text(
               prediction.advice!,
               style: const TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
                 height: 1.6,
@@ -402,7 +402,7 @@ class _AdviceBlock extends StatelessWidget {
             Text(
               advice.detail,
               style: const TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
                 height: 1.7,
@@ -417,14 +417,14 @@ class _AdviceBlock extends StatelessWidget {
   static Color _toneForLevel(String level) {
     switch (level) {
       case 'good':
-        return AppTheme.success;
+        return ZynColors.success;
       case 'caution':
       case 'warning':
-        return AppTheme.warning;
+        return ZynColors.warning;
       case 'critical':
-        return AppTheme.danger;
+        return ZynColors.danger;
       default:
-        return AppTheme.muted;
+        return ZynColors.muted;
     }
   }
 }
@@ -492,12 +492,12 @@ class _InsightsUnavailableCard extends StatelessWidget {
             height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppTheme.indigoSoft,
+              color: ZynColors.primary50,
               borderRadius: BorderRadius.circular(9),
             ),
             child: const Icon(
               Icons.tips_and_updates_outlined,
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               size: 16,
             ),
           ),
@@ -509,7 +509,7 @@ class _InsightsUnavailableCard extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
                   ),
@@ -518,7 +518,7 @@ class _InsightsUnavailableCard extends StatelessWidget {
                 Text(
                   detail,
                   style: const TextStyle(
-                    color: AppTheme.softInk,
+                    color: ZynColors.inkSoft,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                     height: 1.65,
@@ -579,12 +579,12 @@ class _InsightsLoadingCard extends StatelessWidget {
             height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppTheme.indigoSoft,
+              color: ZynColors.primary50,
               borderRadius: BorderRadius.circular(9),
             ),
             child: const Icon(
               Icons.tips_and_updates_outlined,
-              color: AppTheme.indigoPrimary,
+              color: ZynColors.primary700,
               size: 16,
             ),
           ),
@@ -593,7 +593,7 @@ class _InsightsLoadingCard extends StatelessWidget {
             child: Text(
               'جارٍ تحضير التوصيات الذكية...',
               style: TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -629,18 +629,18 @@ class _InsightsErrorCard extends StatelessWidget {
                 height: 30,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppTheme.danger.withValues(alpha: 0.10),
+                  color: ZynColors.danger.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: const Icon(Icons.error_outline,
-                    color: AppTheme.danger, size: 16),
+                    color: ZynColors.danger, size: 16),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   message,
                   style: const TextStyle(
-                    color: AppTheme.softInk,
+                    color: ZynColors.inkSoft,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     height: 1.55,

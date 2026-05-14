@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/utils/backend_time.dart';
 import '../../../core/utils/timestamp.dart';
 import '../../../core/widgets/app_card.dart';
@@ -44,7 +44,7 @@ class DeviceDetailScreen extends ConsumerWidget {
           scrolledUnderElevation: 0,
         ),
         body: DecoratedBox(
-          decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+          decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
           child: SafeArea(
             child: AppErrorState(
               error: ApiException(
@@ -107,7 +107,7 @@ class DeviceDetailScreen extends ConsumerWidget {
         ],
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
         child: SafeArea(
         child: RefreshIndicator(
           // v52: pull-to-refresh also invalidates the new history +
@@ -290,8 +290,8 @@ class _StatusCard extends StatelessWidget {
       // v63: status card is the screen's hero — soft shadow gives it
       // presence over the calmer info/settings cards below.
       elevated: true,
-      borderColor: isActive ? AppTheme.indigoBright : AppTheme.line,
-      background: isActive ? AppTheme.indigoSoft : AppTheme.surface,
+      borderColor: isActive ? ZynColors.primary500 : ZynColors.line,
+      background: isActive ? ZynColors.primary50 : ZynColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -304,12 +304,12 @@ class _StatusCard extends StatelessWidget {
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isActive ? AppTheme.surface : AppTheme.indigoSoft,
+                  color: isActive ? ZynColors.surface : ZynColors.primary50,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
                   Icons.solar_power_outlined,
-                  color: AppTheme.indigoPrimary,
+                  color: ZynColors.primary700,
                   size: 22,
                 ),
               ),
@@ -321,7 +321,7 @@ class _StatusCard extends StatelessWidget {
                     Text(
                       device.name.isNotEmpty ? device.name : '#${device.id}',
                       style: const TextStyle(
-                        color: AppTheme.ink,
+                        color: ZynColors.ink,
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
@@ -334,7 +334,7 @@ class _StatusCard extends StatelessWidget {
                       Text(
                         device.plantName,
                         style: const TextStyle(
-                          color: AppTheme.faintMuted,
+                          color: ZynColors.muted,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -358,12 +358,12 @@ class _StatusCard extends StatelessWidget {
                     : (device.connectionStatus.isNotEmpty
                         ? device.connectionStatus
                         : 'غير متصل'),
-                color: connected ? AppTheme.success : AppTheme.faintMuted,
+                color: connected ? ZynColors.success : ZynColors.muted,
               ),
               if (isActive)
                 const _StatusChip(
                   label: 'الجهاز النشط',
-                  color: AppTheme.indigoPrimary,
+                  color: ZynColors.primary700,
                   filled: true,
                 ),
             ],
@@ -376,20 +376,20 @@ class _StatusCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(
                   horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: AppTheme.softBg,
+                color: ZynColors.bg,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppTheme.line),
+                border: Border.all(color: ZynColors.line),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.access_time_outlined,
-                      color: AppTheme.faintMuted, size: 13),
+                      color: ZynColors.muted, size: 13),
                   const SizedBox(width: 6),
                   Text(
                     'آخر اتصال: $lastSeen',
                     style: const TextStyle(
-                      color: AppTheme.muted,
+                      color: ZynColors.muted,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                     ),
@@ -434,13 +434,13 @@ class _SetupRequiredCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+      borderRadius: BorderRadius.circular(ZynRadii.card),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        borderRadius: BorderRadius.circular(ZynRadii.card),
         child: AppCard(
-          background: AppTheme.warning.withValues(alpha: 0.06),
-          borderColor: AppTheme.warning.withValues(alpha: 0.30),
+          background: ZynColors.warning.withValues(alpha: 0.06),
+          borderColor: ZynColors.warning.withValues(alpha: 0.30),
           child: Row(
             children: [
               Container(
@@ -448,12 +448,12 @@ class _SetupRequiredCard extends StatelessWidget {
                 height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.14),
+                  color: ZynColors.warning.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
                   Icons.settings_input_component_outlined,
-                  color: AppTheme.warning,
+                  color: ZynColors.warning,
                   size: 20,
                 ),
               ),
@@ -465,7 +465,7 @@ class _SetupRequiredCard extends StatelessWidget {
                     Text(
                       'إكمال إعداد المزوّد',
                       style: TextStyle(
-                        color: AppTheme.warning,
+                        color: ZynColors.warning,
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
                       ),
@@ -475,7 +475,7 @@ class _SetupRequiredCard extends StatelessWidget {
                       'هذا الجهاز يحتاج إلى بيانات الاتصال بالمزوّد. '
                       'اضغط للمتابعة وإدخالها.',
                       style: TextStyle(
-                        color: AppTheme.softInk,
+                        color: ZynColors.inkSoft,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         height: 1.55,
@@ -486,7 +486,7 @@ class _SetupRequiredCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               const Icon(Icons.chevron_left,
-                  color: AppTheme.faintMuted, size: 22),
+                  color: ZynColors.muted, size: 22),
             ],
           ),
         ),
@@ -532,7 +532,7 @@ class _IntegrationHealthCard extends StatelessWidget {
               icon: Icons.info_outline,
               label: 'حالة النظام',
               value: backendStatus,
-              tone: AppTheme.indigoPrimary,
+              tone: ZynColors.primary700,
             ),
           ],
         ],
@@ -578,7 +578,7 @@ class _HealthRow extends StatelessWidget {
           child: Text(
             label,
             style: const TextStyle(
-              color: AppTheme.muted,
+              color: ZynColors.muted,
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
               height: 1.4,
@@ -625,17 +625,17 @@ _StatusDisplay _connectionDisplay(String raw) {
   final norm = raw.trim().toLowerCase();
   switch (norm) {
     case 'ok':
-      return const _StatusDisplay('متصل', AppTheme.success);
+      return const _StatusDisplay('متصل', ZynColors.success);
     case 'new':
-      return const _StatusDisplay('جديد', AppTheme.indigoPrimary);
+      return const _StatusDisplay('جديد', ZynColors.primary700);
     case 'setup_required':
-      return const _StatusDisplay('بحاجة إلى إعداد', AppTheme.warning);
+      return const _StatusDisplay('بحاجة إلى إعداد', ZynColors.warning);
     case '':
-      return const _StatusDisplay('غير معروف', AppTheme.faintMuted);
+      return const _StatusDisplay('غير معروف', ZynColors.muted);
     default:
       // Fall back to the raw value so we never hide a real backend
       // signal behind a localisation gap.
-      return _StatusDisplay(raw, AppTheme.faintMuted);
+      return _StatusDisplay(raw, ZynColors.muted);
   }
 }
 
@@ -645,7 +645,7 @@ _StatusDisplay _connectionDisplay(String raw) {
 _StatusDisplay _freshnessDisplay(String? iso) {
   final parsed = parseBackendIso(iso);
   if (parsed == null) {
-    return const _StatusDisplay('لا توجد قراءات', AppTheme.faintMuted);
+    return const _StatusDisplay('لا توجد قراءات', ZynColors.muted);
   }
   final ageMinutes =
       DateTime.now().difference(parsed.toLocal()).inMinutes;
@@ -653,12 +653,12 @@ _StatusDisplay _freshnessDisplay(String? iso) {
   final safeMinutes = ageMinutes < 0 ? 0 : ageMinutes;
   final relative = _arabicRelativeAge(safeMinutes);
   if (safeMinutes <= 15) {
-    return _StatusDisplay('حديثة · $relative', AppTheme.success);
+    return _StatusDisplay('حديثة · $relative', ZynColors.success);
   }
   if (safeMinutes <= 60) {
-    return _StatusDisplay('ضمن الساعة · $relative', AppTheme.indigoPrimary);
+    return _StatusDisplay('ضمن الساعة · $relative', ZynColors.primary700);
   }
-  return _StatusDisplay('قديمة · $relative', AppTheme.warning);
+  return _StatusDisplay('قديمة · $relative', ZynColors.warning);
 }
 
 /// Calm Arabic "since N minutes/hours/days ago" formatter. Uses
@@ -690,7 +690,7 @@ class _LatestCard extends StatelessWidget {
             Text(
               'لا توجد قراءات بعد لهذا الجهاز.',
               style: TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 13,
                 height: 1.55,
               ),
@@ -706,31 +706,31 @@ class _LatestCard extends StatelessWidget {
     final tiles = <_StatTile>[
       _StatTile(
         icon: Icons.wb_sunny_outlined,
-        tone: AppTheme.warning,
+        tone: ZynColors.warning,
         label: 'الإنتاج الشمسي',
         value: '${_fmt(latest.solarPowerW)} W',
       ),
       _StatTile(
         icon: Icons.home_outlined,
-        tone: AppTheme.indigoPrimary,
+        tone: ZynColors.primary700,
         label: 'استهلاك المنزل',
         value: '${_fmt(latest.homeLoadW)} W',
       ),
       _StatTile(
         icon: Icons.battery_charging_full_outlined,
-        tone: AppTheme.success,
+        tone: ZynColors.success,
         label: 'شحن البطارية',
         value: '${_fmt(latest.batterySocPercent)}%',
       ),
       _StatTile(
         icon: Icons.battery_std_outlined,
-        tone: AppTheme.success,
+        tone: ZynColors.success,
         label: 'طاقة البطارية',
         value: '${_fmt(latest.batteryPowerW)} W',
       ),
       _StatTile(
         icon: Icons.bolt_outlined,
-        tone: AppTheme.violet,
+        tone: ZynColors.accent,
         label: 'تبادل الشبكة',
         value: '${_fmt(latest.gridPowerW)} W',
       ),
@@ -772,12 +772,12 @@ class _LatestCard extends StatelessWidget {
             Row(
               children: [
                 const Icon(Icons.access_time_outlined,
-                    color: AppTheme.faintMuted, size: 14),
+                    color: ZynColors.muted, size: 14),
                 const SizedBox(width: 6),
                 Text(
                   'تحديث: ${formatDateTime(latest.createdAt) ?? ''}',
                   style: const TextStyle(
-                    color: AppTheme.faintMuted,
+                    color: ZynColors.muted,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -790,7 +790,7 @@ class _LatestCard extends StatelessWidget {
             Text(
               latest.statusText,
               style: const TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 height: 1.55,
               ),
@@ -820,9 +820,9 @@ class _StatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.softBg,
+        color: ZynColors.bg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.line),
+        border: Border.all(color: ZynColors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -844,7 +844,7 @@ class _StatTile extends StatelessWidget {
                 child: Text(
                   label,
                   style: const TextStyle(
-                    color: AppTheme.muted,
+                    color: ZynColors.muted,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -861,7 +861,7 @@ class _StatTile extends StatelessWidget {
             child: Text(
               value,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.2,
@@ -961,7 +961,7 @@ class _InfoCard extends StatelessWidget {
             value: device.timezone.isNotEmpty ? device.timezone : '—',
           ),
           _KvRow(label: 'المعرّف', value: '#${device.id}'),
-          const Divider(color: AppTheme.line, height: 18, thickness: 1),
+          const Divider(color: ZynColors.line, height: 18, thickness: 1),
           _KvRow(
             label: 'آخر اتصال',
             value: formatDateTime(device.lastConnectedAt) ?? '—',
@@ -1118,10 +1118,10 @@ class _DeviceDetailMenuState extends ConsumerState<_DeviceDetailMenu> {
         PopupMenuItem<String>(
           value: 'delete',
           child: ListTile(
-            leading: Icon(Icons.power_settings_new, color: AppTheme.danger),
+            leading: Icon(Icons.power_settings_new, color: ZynColors.danger),
             title: Text(
               'إلغاء تفعيل الجهاز',
-              style: TextStyle(color: AppTheme.danger),
+              style: TextStyle(color: ZynColors.danger),
             ),
             dense: true,
             contentPadding: EdgeInsets.zero,
@@ -1218,7 +1218,7 @@ class _AlertRow extends StatelessWidget {
                 Text(
                   alertMessageArabic(alert),
                   style: const TextStyle(
-                    color: AppTheme.softInk,
+                    color: ZynColors.inkSoft,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                     height: 1.6,
@@ -1235,13 +1235,13 @@ class _AlertRow extends StatelessWidget {
   Color _toneForLevel(String level) {
     switch (level) {
       case 'warning':
-        return AppTheme.warning;
+        return ZynColors.warning;
       case 'critical':
       case 'danger':
-        return AppTheme.danger;
+        return ZynColors.danger;
       case 'info':
       default:
-        return AppTheme.indigoPrimary;
+        return ZynColors.primary700;
     }
   }
 
@@ -1292,7 +1292,7 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
           const Text(
             'آخر قراءات الجهاز خلال الأيام السابقة.',
             style: TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
               height: 1.55,
@@ -1326,7 +1326,7 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
                     'لا توجد قراءات محفوظة في النافذة الافتراضية '
                     '(آخر سبعة أيام).',
                     style: TextStyle(
-                      color: AppTheme.softInk,
+                      color: ZynColors.inkSoft,
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                       height: 1.6,
@@ -1344,7 +1344,7 @@ class _HistoryCardState extends ConsumerState<_HistoryCard> {
                   for (var i = 0; i < visible.length; i++) ...[
                     if (i > 0)
                       const Divider(
-                        color: AppTheme.line,
+                        color: ZynColors.line,
                         height: 14,
                         thickness: 1,
                       ),
@@ -1388,12 +1388,12 @@ class _HistoryRow extends StatelessWidget {
         Row(
           children: [
             const Icon(Icons.access_time_outlined,
-                size: 13, color: AppTheme.faintMuted),
+                size: 13, color: ZynColors.muted),
             const SizedBox(width: 6),
             Text(
               time,
               style: const TextStyle(
-                color: AppTheme.muted,
+                color: ZynColors.muted,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -1424,7 +1424,7 @@ class _HistoryRow extends StatelessWidget {
           Text(
             reading.statusText,
             style: const TextStyle(
-              color: AppTheme.softInk,
+              color: ZynColors.inkSoft,
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
               height: 1.55,
@@ -1451,7 +1451,7 @@ class _MiniMetric extends StatelessWidget {
         Text(
           '$label: ',
           style: const TextStyle(
-            color: AppTheme.faintMuted,
+            color: ZynColors.muted,
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
@@ -1459,7 +1459,7 @@ class _MiniMetric extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(
-            color: AppTheme.ink,
+            color: ZynColors.ink,
             fontSize: 12,
             fontWeight: FontWeight.w800,
           ),
@@ -1523,7 +1523,7 @@ class _SyncNowButtonState extends ConsumerState<_SyncNowButton> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: AppTheme.formControlHeight,
+      height: 46.0,
       child: OutlinedButton.icon(
         onPressed: _busy ? null : _run,
         icon: _busy
@@ -1550,20 +1550,20 @@ class _ActionRow extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: AppTheme.indigoSoft,
-          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-          border: Border.all(color: AppTheme.indigoBright.withValues(alpha: 0.40)),
+          color: ZynColors.primary50,
+          borderRadius: BorderRadius.circular(ZynRadii.card),
+          border: Border.all(color: ZynColors.primary500.withValues(alpha: 0.40)),
         ),
         child: const Row(
           children: [
             Icon(Icons.check_circle_outline,
-                color: AppTheme.indigoPrimary, size: 18),
+                color: ZynColors.primary700, size: 18),
             SizedBox(width: 8),
             Expanded(
               child: Text(
                 'هذا هو جهازك النشط الحالي.',
                 style: TextStyle(
-                  color: AppTheme.indigoPrimary,
+                  color: ZynColors.primary700,
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1574,7 +1574,7 @@ class _ActionRow extends StatelessWidget {
       );
     }
     return SizedBox(
-      height: AppTheme.formControlHeight + 4,
+      height: 46.0 + 4,
       child: FilledButton.icon(
         onPressed: onSetActive,
         icon: const Icon(Icons.bolt_outlined, size: 18),
@@ -1593,7 +1593,7 @@ class _SectionTitle extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: AppTheme.ink,
+        color: ZynColors.ink,
         fontSize: 14,
         fontWeight: FontWeight.w800,
       ),
@@ -1618,7 +1618,7 @@ class _KvRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: AppTheme.muted,
+                color: ZynColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -1629,7 +1629,7 @@ class _KvRow extends StatelessWidget {
             child: Text(
               value,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),

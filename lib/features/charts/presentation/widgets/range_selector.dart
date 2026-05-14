@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_theme.dart';
+import '../../../../core/design/zyn_tokens.dart';
 import '../../data/energy_chart_models.dart';
 
 /// Premium scope chips for the chart card (يوم / شهر / سنة / الإجمالي).
@@ -27,9 +27,9 @@ class ChartRangeSelector extends StatelessWidget {
       decoration: BoxDecoration(
         // Calm neutral strip — sits quietly under the title row and
         // lets the active chip pop without saturating the whole row.
-        color: AppTheme.softBg,
+        color: ZynColors.bg,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.line.withValues(alpha: 0.7)),
+        border: Border.all(color: ZynColors.line.withValues(alpha: 0.7)),
       ),
       child: Row(
         children: [
@@ -72,21 +72,21 @@ class _RangeChip extends StatelessWidget {
     final Color bg;
     final List<BoxShadow> shadow;
     if (disabled) {
-      fg = AppTheme.faintMuted.withValues(alpha: 0.55);
+      fg = ZynColors.muted.withValues(alpha: 0.55);
       bg = Colors.transparent;
       shadow = const [];
     } else if (selected) {
-      fg = AppTheme.indigoPrimary;
-      bg = AppTheme.indigoSoft;
+      fg = ZynColors.primary700;
+      bg = ZynColors.primary50;
       shadow = [
         BoxShadow(
-          color: AppTheme.indigoPrimary.withValues(alpha: 0.12),
+          color: ZynColors.primary700.withValues(alpha: 0.12),
           blurRadius: 10,
           offset: const Offset(0, 3),
         ),
       ];
     } else {
-      fg = AppTheme.muted;
+      fg = ZynColors.muted;
       bg = Colors.transparent;
       shadow = const [];
     }
@@ -110,7 +110,7 @@ class _RangeChip extends StatelessWidget {
             border: selected
                 ? Border.all(
                     color:
-                        AppTheme.indigoBright.withValues(alpha: 0.22),
+                        ZynColors.primary500.withValues(alpha: 0.22),
                   )
                 : null,
           ),

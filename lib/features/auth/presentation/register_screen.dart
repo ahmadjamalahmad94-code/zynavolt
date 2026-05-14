@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
@@ -489,7 +488,7 @@ class _LoginPrompt extends StatelessWidget {
         const Text(
           'لديك حساب بالفعل؟ ',
           style: TextStyle(
-            color: AppTheme.faintMuted,
+            color: ZynColors.muted,
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
           ),
@@ -504,7 +503,7 @@ class _LoginPrompt extends StatelessWidget {
           child: const Text(
             'تسجيل الدخول',
             style: TextStyle(
-              color: AppTheme.indigoPrimary,
+              color: ZynColors.primary700,
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
             ),
@@ -530,13 +529,13 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 18, color: AppTheme.danger),
+          const Icon(Icons.error_outline, size: 18, color: ZynColors.danger),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.danger,
+                color: ZynColors.danger,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 height: 1.5,

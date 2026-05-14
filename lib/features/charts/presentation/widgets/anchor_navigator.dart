@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_theme.dart';
+import '../../../../core/design/zyn_tokens.dart';
 import '../../data/energy_chart_models.dart';
 
 /// RTL-aware date navigator. Renders as:  [‹ previous]  [date label]  [next ›]
@@ -59,7 +59,7 @@ class ChartAnchorNavigator extends StatelessWidget {
                   Text(
                     _formatAnchor(),
                     style: const TextStyle(
-                      color: AppTheme.ink,
+                      color: ZynColors.ink,
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.1,
@@ -69,7 +69,7 @@ class ChartAnchorNavigator extends StatelessWidget {
                   Text(
                     'اضغط لاختيار تاريخ',
                     style: TextStyle(
-                      color: AppTheme.faintMuted.withValues(alpha: 0.85),
+                      color: ZynColors.muted.withValues(alpha: 0.85),
                       fontSize: 10.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -128,17 +128,17 @@ class _NavButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: enabled
                   ? Colors.white
-                  : AppTheme.softBg,
+                  : ZynColors.bg,
               borderRadius: BorderRadius.circular(13),
               border: Border.all(
                 color: enabled
-                    ? AppTheme.line
-                    : AppTheme.line.withValues(alpha: 0.5),
+                    ? ZynColors.line
+                    : ZynColors.line.withValues(alpha: 0.5),
               ),
               boxShadow: enabled
                   ? [
                       BoxShadow(
-                        color: AppTheme.indigoPrimary
+                        color: ZynColors.primary700
                             .withValues(alpha: 0.05),
                         blurRadius: 6,
                         offset: const Offset(0, 2),
@@ -150,8 +150,8 @@ class _NavButton extends StatelessWidget {
               icon,
               size: 20,
               color: enabled
-                  ? AppTheme.indigoPrimary
-                  : AppTheme.faintMuted.withValues(alpha: 0.55),
+                  ? ZynColors.primary700
+                  : ZynColors.muted.withValues(alpha: 0.55),
             ),
           ),
         ),

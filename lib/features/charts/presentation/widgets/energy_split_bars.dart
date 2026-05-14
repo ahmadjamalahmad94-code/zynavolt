@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_theme.dart';
+import '../../../../core/design/zyn_tokens.dart';
 import '../../data/energy_chart_models.dart';
 import 'chart_palette.dart';
 
@@ -80,18 +80,18 @@ class _BandHeader extends StatelessWidget {
           height: 26,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppTheme.indigoSoft,
+            color: ZynColors.primary50,
             borderRadius: BorderRadius.circular(9),
           ),
           child:
-              Icon(icon, color: AppTheme.indigoPrimary, size: 14),
+              Icon(icon, color: ZynColors.primary700, size: 14),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
             label,
             style: const TextStyle(
-              color: AppTheme.softInk,
+              color: ZynColors.inkSoft,
               fontSize: 13.5,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.1,
@@ -103,16 +103,16 @@ class _BandHeader extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
                 horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: AppTheme.softBg,
+              color: ZynColors.bg,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: AppTheme.line.withValues(alpha: 0.7),
+                color: ZynColors.line.withValues(alpha: 0.7),
               ),
             ),
             child: Text(
               trailingValue!,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.1,
@@ -167,7 +167,7 @@ class _CompositionBar extends StatelessWidget {
         Container(
           height: 14,
           decoration: BoxDecoration(
-            color: AppTheme.line.withValues(alpha: 0.18),
+            color: ZynColors.line.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(999),
           ),
           child: ClipRRect(
@@ -240,7 +240,7 @@ class _CompositionLabel extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            color: AppTheme.muted,
+            color: ZynColors.muted,
             fontSize: 11.5,
             fontWeight: FontWeight.w800,
           ),
@@ -479,7 +479,7 @@ class _HeroStatTile extends StatelessWidget {
             Text(
               '—',
               style: TextStyle(
-                color: AppTheme.faintMuted.withValues(alpha: 0.7),
+                color: ZynColors.muted.withValues(alpha: 0.7),
                 fontSize: 24,
                 fontWeight: FontWeight.w900,
                 height: 1.0,
@@ -493,7 +493,7 @@ class _HeroStatTile extends StatelessWidget {
                 Text(
                   value.numeral,
                   style: const TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     height: 1.0,
@@ -505,7 +505,7 @@ class _HeroStatTile extends StatelessWidget {
                   Text(
                     value.unit,
                     style: TextStyle(
-                      color: AppTheme.faintMuted
+                      color: ZynColors.muted
                           .withValues(alpha: 0.95),
                       fontSize: 10.5,
                       fontWeight: FontWeight.w800,
@@ -529,14 +529,14 @@ class _EmptyBar extends StatelessWidget {
     return Container(
       height: 14,
       decoration: BoxDecoration(
-        color: AppTheme.line.withValues(alpha: 0.30),
+        color: ZynColors.line.withValues(alpha: 0.30),
         borderRadius: BorderRadius.circular(999),
       ),
       alignment: Alignment.center,
       child: const Text(
         'لا يوجد توزيع لهذه الفترة',
         style: TextStyle(
-          color: AppTheme.faintMuted,
+          color: ZynColors.muted,
           fontSize: 10,
           fontWeight: FontWeight.w700,
         ),

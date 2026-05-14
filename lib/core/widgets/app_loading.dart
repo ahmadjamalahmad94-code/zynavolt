@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/app_theme.dart';
+import '../design/zyn_tokens.dart';
 
 /// Centralised loading state. Use everywhere we wait on a single
 /// in-flight request after first paint.
@@ -22,7 +22,7 @@ class AppLoading extends StatelessWidget {
               height: 28,
               child: CircularProgressIndicator(
                 strokeWidth: 2.4,
-                color: AppTheme.indigoPrimary,
+                color: ZynColors.primary700,
               ),
             ),
             if (message != null) ...[
@@ -31,7 +31,7 @@ class AppLoading extends StatelessWidget {
                 message!,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: AppTheme.faintMuted,
+                  color: ZynColors.muted,
                   fontSize: 13,
                 ),
               ),

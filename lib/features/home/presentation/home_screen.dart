@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/state/app_session.dart';
 import '../../../core/state/auto_refresh.dart';
 import '../../../core/utils/backend_time.dart';
@@ -80,18 +80,7 @@ class _ScreenBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFFE0E7FF), // pale indigo
-            Color(0xFFF1F5FF),
-            Color(0xFFF8FAFC), // soft bg
-          ],
-          stops: [0.0, 0.35, 0.85],
-        ),
-      ),
+      decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
       child: SafeArea(child: child),
     );
   }
@@ -108,7 +97,7 @@ class _HomeBody extends ConsumerWidget {
     final dashboard = ref.watch(dashboardProvider);
 
     return RefreshIndicator(
-      color: AppTheme.indigoPrimary,
+      color: ZynColors.primary700,
       onRefresh: () async {
         ref.invalidate(dashboardProvider);
         // v75: also refresh the insights card so pull-to-refresh
@@ -222,34 +211,11 @@ class _HomeHero extends StatelessWidget {
     // art. Multi-layer shadows + a subtle top highlight give the card
     // genuine 3-D depth instead of the previous flat slab.
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          // Close shadow — defines the card edge
-          BoxShadow(
-            color: const Color(0xFF0E1A2E).withValues(alpha: 0.32),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-          // Diffuse ambient — gives the floating-glass feel
-          BoxShadow(
-            color: const Color(0xFF1B2C4A).withValues(alpha: 0.22),
-            blurRadius: 36,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
+      decoration: zynNavyHeroDecoration(radius: ZynRadii.hero),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(ZynRadii.hero),
         child: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-              colors: [Color(0xFF1B2C4A), Color(0xFF152340), Color(0xFF0E1A2E)],
-              stops: [0.0, 0.55, 1.0],
-            ),
-          ),
+          decoration: const BoxDecoration(gradient: ZynColors.navyHero),
           child: Stack(
             children: [
               // Sun + solar-panel illustration anchored on the LEFT,
@@ -707,7 +673,7 @@ class _ScopeNotice extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
+        color: ZynColors.primary50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFC7D2FE)),
       ),
@@ -717,14 +683,14 @@ class _ScopeNotice extends StatelessWidget {
           const Icon(
             Icons.info_outline,
             size: 16,
-            color: AppTheme.indigoPrimary,
+            color: ZynColors.primary700,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               style: const TextStyle(
-                color: AppTheme.softInk,
+                color: ZynColors.inkSoft,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 height: 1.55,
@@ -798,11 +764,11 @@ class _EnergyFlowCardState extends State<_EnergyFlowCard>
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(AppTheme.radiusGlass),
-        border: Border.all(color: AppTheme.line),
+        borderRadius: BorderRadius.circular(ZynRadii.xl),
+        border: Border.all(color: ZynColors.line),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.06),
+            color: ZynColors.primary700.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -847,16 +813,16 @@ class _FlowCardHeader extends StatelessWidget {
           height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppTheme.indigoSoft,
+            color: ZynColors.primary50,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: AppTheme.indigoPrimary.withValues(alpha: 0.18),
+              color: ZynColors.primary700.withValues(alpha: 0.18),
               width: 0.8,
             ),
           ),
           child: const Icon(
             Icons.timeline_outlined,
-            color: AppTheme.indigoPrimary,
+            color: ZynColors.primary700,
             size: 17,
           ),
         ),
@@ -868,7 +834,7 @@ class _FlowCardHeader extends StatelessWidget {
             const Text(
               'حالة النظام',
               style: TextStyle(
-                color: AppTheme.faintMuted,
+                color: ZynColors.muted,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -880,7 +846,7 @@ class _FlowCardHeader extends StatelessWidget {
                 Text(
                   hasStatus ? statusText : 'لا توجد قراءة',
                   style: const TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
                     height: 1.2,
@@ -892,11 +858,11 @@ class _FlowCardHeader extends StatelessWidget {
                   height: 8,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: hasStatus ? AppTheme.success : AppTheme.faintMuted,
+                    color: hasStatus ? ZynColors.success : ZynColors.muted,
                     boxShadow: hasStatus
                         ? [
                             BoxShadow(
-                              color: AppTheme.success.withValues(alpha: 0.45),
+                              color: ZynColors.success.withValues(alpha: 0.45),
                               blurRadius: 8,
                               spreadRadius: 1,
                             ),
@@ -1300,7 +1266,7 @@ class _FlowDiagram extends StatelessWidget {
                 solarRect,
                 _FlowNodeCard(
                   icon: Icons.wb_sunny,
-                  tone: AppTheme.warning,
+                  tone: ZynColors.warning,
                   label: 'الألواح',
                   value: _formatNodeValue(cards.solarPowerW),
                   active: flags.solar,
@@ -1311,7 +1277,7 @@ class _FlowDiagram extends StatelessWidget {
                 gridRect,
                 _FlowNodeCard(
                   icon: Icons.bolt_outlined,
-                  tone: AppTheme.violet,
+                  tone: ZynColors.accent,
                   label: 'الشبكة',
                   value: _formatNodeValue(cards.gridPowerW),
                   active: flags.grid,
@@ -1322,7 +1288,7 @@ class _FlowDiagram extends StatelessWidget {
                 batteryRect,
                 _FlowNodeCard(
                   icon: Icons.battery_full,
-                  tone: AppTheme.success,
+                  tone: ZynColors.success,
                   label: 'البطارية',
                   value: _formatNodeValue(cards.batteryPowerW),
                   active: flags.battery,
@@ -1336,7 +1302,7 @@ class _FlowDiagram extends StatelessWidget {
                 homeRect,
                 _FlowNodeCard(
                   icon: Icons.home_rounded,
-                  tone: AppTheme.indigoPrimary,
+                  tone: ZynColors.primary700,
                   label: 'البيت',
                   value: _formatNodeValue(cards.homeLoadW),
                   active: flags.home,
@@ -1357,7 +1323,7 @@ class _FlowDiagram extends StatelessWidget {
                 ),
                 _FlowNodeCard(
                   icon: Icons.power_outlined,
-                  tone: AppTheme.cyan,
+                  tone: ZynColors.cyan,
                   label: 'المولد',
                   value: _formatNodeValue(cards.generatorPowerW),
                   active: flags.generator,
@@ -1422,7 +1388,7 @@ class _AnimatedFlowPainter extends CustomPainter {
 
   void _drawAnchor(Canvas canvas, Offset point, _FlowMotionMode mode) {
     final active = mode != _FlowMotionMode.none;
-    final color = active ? AppTheme.indigoBright : AppTheme.line;
+    final color = active ? ZynColors.primary500 : ZynColors.line;
     canvas.drawCircle(point, _anchorR, Paint()..color = color);
     canvas.drawCircle(
       point,
@@ -1454,7 +1420,7 @@ class _AnimatedFlowPainter extends CustomPainter {
   /// Inactive connector — thin muted static line.
   void _drawStatic(Canvas canvas, Path path) {
     final paint = Paint()
-      ..color = AppTheme.line
+      ..color = ZynColors.line
       ..strokeWidth = _strokeWInactive
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
@@ -1471,7 +1437,7 @@ class _AnimatedFlowPainter extends CustomPainter {
     final wave = (math.sin(phase * 2 * math.pi) + 1) / 2; // 0..1
     final opacity = 0.45 + 0.55 * wave;
     final paint = Paint()
-      ..color = AppTheme.indigoBright.withValues(alpha: opacity)
+      ..color = ZynColors.primary500.withValues(alpha: opacity)
       ..strokeWidth = _strokeWPulse
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
@@ -1486,7 +1452,7 @@ class _AnimatedFlowPainter extends CustomPainter {
   ///   reverse: true  → dashes travel against it (hub → node) = awayFromHub.
   void _drawDashes(Canvas canvas, Path path, {required bool reverse}) {
     final paint = Paint()
-      ..color = AppTheme.indigoBright
+      ..color = ZynColors.primary500
       ..strokeWidth = _strokeWActive
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
@@ -1553,10 +1519,10 @@ class _FlowNodeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderColor = active
-        ? AppTheme.indigoBright.withValues(alpha: 0.45)
-        : AppTheme.line;
-    final iconColor = active ? tone : AppTheme.faintMuted;
-    final valueColor = active ? AppTheme.ink : AppTheme.muted;
+        ? ZynColors.primary500.withValues(alpha: 0.45)
+        : ZynColors.line;
+    final iconColor = active ? tone : ZynColors.muted;
+    final valueColor = active ? ZynColors.ink : ZynColors.muted;
 
     // Battery row puts the icon next to the SOC chip — both INSIDE the
     // card. No floating Positioned anywhere — the chip can never drift.
@@ -1570,7 +1536,7 @@ class _FlowNodeCard extends StatelessWidget {
         border: Border.all(color: borderColor, width: active ? 1.4 : 1.0),
         boxShadow: [
           BoxShadow(
-            color: (active ? AppTheme.indigoPrimary : AppTheme.softInk)
+            color: (active ? ZynColors.primary700 : ZynColors.inkSoft)
                 .withValues(alpha: active ? 0.10 : 0.04),
             blurRadius: active ? 14 : 7,
             offset: const Offset(0, 4),
@@ -1605,7 +1571,7 @@ class _FlowNodeCard extends StatelessWidget {
                     vertical: 1,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.indigoSoft,
+                    color: ZynColors.primary50,
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(color: const Color(0xFFC7D2FE)),
                   ),
@@ -1613,7 +1579,7 @@ class _FlowNodeCard extends StatelessWidget {
                     socBadge!,
                     maxLines: 1,
                     style: const TextStyle(
-                      color: AppTheme.indigoPrimary,
+                      color: ZynColors.primary700,
                       fontSize: 9.5,
                       fontWeight: FontWeight.w900,
                       fontFeatures: [FontFeature.tabularFigures()],
@@ -1647,7 +1613,7 @@ class _FlowNodeCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 10,
               fontWeight: FontWeight.w700,
               height: 1.1,
@@ -1680,19 +1646,19 @@ class _FlowHubCard extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: AppTheme.indigoBright.withValues(alpha: 0.55),
+          color: ZynColors.primary500.withValues(alpha: 0.55),
           width: 1.6,
         ),
         boxShadow: [
           // Outer indigo glow.
           BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.22),
+            color: ZynColors.primary700.withValues(alpha: 0.22),
             blurRadius: 26,
             offset: const Offset(0, 10),
           ),
           // Tight inner-feel shadow for premium depth.
           BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.06),
+            color: ZynColors.primary700.withValues(alpha: 0.06),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -1711,7 +1677,7 @@ class _FlowHubCard extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.indigoPrimary.withValues(alpha: 0.18),
+                  color: ZynColors.primary700.withValues(alpha: 0.18),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1719,7 +1685,7 @@ class _FlowHubCard extends StatelessWidget {
             ),
             child: Container(
               decoration: const BoxDecoration(
-                color: AppTheme.indigoSoft,
+                color: ZynColors.primary50,
                 shape: BoxShape.circle,
               ),
               child: ClipOval(
@@ -1730,7 +1696,7 @@ class _FlowHubCard extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const Icon(
                     Icons.electric_meter_outlined,
-                    color: AppTheme.indigoPrimary,
+                    color: ZynColors.primary700,
                     size: 20,
                   ),
                 ),
@@ -1743,7 +1709,7 @@ class _FlowHubCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: AppTheme.indigoPrimary,
+              color: ZynColors.primary700,
               fontSize: 11,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.4,
@@ -1795,10 +1761,10 @@ class _BatteryCard extends StatelessWidget {
     // battery's importance reads at a glance: success-green when
     // healthy, warm amber when mid, danger red when critical.
     final socColor = soc >= 50
-        ? AppTheme.success
+        ? ZynColors.success
         : soc >= 20
-        ? AppTheme.warning
-        : AppTheme.danger;
+        ? ZynColors.warning
+        : ZynColors.danger;
     final batteryPower = cards.batteryPowerW;
     final (modeText, modeIcon) = batteryPower > 0
         ? ('شحن', Icons.bolt_rounded)
@@ -1904,7 +1870,7 @@ class _BatteryCard extends StatelessWidget {
                             Text(
                               'البطارية',
                               style: TextStyle(
-                                color: AppTheme.ink,
+                                color: ZynColors.ink,
                                 fontSize: 15.5,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: -0.2,
@@ -1914,7 +1880,7 @@ class _BatteryCard extends StatelessWidget {
                             Text(
                               'مستوى الشحن والقدرة اللحظية',
                               style: TextStyle(
-                                color: AppTheme.faintMuted,
+                                color: ZynColors.muted,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1972,7 +1938,7 @@ class _BatteryCard extends StatelessWidget {
                                   ? soc.toStringAsFixed(0)
                                   : soc.toStringAsFixed(1),
                               style: TextStyle(
-                                color: AppTheme.ink,
+                                color: ZynColors.ink,
                                 fontSize: 40,
                                 fontWeight: FontWeight.w900,
                                 height: 1.0,
@@ -2007,7 +1973,7 @@ class _BatteryCard extends StatelessWidget {
                           const Text(
                             'التدفق الآن',
                             style: TextStyle(
-                              color: AppTheme.faintMuted,
+                              color: ZynColors.muted,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                             ),
@@ -2133,10 +2099,10 @@ class _ProductionCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [Colors.white, Color(0xFFF8FBFF)],
         ),
-        border: Border.all(color: AppTheme.line, width: 1),
+        border: Border.all(color: ZynColors.line, width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.indigoPrimary.withValues(alpha: 0.06),
+            color: ZynColors.primary700.withValues(alpha: 0.06),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -2155,7 +2121,7 @@ class _ProductionCard extends StatelessWidget {
             icon: Icons.bar_chart_rounded,
             title: 'الإنتاج',
             subtitle: 'إجمالي الطاقة المنتجة كما يحتسبها الخادم',
-            accent: AppTheme.warning,
+            accent: ZynColors.warning,
           ),
           const SizedBox(height: 14),
           // v99d — three glossy tiles instead of dot+divider columns.
@@ -2168,7 +2134,7 @@ class _ProductionCard extends StatelessWidget {
                 child: _ProductionCol(
                   label: 'اليوم',
                   valueText: _formatKwh(cards.dailyProductionKwh),
-                  tone: AppTheme.warning,
+                  tone: ZynColors.warning,
                   icon: Icons.wb_sunny_rounded,
                 ),
               ),
@@ -2177,7 +2143,7 @@ class _ProductionCard extends StatelessWidget {
                 child: _ProductionCol(
                   label: 'الشهر',
                   valueText: _formatKwh(cards.monthlyProductionKwh),
-                  tone: AppTheme.indigoPrimary,
+                  tone: ZynColors.primary700,
                   icon: Icons.calendar_month_rounded,
                 ),
               ),
@@ -2186,7 +2152,7 @@ class _ProductionCard extends StatelessWidget {
                 child: _ProductionCol(
                   label: 'الإجمالي',
                   valueText: _formatKwh(cards.totalProductionKwh),
-                  tone: AppTheme.success,
+                  tone: ZynColors.success,
                   icon: Icons.public_rounded,
                 ),
               ),
@@ -2272,7 +2238,7 @@ class _ProductionCol extends StatelessWidget {
           Text(
             valueText,
             style: const TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 14.5,
               fontWeight: FontWeight.w900,
               height: 1.1,
@@ -2308,11 +2274,11 @@ class _FooterMetaChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.line),
+        border: Border.all(color: ZynColors.line),
       ),
       child: Row(
         children: [
-          const Icon(Icons.schedule, size: 14, color: AppTheme.faintMuted),
+          const Icon(Icons.schedule, size: 14, color: ZynColors.muted),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -2321,7 +2287,7 @@ class _FooterMetaChip extends StatelessWidget {
                 Text(
                   'آخر قراءة: $reading',
                   style: const TextStyle(
-                    color: AppTheme.softInk,
+                    color: ZynColors.inkSoft,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     fontFeatures: [FontFeature.tabularFigures()],
@@ -2332,7 +2298,7 @@ class _FooterMetaChip extends StatelessWidget {
                   // v73: bumped fontSize 10.5 → 11 for readability.
                   'وقت الاستجابة: $generated',
                   style: const TextStyle(
-                    color: AppTheme.faintMuted,
+                    color: ZynColors.muted,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     fontFeatures: [FontFeature.tabularFigures()],
@@ -2371,7 +2337,7 @@ class _CardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = accent ?? AppTheme.indigoPrimary;
+    final tint = accent ?? ZynColors.primary700;
     final hasAccent = accent != null;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -2391,7 +2357,7 @@ class _CardHeader extends StatelessWidget {
                     ],
                   )
                 : null,
-            color: hasAccent ? null : AppTheme.indigoSoft,
+            color: hasAccent ? null : ZynColors.primary50,
             borderRadius: BorderRadius.circular(hasAccent ? 11 : 9),
             border: hasAccent
                 ? Border.all(color: tint.withValues(alpha: 0.22), width: 0.8)
@@ -2407,7 +2373,7 @@ class _CardHeader extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  color: AppTheme.ink,
+                  color: ZynColors.ink,
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
                 ),
@@ -2417,7 +2383,7 @@ class _CardHeader extends StatelessWidget {
                 Text(
                   subtitle!,
                   style: const TextStyle(
-                    color: AppTheme.faintMuted,
+                    color: ZynColors.muted,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     height: 1.4,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/app_theme.dart';
+import '../design/zyn_tokens.dart';
 
 /// Honest empty state — icon + one short line + optional CTA. Matches the
 /// pattern from v35 §7.2: no 400 px blank rectangles, no marketing prose.
@@ -31,17 +31,17 @@ class AppEmptyState extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppTheme.indigoSoft,
+                color: ZynColors.primary50,
                 borderRadius: BorderRadius.circular(40),
               ),
-              child: Icon(icon, size: 28, color: AppTheme.indigoPrimary),
+              child: Icon(icon, size: 28, color: ZynColors.primary700),
             ),
             const SizedBox(height: 14),
             Text(
               title,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: AppTheme.ink,
+                color: ZynColors.ink,
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
               ),
@@ -52,7 +52,7 @@ class AppEmptyState extends StatelessWidget {
                 subtitle!,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: AppTheme.faintMuted,
+                  color: ZynColors.muted,
                   fontSize: 13,
                   height: 1.55,
                 ),

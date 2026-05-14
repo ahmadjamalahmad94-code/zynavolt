@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/widgets/app_card.dart';
 import '../data/device_detail_models.dart';
@@ -130,7 +130,7 @@ class _EditDeviceScreenState extends ConsumerState<EditDeviceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.softBg,
+      backgroundColor: ZynColors.bg,
       appBar: AppBar(title: const Text('تعديل الجهاز')),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -186,7 +186,7 @@ class _EditDeviceScreenState extends ConsumerState<EditDeviceScreen> {
                       const Text(
                         'تُستخدم لحسابات الفائض الفعلي والتحليل الذكي على الخادم.',
                         style: TextStyle(
-                          color: AppTheme.faintMuted,
+                          color: ZynColors.muted,
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
                           height: 1.55,
@@ -245,7 +245,7 @@ class _EditDeviceScreenState extends ConsumerState<EditDeviceScreen> {
                 ],
                 const SizedBox(height: 18),
                 SizedBox(
-                  height: AppTheme.formControlHeight,
+                  height: 46.0,
                   child: FilledButton.icon(
                     onPressed: _submitting ? null : _submit,
                     icon: _submitting
@@ -279,7 +279,7 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Text(
         label,
         style: const TextStyle(
-          color: AppTheme.ink,
+          color: ZynColors.ink,
           fontSize: 14,
           fontWeight: FontWeight.w800,
         ),
@@ -296,22 +296,22 @@ class _HonestNote extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.indigoBright.withValues(alpha: 0.25)),
+        color: ZynColors.primary50,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.primary500.withValues(alpha: 0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.info_outline,
-              color: AppTheme.indigoPrimary, size: 16),
+              color: ZynColors.primary700, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'تعديل بيانات «$subject». بيانات الاتصال بالمزوّد والمنطقة '
               'الزمنية والتفعيل تُغيَّر من تدفقات مخصّصة منفصلة.',
               style: const TextStyle(
-                color: AppTheme.indigoPrimary,
+                color: ZynColors.primary700,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.6,
@@ -333,20 +333,20 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.danger.withValues(alpha: 0.30)),
+        color: ZynColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.danger.withValues(alpha: 0.30)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: AppTheme.danger, size: 16),
+          const Icon(Icons.error_outline, color: ZynColors.danger, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.danger,
+                color: ZynColors.danger,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.55,

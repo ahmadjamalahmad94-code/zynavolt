@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/api/api_exception.dart';
 import '../../devices/state/selected_device_provider.dart';
 import '../data/energy_chart_models.dart';
@@ -123,11 +123,11 @@ class _HomeEnergyChartCardState
         // the rounded edge and the bands have proper rhythm.
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
         decoration: BoxDecoration(
-          color: AppTheme.surface,
+          color: ZynColors.surface,
           borderRadius:
-              BorderRadius.circular(AppTheme.radiusGlass + 4), // 22
-          border: Border.all(color: AppTheme.line.withValues(alpha: 0.8)),
-          boxShadow: AppTheme.softShadow,
+              BorderRadius.circular(ZynRadii.xl + 4), // 22
+          border: Border.all(color: ZynColors.line.withValues(alpha: 0.8)),
+          boxShadow: ZynShadows.soft(),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -194,18 +194,18 @@ class _CardHeader extends StatelessWidget {
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
               colors: [
-                AppTheme.indigoSoft,
-                AppTheme.indigoBright.withValues(alpha: 0.18),
+                ZynColors.primary50,
+                ZynColors.primary500.withValues(alpha: 0.18),
               ],
             ),
             borderRadius: BorderRadius.circular(11),
             border: Border.all(
-              color: AppTheme.indigoBright.withValues(alpha: 0.16),
+              color: ZynColors.primary500.withValues(alpha: 0.16),
             ),
           ),
           child: const Icon(
             Icons.show_chart_rounded,
-            color: AppTheme.indigoPrimary,
+            color: ZynColors.primary700,
             size: 19,
           ),
         ),
@@ -217,7 +217,7 @@ class _CardHeader extends StatelessWidget {
               Text(
                 'منحنى القدرة',
                 style: TextStyle(
-                  color: AppTheme.ink,
+                  color: ZynColors.ink,
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
                   height: 1.1,
@@ -228,7 +228,7 @@ class _CardHeader extends StatelessWidget {
               Text(
                 'تتبع الإنتاج والاستهلاك خلال الفترة',
                 style: TextStyle(
-                  color: AppTheme.faintMuted,
+                  color: ZynColors.muted,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
                   height: 1.45,
@@ -244,10 +244,10 @@ class _CardHeader extends StatelessWidget {
           padding:
               const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: AppTheme.emerald.withValues(alpha: 0.10),
+            color: ZynColors.success.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: AppTheme.emerald.withValues(alpha: 0.20),
+              color: ZynColors.success.withValues(alpha: 0.20),
             ),
           ),
           child: Row(
@@ -257,11 +257,11 @@ class _CardHeader extends StatelessWidget {
                 width: 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: AppTheme.emerald,
+                  color: ZynColors.success,
                   borderRadius: BorderRadius.circular(999),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.emerald.withValues(alpha: 0.45),
+                      color: ZynColors.success.withValues(alpha: 0.45),
                       blurRadius: 4,
                     ),
                   ],
@@ -271,7 +271,7 @@ class _CardHeader extends StatelessWidget {
               const Text(
                 'حيّ',
                 style: TextStyle(
-                  color: AppTheme.emerald,
+                  color: ZynColors.success,
                   fontSize: 10.5,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.1,
@@ -372,7 +372,7 @@ class _HeroMetricRow extends StatelessWidget {
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: AppTheme.emerald,
+                      color: ZynColors.success,
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -380,7 +380,7 @@ class _HeroMetricRow extends StatelessWidget {
                   Text(
                     'إجمالي الإنتاج',
                     style: TextStyle(
-                      color: AppTheme.muted.withValues(alpha: 0.95),
+                      color: ZynColors.muted.withValues(alpha: 0.95),
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                     ),
@@ -395,7 +395,7 @@ class _HeroMetricRow extends StatelessWidget {
                   Text(
                     _fmtKwh(series.productionKwh),
                     style: const TextStyle(
-                      color: AppTheme.ink,
+                      color: ZynColors.ink,
                       fontSize: 26,
                       fontWeight: FontWeight.w900,
                       height: 1.0,
@@ -406,7 +406,7 @@ class _HeroMetricRow extends StatelessWidget {
                   Text(
                     'kWh',
                     style: TextStyle(
-                      color: AppTheme.faintMuted.withValues(alpha: 0.95),
+                      color: ZynColors.muted.withValues(alpha: 0.95),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.2,
@@ -428,7 +428,7 @@ class _HeroMetricRow extends StatelessWidget {
                 Text(
                   'الاستهلاك',
                   style: TextStyle(
-                    color: AppTheme.muted.withValues(alpha: 0.95),
+                    color: ZynColors.muted.withValues(alpha: 0.95),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -438,7 +438,7 @@ class _HeroMetricRow extends StatelessWidget {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: AppTheme.warning,
+                    color: ZynColors.warning,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -453,7 +453,7 @@ class _HeroMetricRow extends StatelessWidget {
                 Text(
                   _fmtKwh(series.consumptionKwh),
                   style: const TextStyle(
-                    color: AppTheme.softInk,
+                    color: ZynColors.inkSoft,
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
                     height: 1.0,
@@ -464,7 +464,7 @@ class _HeroMetricRow extends StatelessWidget {
                 Text(
                   'kWh',
                   style: TextStyle(
-                    color: AppTheme.faintMuted.withValues(alpha: 0.95),
+                    color: ZynColors.muted.withValues(alpha: 0.95),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.2,
@@ -504,10 +504,10 @@ class _TitleHintRow extends StatelessWidget {
         padding:
             const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: AppTheme.indigoSoft.withValues(alpha: 0.65),
+          color: ZynColors.primary50.withValues(alpha: 0.65),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: AppTheme.indigoBright.withValues(alpha: 0.16),
+            color: ZynColors.primary500.withValues(alpha: 0.16),
           ),
         ),
         child: Row(
@@ -516,14 +516,14 @@ class _TitleHintRow extends StatelessWidget {
             Icon(
               Icons.event_available_outlined,
               size: 13,
-              color: AppTheme.indigoPrimary.withValues(alpha: 0.85),
+              color: ZynColors.primary700.withValues(alpha: 0.85),
             ),
             const SizedBox(width: 6),
             Flexible(
               child: Text(
                 text,
                 style: TextStyle(
-                  color: AppTheme.indigoPrimary.withValues(alpha: 0.95),
+                  color: ZynColors.primary700.withValues(alpha: 0.95),
                   fontSize: 11.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.1,
@@ -552,9 +552,9 @@ class _BandSeparator extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppTheme.line.withValues(alpha: 0.0),
-            AppTheme.line.withValues(alpha: 0.85),
-            AppTheme.line.withValues(alpha: 0.0),
+            ZynColors.line.withValues(alpha: 0.0),
+            ZynColors.line.withValues(alpha: 0.85),
+            ZynColors.line.withValues(alpha: 0.0),
           ],
         ),
       ),
@@ -574,7 +574,7 @@ class _ChartLoading extends StatelessWidget {
         height: 24,
         child: CircularProgressIndicator(
           strokeWidth: 2.4,
-          color: AppTheme.indigoPrimary,
+          color: ZynColors.primary700,
         ),
       ),
     );
@@ -609,12 +609,12 @@ class _ChartStatePanel extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            AppTheme.indigoSoft.withValues(alpha: 0.35),
-            AppTheme.softBg.withValues(alpha: 0.55),
+            ZynColors.primary50.withValues(alpha: 0.35),
+            ZynColors.bg.withValues(alpha: 0.55),
           ],
         ),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard + 4),
-        border: Border.all(color: AppTheme.line.withValues(alpha: 0.6)),
+        borderRadius: BorderRadius.circular(ZynRadii.card + 4),
+        border: Border.all(color: ZynColors.line.withValues(alpha: 0.6)),
       ),
       child: Column(
         children: [
@@ -623,7 +623,7 @@ class _ChartStatePanel extends StatelessWidget {
             height: 56,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppTheme.indigoSoft.withValues(alpha: 0.55),
+              color: ZynColors.primary50.withValues(alpha: 0.55),
               shape: BoxShape.circle,
             ),
             child: Container(
@@ -631,11 +631,11 @@ class _ChartStatePanel extends StatelessWidget {
               height: 38,
               alignment: Alignment.center,
               decoration: const BoxDecoration(
-                color: AppTheme.indigoSoft,
+                color: ZynColors.primary50,
                 shape: BoxShape.circle,
               ),
               child:
-                  Icon(icon, color: AppTheme.indigoPrimary, size: 19),
+                  Icon(icon, color: ZynColors.primary700, size: 19),
             ),
           ),
           const SizedBox(height: 14),
@@ -643,7 +643,7 @@ class _ChartStatePanel extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 13.5,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.1,
@@ -654,7 +654,7 @@ class _ChartStatePanel extends StatelessWidget {
             subtitle,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: AppTheme.faintMuted,
+              color: ZynColors.muted,
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
               height: 1.6,

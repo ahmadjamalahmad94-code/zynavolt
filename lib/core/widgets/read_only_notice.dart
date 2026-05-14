@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/app_theme.dart';
+import '../design/zyn_tokens.dart';
 
 /// Calm "للقراءة فقط" notice (v76).
 ///
@@ -21,22 +21,22 @@ class ReadOnlyNotice extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+        color: ZynColors.primary50,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
         border: Border.all(
-          color: AppTheme.indigoBright.withValues(alpha: 0.25),
+          color: ZynColors.primary500.withValues(alpha: 0.25),
         ),
       ),
       child: Row(
         children: [
           const Icon(Icons.lock_outline,
-              color: AppTheme.indigoPrimary, size: 16),
+              color: ZynColors.primary700, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: AppTheme.indigoPrimary,
+                color: ZynColors.primary700,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 height: 1.5,
