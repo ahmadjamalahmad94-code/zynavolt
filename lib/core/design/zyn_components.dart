@@ -1051,7 +1051,7 @@ class _HeroBackButton extends StatelessWidget {
             ),
           ),
           child: const Icon(
-            Icons.arrow_forward_rounded, // RTL: visually "back"
+            Icons.arrow_back_rounded,
             color: Colors.white,
             size: 18,
           ),
