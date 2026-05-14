@@ -23,9 +23,15 @@ class NotifSummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    // IntrinsicHeight gives all three cards the same height via the
+    // tallest card's intrinsic measurement, but explicitly bounds
+    // vertical for the Row so we don't depend on stretch behaviour
+    // inside an unbounded ListView slot (which was silently
+    // collapsing the rest of the page on real devices).
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         Expanded(
           child: _SummaryCard(
             tone: batteryStable ? ZynColors.success : ZynColors.warning,
@@ -68,7 +74,8 @@ class NotifSummaryStrip extends StatelessWidget {
             subtitle: 'إجمالي الإشعارات',
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -106,21 +113,21 @@ class _SummaryCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Top icon — tone-coloured filled circle, top-left in LTR
-          // which renders as top-right in RTL automatically.
-          Align(
-            alignment: AlignmentDirectional.topStart,
-            child: Container(
-              width: 30,
-              height: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.18),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: tone, size: 16),
+          // Top icon — tone-coloured filled circle. Column's
+          // crossAxisAlignment.start places it on the start edge
+          // automatically; the previous Align wrapper was eating
+          // the column's vertical layout in some contexts.
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: tone.withValues(alpha: 0.18),
+              shape: BoxShape.circle,
             ),
+            child: Icon(icon, color: tone, size: 16),
           ),
           const SizedBox(height: ZynSpacing.sm),
           if (value != null) ...[

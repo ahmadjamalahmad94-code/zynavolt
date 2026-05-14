@@ -8,17 +8,19 @@ import '../../data/notification_models.dart';
 /// v102 DS v1 — unified notification tile.
 ///
 /// Renders one [AppNotification] as a card with:
-///   * a left-edge accent strip in the bucket's tone,
-///   * a tone-tinted square icon on the (right in RTL) leading edge,
-///   * title (single line, ellipsised),
-///   * one-line summary (the message body, ellipsised to 2 lines),
-///   * a small tone-coloured chip label naming the bucket / source,
-///   * a faint timestamp on the (left in RTL) trailing column,
-///   * an unread dot at the start of the title row when relevant.
+///   * a leading-edge tone-coloured accent strip (positioned overlay
+///     so the strip stretches the full tile height without needing
+///     an `IntrinsicHeight` wrapper that was breaking layout on
+///     real devices),
+///   * a tone-tinted square icon chip,
+///   * title (single line),
+///   * one-line/two-line summary,
+///   * a tone-coloured chip label,
+///   * a faint timestamp on the trailing column,
+///   * an unread dot on the title row when relevant.
 ///
-/// Tap → [onTap]. The parent owns the detail-sheet open path so the
-/// tile itself stays a pure presentation widget. No fixed height —
-/// content can grow up to 2 lines without overflow.
+/// Tap → [onTap]. Pure presentation; the parent owns the detail
+/// sheet open path. No fixed height — content adapts up to 2 lines.
 class NotifTile extends StatelessWidget {
   const NotifTile({
     super.key,
@@ -33,140 +35,144 @@ class NotifTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (tone, toneSoft, icon, chipLabel) = _bucketStyle(bucket, notification);
+    final (tone, toneSoft, icon, chipLabel) =
+        _bucketStyle(bucket, notification);
     final time = _formatTimestamp(notification.createdAt);
     final isUnread = !notification.isRead;
 
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(ZynRadii.card),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(ZynRadii.card),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: isUnread ? toneSoft : ZynColors.surface,
+    return Stack(
+      children: [
+        // Card body — sized child of the Stack.
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(ZynRadii.card),
+          child: InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(ZynRadii.card),
-            border: Border.all(
-              color: isUnread
-                  ? tone.withValues(alpha: 0.30)
-                  : ZynColors.line,
-              width: 1,
-            ),
-            boxShadow: ZynShadows.soft(tint: tone),
-          ),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Accent strip — tone-coloured edge.
-                Container(
-                  width: 4,
-                  decoration: BoxDecoration(
-                    color: tone,
-                    borderRadius: const BorderRadiusDirectional.only(
-                      topStart: Radius.circular(ZynRadii.card),
-                      bottomStart: Radius.circular(ZynRadii.card),
-                    ),
-                  ),
+            child: Ink(
+              decoration: BoxDecoration(
+                color: isUnread ? toneSoft : ZynColors.surface,
+                borderRadius: BorderRadius.circular(ZynRadii.card),
+                border: Border.all(
+                  color: isUnread
+                      ? tone.withValues(alpha: 0.30)
+                      : ZynColors.line,
+                  width: 1,
                 ),
-                // Body.
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      ZynSpacing.md,
-                      ZynSpacing.md,
-                      ZynSpacing.md,
-                      ZynSpacing.md,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _IconChip(tone: tone, icon: icon),
-                        const SizedBox(width: ZynSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                boxShadow: ZynShadows.soft(tint: tone),
+              ),
+              child: Padding(
+                // Extra start padding accounts for the accent strip
+                // overlay so content doesn't sit on top of it.
+                padding: const EdgeInsetsDirectional.fromSTEB(
+                  ZynSpacing.md + 4,
+                  ZynSpacing.md,
+                  ZynSpacing.md,
+                  ZynSpacing.md,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _IconChip(tone: tone, icon: icon),
+                    const SizedBox(width: ZynSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
                             children: [
-                              Row(
-                                children: [
-                                  if (isUnread) ...[
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: BoxDecoration(
-                                        color: tone,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                  ],
-                                  Expanded(
-                                    child: Text(
-                                      notification.title.isEmpty
-                                          ? '—'
-                                          : notification.title,
-                                      style: const TextStyle(
-                                        color: ZynColors.ink,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1.25,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                              if (isUnread) ...[
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: tone,
+                                    shape: BoxShape.circle,
                                   ),
-                                ],
-                              ),
-                              if (notification.message.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  notification.message,
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  notification.title.isEmpty
+                                      ? '—'
+                                      : notification.title,
                                   style: const TextStyle(
-                                    color: ZynColors.inkSoft,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w400,
-                                    height: 1.4,
+                                    color: ZynColors.ink,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.25,
                                   ),
-                                  maxLines: 2,
+                                  maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ],
-                              if (chipLabel.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                _ChipLabel(tone: tone, text: chipLabel),
-                              ],
+                              ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: ZynSpacing.sm),
-                        // Timestamp column.
-                        if (time.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              time,
+                          if (notification.message.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              notification.message,
                               style: const TextStyle(
-                                color: ZynColors.faint,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                height: 1.2,
-                                fontFeatures: [
-                                  FontFeature.tabularFigures(),
-                                ],
+                                color: ZynColors.inkSoft,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w400,
+                                height: 1.4,
                               ),
-                              textDirection: TextDirection.ltr,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                      ],
+                          ],
+                          if (chipLabel.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            _ChipLabel(tone: tone, text: chipLabel),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
+                    if (time.isNotEmpty) ...[
+                      const SizedBox(width: ZynSpacing.sm),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          time,
+                          style: const TextStyle(
+                            color: ZynColors.faint,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                          textDirection: TextDirection.ltr,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+        // Accent strip overlay — sized to body via top/bottom.
+        PositionedDirectional(
+          start: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: tone,
+                borderRadius: const BorderRadiusDirectional.only(
+                  topStart: Radius.circular(ZynRadii.card),
+                  bottomStart: Radius.circular(ZynRadii.card),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -176,7 +182,6 @@ class NotifTile extends StatelessWidget {
     AppNotification n,
   ) {
     final ev = n.eventType.toLowerCase();
-    // Smarter icon per event type when possible.
     IconData icon;
     if (ev.contains('battery')) {
       icon = Icons.battery_full_rounded;
@@ -197,7 +202,6 @@ class NotifTile extends StatelessWidget {
     } else if (ev.contains('account') || ev.contains('login')) {
       icon = Icons.person_outline_rounded;
     } else {
-      // Bucket-default icon.
       icon = switch (b) {
         NotificationBucket.critical => Icons.priority_high_rounded,
         NotificationBucket.suggestion => Icons.auto_awesome_rounded,
@@ -205,7 +209,6 @@ class NotifTile extends StatelessWidget {
       };
     }
 
-    // Chip label — short categorical tag.
     final chipLabel = switch (b) {
       NotificationBucket.critical => _chipForCritical(ev),
       NotificationBucket.suggestion => 'تحسين الأداء',

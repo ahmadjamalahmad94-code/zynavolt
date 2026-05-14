@@ -359,6 +359,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 64,
