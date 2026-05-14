@@ -1,6 +1,11 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 
 import '../../../app/app_router.dart';
@@ -32,7 +37,8 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   String _view = 'day';
   DateTime _anchor = _todayDateOnly();
-  bool _exporting = false;
+  bool _opening = false;
+  bool _sharing = false;
 
   static DateTime _todayDateOnly() {
     final n = DateTime.now();
@@ -64,30 +70,103 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     setState(() => _view = next);
   }
 
-  Future<void> _exportPdf(ReportsSnapshot snapshot) async {
-    if (_exporting) return;
-    setState(() => _exporting = true);
+  /// Generate the PDF bytes + a stable filename for [snapshot].
+  Future<({Uint8List bytes, String filename})> _build(
+    ReportsSnapshot snapshot,
+  ) async {
+    final deviceName = ref.read(effectiveDeviceProvider)?.name ?? '';
+    final bytes = await ReportsPdfBuilder.generate(
+      snapshot: snapshot,
+      deviceName: deviceName,
+    );
+    final stamp = snapshot.anchor.isNotEmpty
+        ? snapshot.anchor.replaceAll(RegExp(r'[^0-9A-Za-z-]'), '')
+        : 'report';
+    final filename = 'zynavolt-${snapshot.view}-$stamp.pdf';
+    return (bytes: bytes, filename: filename);
+  }
+
+  /// تنزيل وفتح: write the PDF into the app's documents directory
+  /// (persistent, accessible from the OS files app on Android via
+  /// the per-app folder) and hand off to the system PDF viewer.
+  Future<void> _downloadAndOpen(ReportsSnapshot snapshot) async {
+    if (_opening || _sharing) return;
+    setState(() => _opening = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final deviceName = ref.read(effectiveDeviceProvider)?.name ?? '';
-      final bytes = await ReportsPdfBuilder.generate(
-        snapshot: snapshot,
-        deviceName: deviceName,
-      );
-      final stamp = snapshot.anchor.isNotEmpty
-          ? snapshot.anchor.replaceAll(RegExp(r'[^0-9A-Za-z-]'), '')
-          : 'report';
-      final filename =
-          'zynavolt-${snapshot.view}-$stamp.pdf';
+      final out = await _build(snapshot);
+      final dir = await getApplicationDocumentsDirectory();
+      final reportsDir = Directory('${dir.path}/reports');
+      if (!await reportsDir.exists()) {
+        await reportsDir.create(recursive: true);
+      }
+      final file = File('${reportsDir.path}/${out.filename}');
+      await file.writeAsBytes(out.bytes, flush: true);
       if (!mounted) return;
-      await Printing.sharePdf(bytes: bytes, filename: filename);
+      final result = await OpenFilex.open(file.path);
+      if (!mounted) return;
+      switch (result.type) {
+        case ResultType.done:
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              duration: const Duration(seconds: 3),
+              content: Text('تم الحفظ: ${out.filename}'),
+            ));
+        case ResultType.noAppToOpen:
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(const SnackBar(
+              duration: Duration(seconds: 3),
+              content: Text(
+                'تم الحفظ، لكن لا يوجد تطبيق على الجهاز يفتح ملفات PDF.',
+              ),
+            ));
+        case ResultType.fileNotFound:
+        case ResultType.permissionDenied:
+        case ResultType.error:
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              duration: const Duration(seconds: 3),
+              content: Text(
+                result.message.isNotEmpty
+                    ? 'تعذّر الفتح: ${result.message}'
+                    : 'تعذّر فتح الملف.',
+              ),
+            ));
+      }
     } catch (e) {
       if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text('تعذّر إنشاء التقرير: $e')));
     } finally {
-      if (mounted) setState(() => _exporting = false);
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  /// تنزيل ومشاركة: hand the bytes to the system share / save
+  /// sheet — user picks the destination (WhatsApp, Drive, Mail,
+  /// Save to Files, etc.).
+  Future<void> _downloadAndShare(ReportsSnapshot snapshot) async {
+    if (_opening || _sharing) return;
+    setState(() => _sharing = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final out = await _build(snapshot);
+      if (!mounted) return;
+      await Printing.sharePdf(
+        bytes: out.bytes,
+        filename: out.filename,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('تعذّر إنشاء التقرير: $e')));
+    } finally {
+      if (mounted) setState(() => _sharing = false);
     }
   }
 
@@ -171,10 +250,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           _DerivedMetricsCard(summary: s.summary),
           const SizedBox(height: ZynSpacing.lg),
           ZynButton(
-            label: 'تنزيل التقرير ومشاركته (PDF)',
+            label: 'تنزيل وفتح (PDF)',
             icon: Icons.picture_as_pdf_rounded,
-            busy: _exporting,
-            onTap: _exporting ? null : () => _exportPdf(s),
+            busy: _opening,
+            onTap: (_opening || _sharing) ? null : () => _downloadAndOpen(s),
+          ),
+          const SizedBox(height: ZynSpacing.sm),
+          ZynButton(
+            label: 'تنزيل ومشاركة',
+            icon: Icons.ios_share_rounded,
+            variant: ZynButtonVariant.secondary,
+            busy: _sharing,
+            onTap: (_opening || _sharing) ? null : () => _downloadAndShare(s),
           ),
         ],
         const SizedBox(height: ZynSpacing.md),
