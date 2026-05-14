@@ -19,6 +19,7 @@ import 'widgets/notif_header.dart';
 import 'widgets/notif_mini_empty.dart';
 import 'widgets/notif_search_bar.dart';
 import 'widgets/notif_section_header.dart';
+import 'widgets/loads_recommendations_strip.dart';
 import 'widgets/notif_summary_strip.dart';
 import 'widgets/notif_tile.dart';
 import 'widgets/smart_decision_card.dart';
@@ -348,7 +349,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           if (bucket == NotificationBucket.suggestion) ...[
             const SmartDecisionCard(),
             const SizedBox(height: ZynSpacing.md),
-            const _LoadsRecommendationsPlaceholder(),
+            const LoadsRecommendationsStrip(),
             const SizedBox(height: ZynSpacing.md),
           ],
           if ((grouped[bucket] ?? const []).isEmpty)
@@ -450,171 +451,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 }
 
 /// v102 DS v1 — placeholder for the upcoming Loads Recommendations
-/// sub-section inside "اقتراحات ذكية".
-///
-/// Renders two side-by-side cards ("مسموح الآن" / "غير مسموح الآن")
-/// in a calm "قيد التطوير" state while the backend logic is being
-/// built per `docs/LOADS_BACKEND_SPEC.md`. Once
-/// `/api/mobile/loads/recommendations` returns real data, this
-/// widget gets replaced by a `LoadsRecommendationsStrip` that wires
-/// the real items.
-///
-/// The placeholder is deliberately calm — no mock load names, no
-/// fake numbers — so the screen reads honestly to the user
-/// ("preparing" not "wrong data").
-class _LoadsRecommendationsPlaceholder extends StatelessWidget {
-  const _LoadsRecommendationsPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: ZynSpacing.xs,
-            vertical: ZynSpacing.xs,
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.electrical_services_rounded,
-                color: ZynColors.accent,
-                size: 14,
-              ),
-              const SizedBox(width: 6),
-              const Text(
-                'اقتراح الأحمال',
-                style: TextStyle(
-                  color: ZynColors.ink,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(width: ZynSpacing.sm),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 7,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: ZynColors.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(ZynRadii.pill),
-                ),
-                child: const Text(
-                  'قيد التطوير',
-                  style: TextStyle(
-                    color: ZynColors.accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: ZynSpacing.sm),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: _LoadsSlot(
-                  tone: ZynColors.success,
-                  toneSoft: ZynColors.successSoft,
-                  icon: Icons.check_circle_outline_rounded,
-                  title: 'مسموح الآن',
-                  placeholder: 'سيظهر هنا ما يمكن تشغيله الآن.',
-                ),
-              ),
-              const SizedBox(width: ZynSpacing.sm),
-              Expanded(
-                child: _LoadsSlot(
-                  tone: ZynColors.danger,
-                  toneSoft: ZynColors.dangerSoft,
-                  icon: Icons.do_not_disturb_alt_rounded,
-                  title: 'غير مسموح الآن',
-                  placeholder: 'سيظهر هنا ما يُفضَّل تأجيله.',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LoadsSlot extends StatelessWidget {
-  const _LoadsSlot({
-    required this.tone,
-    required this.toneSoft,
-    required this.icon,
-    required this.title,
-    required this.placeholder,
-  });
-
-  final Color tone;
-  final Color toneSoft;
-  final IconData icon;
-  final String title;
-  final String placeholder;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: toneSoft.withValues(alpha: 0.50),
-        borderRadius: BorderRadius.circular(ZynRadii.card),
-        border: Border.all(
-          color: tone.withValues(alpha: 0.20),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: tone.withValues(alpha: 0.18),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: tone, size: 16),
-          ),
-          const SizedBox(height: ZynSpacing.sm),
-          Text(
-            title,
-            style: const TextStyle(
-              color: ZynColors.ink,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              height: 1.2,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            placeholder,
-            style: const TextStyle(
-              color: ZynColors.muted,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w400,
-              height: 1.45,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _FilteredEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
