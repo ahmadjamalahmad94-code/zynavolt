@@ -43,10 +43,10 @@ class HomeShell extends StatefulWidget {
       route: AppRoutes.home,
     ),
     _Tab(
-      label: 'الأجهزة',
-      iconActive: Icons.solar_power_rounded,
-      iconInactive: Icons.solar_power_outlined,
-      route: AppRoutes.devices,
+      label: 'البطارية',
+      iconActive: Icons.battery_charging_full_rounded,
+      iconInactive: Icons.battery_charging_full_outlined,
+      route: AppRoutes.batteryLab,
     ),
     _Tab(
       label: 'الطقس',

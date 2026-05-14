@@ -17,10 +17,8 @@ import 'widgets/notif_filter_sheet.dart';
 import 'widgets/notif_mini_empty.dart';
 import 'widgets/notif_search_bar.dart';
 import 'widgets/notif_section_header.dart';
-import 'widgets/loads_recommendations_strip.dart';
 import 'widgets/notif_summary_strip.dart';
 import 'widgets/notif_tile.dart';
-import 'widgets/smart_decision_card.dart';
 
 /// v102 DS v1 — Notifications screen.
 ///
@@ -299,16 +297,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ),
         const SizedBox(height: ZynSpacing.xl),
 
-        // All three sections, always.
-        //
-        // The "اقتراحات ذكية" section gets a special top slot: the
-        // SmartDecisionCard pulls live system advice from
-        // `/api/v1/devices/<id>/insights` — the same `smart_engine`
-        // output the web dashboard renders. Notification-bucket
-        // tiles classified as suggestions render below it. A
-        // placeholder for the upcoming Loads Recommendations
-        // sub-section also lives here; it sits dark / "قيد التطوير"
-        // until backend Heavy v10.5.X ships per LOADS_BACKEND_SPEC.md.
+        // v102d — three permanent buckets. The Smart Decision card
+        // and Loads Recommendations strip moved to the البطارية tab
+        // (they were previously pinned at the top of the
+        // suggestion bucket here). Each bucket now renders its
+        // notification tiles or the mini-empty placeholder.
         for (final bucket in NotificationBucket.values) ...[
           NotifSectionHeader(
             label: notificationBucketLabel(bucket),
@@ -317,28 +310,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             icon: _iconFor(bucket),
           ),
           const SizedBox(height: ZynSpacing.md),
-          if (bucket == NotificationBucket.suggestion) ...[
-            const SmartDecisionCard(),
-            const SizedBox(height: ZynSpacing.md),
-            const LoadsRecommendationsStrip(),
-            // Suggestion-classified notifications (if any)
-            // render BELOW the Smart Decision + Loads strip.
-            // No mini-empty here — the section already carries
-            // two persistent content blocks (decision + loads)
-            // so claiming "لا اقتراحات جديدة" would contradict
-            // what's on screen.
-            if ((grouped[bucket] ?? const []).isNotEmpty) ...[
-              const SizedBox(height: ZynSpacing.md),
-              for (final n in grouped[bucket]!) ...[
-                NotifTile(
-                  notification: n,
-                  bucket: bucket,
-                  onTap: () => _openDetailSheet(n, bucket),
-                ),
-                const SizedBox(height: ZynSpacing.sm),
-              ],
-            ],
-          ] else if ((grouped[bucket] ?? const []).isEmpty)
+          if ((grouped[bucket] ?? const []).isEmpty)
             NotifMiniEmpty(bucket: bucket)
           else
             for (final n in grouped[bucket]!) ...[

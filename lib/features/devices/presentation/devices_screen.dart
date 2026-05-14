@@ -36,9 +36,7 @@ class DevicesScreen extends ConsumerWidget {
         hero: const ZynPageHero(
           title: 'الأجهزة',
           subtitle: 'الأجهزة المرتبطة بحسابك وحالة الاتصال.',
-          showBackButton: false,
         ),
-        extendBody: true,
         floatingActionButton: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(ZynRadii.pill),

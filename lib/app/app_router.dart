@@ -211,13 +211,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.reports,
         builder: (_, _) => const ReportsScreen(),
       ),
-      // v100: native Battery Lab. Replaces the external-browser link
-      // that the More tab used to open; full data set comes through
-      // `/api/mobile/battery-lab`.
-      GoRoute(
-        path: AppRoutes.batteryLab,
-        builder: (_, _) => const BatteryLabScreen(),
-      ),
       // v87: notification settings editor (master + channels + per-section
       // toggles). Opened from the Notifications screen AppBar.
       GoRoute(
@@ -248,6 +241,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.support,
         builder: (_, _) => const SupportScreen(),
       ),
+      // v102d: Devices list moved off the bottom-nav shell into More
+      // (rare-use surface). Reached via `context.push(AppRoutes.devices)`
+      // so it gets a back-arrow AppBar instead of the tab chrome.
+      GoRoute(
+        path: AppRoutes.devices,
+        builder: (_, _) => const DevicesScreen(),
+      ),
       ShellRoute(
         navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => HomeShell(child: child),
@@ -256,10 +256,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.home,
             pageBuilder: (_, _) => const NoTransitionPage(child: HomeScreen()),
           ),
+          // v102d: Battery (was Battery Lab) promoted into the bottom-nav
+          // shell. Carries the v100 native diagnostics + the v102 Smart
+          // Decision card + Loads Recommendations strip moved over from
+          // the Notifications screen.
           GoRoute(
-            path: AppRoutes.devices,
+            path: AppRoutes.batteryLab,
             pageBuilder: (_, _) =>
-                const NoTransitionPage(child: DevicesScreen()),
+                const NoTransitionPage(child: BatteryLabScreen()),
           ),
           // v63: Weather tab — backed by the v62
           // `/api/v1/devices/<id>/weather` endpoint.

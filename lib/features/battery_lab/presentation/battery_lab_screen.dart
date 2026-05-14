@@ -4,25 +4,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
 import '../../../core/state/auto_refresh.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../../notifications/presentation/widgets/loads_recommendations_strip.dart';
+import '../../notifications/presentation/widgets/smart_decision_card.dart';
 import '../data/battery_lab_models.dart';
 import '../data/battery_lab_repository.dart';
 
-/// v100 — Native Battery Lab screen.
+/// v102d — البطارية tab (was مختبر البطارية).
 ///
-/// Consumes [batteryLabProvider]. Replaces the previous external-
-/// browser link from the More tab. Renders the same data the web
-/// `/battery-lab` page renders:
+/// Promoted to a bottom-nav tab and now carries the Smart
+/// Decision card + Loads Recommendations strip that previously
+/// lived on the Notifications screen — both render with the
+/// exact same look they had there.
+///
+/// Underneath the suggestion section, the original v100 Battery
+/// Lab content stays intact:
 ///   * Live state hero (SoC, mode, ETA, flow).
-///   * Capacity insights (capacity, reserve, stored, usable, remaining
-///     to full).
-///   * External AC-IN breakdown (grid vs generator + source label +
-///     daily AC-IN energy).
-///   * Battery details (voltage, current, temperature, cycles, SOH,
-///     status, SN numbers).
+///   * Capacity insights (capacity, reserve, stored, usable,
+///     remaining to full).
+///   * External AC-IN breakdown (grid vs generator + source
+///     label + daily AC-IN energy).
+///   * Battery details (voltage, current, temperature, cycles,
+///     SOH, status, SN numbers).
 ///   * 48 h SoC line chart.
 class BatteryLabScreen extends ConsumerWidget {
   const BatteryLabScreen({super.key});
@@ -30,55 +37,47 @@ class BatteryLabScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final snap = ref.watch(batteryLabProvider);
-    // v101 — 30 s auto-refresh. Live SoC and AC-IN diagnostics drift
-    // quickly so this matches Home's cadence.
     return AutoRefreshScope(
       interval: const Duration(seconds: 30),
       targets: [batteryLabProvider],
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('مختبر البطارية'),
-          backgroundColor: Colors.transparent,
-          scrolledUnderElevation: 0,
+      child: ZynScreen(
+        hero: const ZynPageHero(
+          title: 'البطارية',
+          subtitle: 'حالة البطارية، الاقتراحات الذكية، وإدارة الأحمال.',
+          showBackButton: false,
         ),
-        body: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFE0E7FF), Color(0xFFF1F5FF), Color(0xFFF8FAFC)],
-              stops: [0.0, 0.35, 0.85],
+        scrollable: false,
+        padding: EdgeInsets.zero,
+        child: RefreshIndicator(
+          color: AppTheme.indigoPrimary,
+          onRefresh: () async {
+            ref.invalidate(batteryLabProvider);
+            await ref.read(batteryLabProvider.future);
+          },
+          child: snap.when(
+            loading: () => ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              children: const [
+                AppLoading(message: 'جارٍ تحميل البطارية...'),
+              ],
             ),
-          ),
-          child: SafeArea(
-            child: RefreshIndicator(
-              color: AppTheme.indigoPrimary,
-              onRefresh: () async {
-                ref.invalidate(batteryLabProvider);
-                await ref.read(batteryLabProvider.future);
-              },
-              child: snap.when(
-                loading: () => const Center(
-                  child: AppLoading(message: 'جارٍ تحميل مختبر البطارية...'),
+            error: (err, _) => ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: [
+                AppErrorState(
+                  error: err is ApiException
+                      ? err
+                      : ApiException(
+                          message: 'تعذّر تحميل البطارية.',
+                          kind: ApiErrorKind.unknown,
+                        ),
+                  onRetry: () => ref.invalidate(batteryLabProvider),
                 ),
-                error: (err, _) => ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    AppErrorState(
-                      error: err is ApiException
-                          ? err
-                          : ApiException(
-                              message: 'تعذّر تحميل مختبر البطارية.',
-                              kind: ApiErrorKind.unknown,
-                            ),
-                      onRetry: () => ref.invalidate(batteryLabProvider),
-                    ),
-                  ],
-                ),
-                data: (data) => _Body(snapshot: data),
-              ),
+              ],
             ),
+            data: (data) => _Body(snapshot: data),
           ),
         ),
       ),
@@ -94,33 +93,38 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     final insights = snapshot.insights;
     final details = snapshot.details;
-    if (insights.capacityKwh <= 0 && (snapshot.latest == null)) {
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          AppEmptyState(
+    final hasReading =
+        insights.capacityKwh > 0 || (snapshot.latest != null);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+      children: [
+        // v102d — Smart Decision + Loads Recommendations now live
+        // on the Battery tab. Same widgets the Notifications
+        // screen used; they self-handle loading/empty/error.
+        const SmartDecisionCard(),
+        const SizedBox(height: 14),
+        const LoadsRecommendationsStrip(),
+        const SizedBox(height: 14),
+        if (!hasReading)
+          const AppEmptyState(
             icon: Icons.battery_unknown_outlined,
             title: 'لا توجد قراءات للبطارية بعد',
             subtitle:
                 'بمجرد وصول أول قراءة من الانفرتر، ستظهر تفاصيل البطارية هنا.',
-          ),
+          )
+        else ...[
+          _StateHero(insights: insights),
+          const SizedBox(height: 14),
+          _CapacitySection(insights: insights),
+          const SizedBox(height: 14),
+          _ExternalInputSection(insights: insights),
+          const SizedBox(height: 14),
+          _DetailsSection(details: details),
+          const SizedBox(height: 14),
+          _TrendChart(hourly: snapshot.hourly),
+          const SizedBox(height: 14),
+          _GeneratedAtFooter(generatedAt: snapshot.generatedAt),
         ],
-      );
-    }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-      children: [
-        _StateHero(insights: insights),
-        const SizedBox(height: 14),
-        _CapacitySection(insights: insights),
-        const SizedBox(height: 14),
-        _ExternalInputSection(insights: insights),
-        const SizedBox(height: 14),
-        _DetailsSection(details: details),
-        const SizedBox(height: 14),
-        _TrendChart(hourly: snapshot.hourly),
-        const SizedBox(height: 14),
-        _GeneratedAtFooter(generatedAt: snapshot.generatedAt),
       ],
     );
   }

@@ -453,10 +453,10 @@ class _ToolsGrid extends StatelessWidget {
       tone: ZynColors.warning,
     ),
     _ToolItem(
-      icon: Icons.science_outlined,
-      label: 'مختبر البطارية',
-      subtitle: 'تحليلات SOC، الجهد، والمدخل الخارجي.',
-      route: AppRoutes.batteryLab,
+      icon: Icons.solar_power_rounded,
+      label: 'الأجهزة',
+      subtitle: 'قائمة الأجهزة المرتبطة بحسابك وحالة الاتصال.',
+      route: AppRoutes.devices,
       tone: ZynColors.cyan,
     ),
     _ToolItem(
