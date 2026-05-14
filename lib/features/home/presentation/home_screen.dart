@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/state/app_session.dart';
+import '../../../core/state/auto_refresh.dart';
 import '../../../core/utils/backend_time.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
@@ -45,11 +46,25 @@ class HomeScreen extends StatelessWidget {
     // v46: Home has no AppBar — the gradient hero card *is* the page
     // header. Status bar icons forced dark via AnnotatedRegion since the
     // gradient backdrop is pale-indigo (light).
+    // v101 — Home auto-refreshes every 30 s. Pulls fresh dashboard,
+    // insights, and chart series in lockstep so the mid-screen split
+    // tiles don't drift out of sync with the hero / energy chart.
+    // The scope pauses on background and refreshes immediately on
+    // resume if the data is stale (see AutoRefreshScope docs).
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
-      child: const Scaffold(
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: _ScreenBackground(child: _HomeBody()),
+        body: AutoRefreshScope(
+          interval: const Duration(seconds: 30),
+          targets: [
+            dashboardProvider,
+            insightsProvider,
+            statisticsProvider,
+            energyChartSeriesProvider,
+          ],
+          child: const _ScreenBackground(child: _HomeBody()),
+        ),
       ),
     );
   }
@@ -231,11 +246,7 @@ class _HomeHero extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
-              colors: [
-                Color(0xFF1B2C4A),
-                Color(0xFF152340),
-                Color(0xFF0E1A2E),
-              ],
+              colors: [Color(0xFF1B2C4A), Color(0xFF152340), Color(0xFF0E1A2E)],
               stops: [0.0, 0.55, 1.0],
             ),
           ),
@@ -251,9 +262,7 @@ class _HomeHero extends StatelessWidget {
                 width: 150,
                 child: Opacity(
                   opacity: 0.85,
-                  child: CustomPaint(
-                    painter: _SunPanelsPainter(),
-                  ),
+                  child: CustomPaint(painter: _SunPanelsPainter()),
                 ),
               ),
               // Top-edge specular highlight — fakes the look of glass
@@ -364,26 +373,22 @@ class _SunPanelsPainter extends CustomPainter {
 
     // Outer halo
     final halo = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFFFFC766).withValues(alpha: 0.45),
-          const Color(0xFFFFC766).withValues(alpha: 0.00),
-        ],
-      ).createShader(
-        Rect.fromCircle(center: sunCenter, radius: sunRadius * 2.4),
-      );
+      ..shader =
+          RadialGradient(
+            colors: [
+              const Color(0xFFFFC766).withValues(alpha: 0.45),
+              const Color(0xFFFFC766).withValues(alpha: 0.00),
+            ],
+          ).createShader(
+            Rect.fromCircle(center: sunCenter, radius: sunRadius * 2.4),
+          );
     canvas.drawCircle(sunCenter, sunRadius * 2.4, halo);
 
     // Sun core (warm yellow / amber gradient)
     final sun = Paint()
       ..shader = RadialGradient(
-        colors: [
-          const Color(0xFFFFE5A6),
-          const Color(0xFFFFB347),
-        ],
-      ).createShader(
-        Rect.fromCircle(center: sunCenter, radius: sunRadius),
-      );
+        colors: [const Color(0xFFFFE5A6), const Color(0xFFFFB347)],
+      ).createShader(Rect.fromCircle(center: sunCenter, radius: sunRadius));
     canvas.drawCircle(sunCenter, sunRadius, sun);
 
     // Solar panels — two tilted rounded rectangles in the lower half,
@@ -397,10 +402,7 @@ class _SunPanelsPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [
-          Color(0xFF3B5A8C),
-          Color(0xFF24385F),
-        ],
+        colors: [Color(0xFF3B5A8C), Color(0xFF24385F)],
       ).createShader(const Rect.fromLTWH(0, 0, 130, 60));
     final panelBorder = Paint()
       ..color = const Color(0xFF6B86B5).withValues(alpha: 0.65)
@@ -628,23 +630,27 @@ class _DashboardBody extends StatelessWidget {
     final children = <Widget>[];
 
     if (snapshot.scope.isAllDevices) {
-      children.add(const _ScopeNotice(
-        text:
-            'هذه البيانات من ملخص النظام المتاح حالياً، وليست لجهاز واحد بعينه.',
-      ));
+      children.add(
+        const _ScopeNotice(
+          text:
+              'هذه البيانات من ملخص النظام المتاح حالياً، وليست لجهاز واحد بعينه.',
+        ),
+      );
       children.add(const SizedBox(height: 10));
     }
 
     if (snapshot.empty) {
-      children.add(const AppCard(
-        padding: EdgeInsets.symmetric(vertical: 28),
-        child: AppEmptyState(
-          icon: Icons.cloud_off_outlined,
-          title: 'لا توجد قراءة متاحة لهذا الجهاز بعد',
-          subtitle:
-              'سيظهر آخر تحديث هنا فور وصوله من الخادم — لا حسابات داخل التطبيق.',
+      children.add(
+        const AppCard(
+          padding: EdgeInsets.symmetric(vertical: 28),
+          child: AppEmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'لا توجد قراءة متاحة لهذا الجهاز بعد',
+            subtitle:
+                'سيظهر آخر تحديث هنا فور وصوله من الخادم — لا حسابات داخل التطبيق.',
+          ),
         ),
-      ));
+      );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -708,8 +714,11 @@ class _ScopeNotice extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline,
-              size: 16, color: AppTheme.indigoPrimary),
+          const Icon(
+            Icons.info_outline,
+            size: 16,
+            color: AppTheme.indigoPrimary,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -883,9 +892,7 @@ class _FlowCardHeader extends StatelessWidget {
                   height: 8,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: hasStatus
-                        ? AppTheme.success
-                        : AppTheme.faintMuted,
+                    color: hasStatus ? AppTheme.success : AppTheme.faintMuted,
                     boxShadow: hasStatus
                         ? [
                             BoxShadow(
@@ -918,15 +925,15 @@ class _FlowActivity {
   });
 
   factory _FlowActivity.fromCards(DashboardCards c) => _FlowActivity(
-        solar: c.solarPowerW > 0,
-        home: c.homeLoadW > 0,
-        battery: c.batterySocPercent > 0 || c.batteryPowerW.abs() > 0,
-        grid: c.gridPowerW.abs() > 0,
-        // v93r — generator card lights up when AC-IN > 5 W (real
-        // measurement or station-tier inference). Below that, the
-        // card stays muted so a stray watt of noise doesn't flicker.
-        generator: c.generatorPowerW > 5,
-      );
+    solar: c.solarPowerW > 0,
+    home: c.homeLoadW > 0,
+    battery: c.batterySocPercent > 0 || c.batteryPowerW.abs() > 0,
+    grid: c.gridPowerW.abs() > 0,
+    // v93r — generator card lights up when AC-IN > 5 W (real
+    // measurement or station-tier inference). Below that, the
+    // card stays muted so a stray watt of noise doesn't flicker.
+    generator: c.generatorPowerW > 5,
+  );
 
   final bool solar;
   final bool home;
@@ -1097,11 +1104,11 @@ class _BoardSpec {
       cell(row, col, board).deflate(cellInset);
 
   // Cell (row, col) for each node — fixed coordinates, never recomputed.
-  static const int solarRow = 0,    solarCol = 0;
-  static const int gridRow  = 0,    gridCol  = 2;
-  static const int hubRow   = 1,    hubCol   = 1;
-  static const int batteryRow = 2,  batteryCol = 0;
-  static const int homeRow  = 2,    homeCol  = 2;
+  static const int solarRow = 0, solarCol = 0;
+  static const int gridRow = 0, gridCol = 2;
+  static const int hubRow = 1, hubCol = 1;
+  static const int batteryRow = 2, batteryCol = 0;
+  static const int homeRow = 2, homeCol = 2;
   // v93r — Generator sits in the top-middle cell, naturally between
   // Solar (top-left) and Grid (top-right). The cell was previously
   // empty in the 3×3 grid; placing the generator there does not
@@ -1189,7 +1196,10 @@ class _BoardSpec {
       // pipeline matches the other four; the control point at
       // (end.dx, start.dy) collapses to a straight segment when
       // start and end share an x-coordinate.
-      _curve(cardAnchorVertical(generator, hub), hubVerticalEdgeFor(generator, hub)),
+      _curve(
+        cardAnchorVertical(generator, hub),
+        hubVerticalEdgeFor(generator, hub),
+      ),
     ];
   }
 
@@ -1241,15 +1251,30 @@ class _FlowDiagram extends StatelessWidget {
         // and the painter (via _BoardSpec.connectors / cardAnchors) read
         // these same shapes.
         final solarRect = _BoardSpec.nodeBounds(
-            _BoardSpec.solarRow, _BoardSpec.solarCol, board);
+          _BoardSpec.solarRow,
+          _BoardSpec.solarCol,
+          board,
+        );
         final gridRect = _BoardSpec.nodeBounds(
-            _BoardSpec.gridRow, _BoardSpec.gridCol, board);
+          _BoardSpec.gridRow,
+          _BoardSpec.gridCol,
+          board,
+        );
         final hubRect = _BoardSpec.nodeBounds(
-            _BoardSpec.hubRow, _BoardSpec.hubCol, board);
+          _BoardSpec.hubRow,
+          _BoardSpec.hubCol,
+          board,
+        );
         final batteryRect = _BoardSpec.nodeBounds(
-            _BoardSpec.batteryRow, _BoardSpec.batteryCol, board);
+          _BoardSpec.batteryRow,
+          _BoardSpec.batteryCol,
+          board,
+        );
         final homeRect = _BoardSpec.nodeBounds(
-            _BoardSpec.homeRow, _BoardSpec.homeCol, board);
+          _BoardSpec.homeRow,
+          _BoardSpec.homeCol,
+          board,
+        );
 
         return SizedBox(
           width: w,
@@ -1269,10 +1294,7 @@ class _FlowDiagram extends StatelessWidget {
                 ),
               ),
               // Hub (centre).
-              _place(
-                hubRect,
-                const _FlowHubCard(),
-              ),
+              _place(hubRect, const _FlowHubCard()),
               // Solar (top-left).
               _place(
                 solarRect,
@@ -1329,7 +1351,9 @@ class _FlowDiagram extends StatelessWidget {
               // (violet), battery (green) and home (indigo).
               _place(
                 _BoardSpec.nodeBounds(
-                  _BoardSpec.generatorRow, _BoardSpec.generatorCol, board,
+                  _BoardSpec.generatorRow,
+                  _BoardSpec.generatorCol,
+                  board,
                 ),
                 _FlowNodeCard(
                   icon: Icons.power_outlined,
@@ -1367,10 +1391,7 @@ class _FlowDiagram extends StatelessWidget {
 ///   * towardHub   → dashes scroll from node toward hub
 ///   * awayFromHub → dashes scroll from hub toward node
 class _AnimatedFlowPainter extends CustomPainter {
-  _AnimatedFlowPainter({
-    required this.phase,
-    required this.modes,
-  });
+  _AnimatedFlowPainter({required this.phase, required this.modes});
 
   /// 0.0 .. 1.0 — drives both dash scrolling and pulse breathing.
   final double phase;
@@ -1579,8 +1600,10 @@ class _FlowNodeCard extends StatelessWidget {
               if (hasSoc) ...[
                 const SizedBox(width: 4),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.indigoSoft,
                     borderRadius: BorderRadius.circular(999),
@@ -1751,8 +1774,9 @@ String _formatNodeValue(double w) {
 
 String _formatSocBadge(double p) {
   final clamped = p.clamp(0, 100);
-  final str =
-      clamped >= 100 ? clamped.toStringAsFixed(0) : clamped.toStringAsFixed(0);
+  final str = clamped >= 100
+      ? clamped.toStringAsFixed(0)
+      : clamped.toStringAsFixed(0);
   return '$str%';
 }
 
@@ -1773,14 +1797,14 @@ class _BatteryCard extends StatelessWidget {
     final socColor = soc >= 50
         ? AppTheme.success
         : soc >= 20
-            ? AppTheme.warning
-            : AppTheme.danger;
+        ? AppTheme.warning
+        : AppTheme.danger;
     final batteryPower = cards.batteryPowerW;
     final (modeText, modeIcon) = batteryPower > 0
         ? ('شحن', Icons.bolt_rounded)
         : batteryPower < 0
-            ? ('تفريغ', Icons.south_rounded)
-            : ('خامل', Icons.pause_circle_filled_rounded);
+        ? ('تفريغ', Icons.south_rounded)
+        : ('خامل', Icons.pause_circle_filled_rounded);
 
     // v99d — Battery is now a hero-style card: ringed % display on
     // the left, mode + flow strip on the right, big gradient
@@ -1792,15 +1816,9 @@ class _BatteryCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Colors.white,
-            socColor.withValues(alpha: 0.04),
-          ],
+          colors: [Colors.white, socColor.withValues(alpha: 0.04)],
         ),
-        border: Border.all(
-          color: socColor.withValues(alpha: 0.22),
-          width: 1.1,
-        ),
+        border: Border.all(color: socColor.withValues(alpha: 0.22), width: 1.1),
         boxShadow: [
           BoxShadow(
             color: socColor.withValues(alpha: 0.18),
@@ -1907,7 +1925,9 @@ class _BatteryCard extends StatelessWidget {
                       // Mode pill (شحن / تفريغ / خامل) on the LEFT.
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
@@ -2202,16 +2222,10 @@ class _ProductionCol extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            tone.withValues(alpha: 0.10),
-            tone.withValues(alpha: 0.04),
-          ],
+          colors: [tone.withValues(alpha: 0.10), tone.withValues(alpha: 0.04)],
         ),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: tone.withValues(alpha: 0.25),
-          width: 0.9,
-        ),
+        border: Border.all(color: tone.withValues(alpha: 0.25), width: 0.9),
         boxShadow: [
           BoxShadow(
             color: tone.withValues(alpha: 0.18),
@@ -2231,10 +2245,7 @@ class _ProductionCol extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  tone,
-                  tone.withValues(alpha: 0.75),
-                ],
+                colors: [tone, tone.withValues(alpha: 0.75)],
               ),
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
@@ -2383,10 +2394,7 @@ class _CardHeader extends StatelessWidget {
             color: hasAccent ? null : AppTheme.indigoSoft,
             borderRadius: BorderRadius.circular(hasAccent ? 11 : 9),
             border: hasAccent
-                ? Border.all(
-                    color: tint.withValues(alpha: 0.22),
-                    width: 0.8,
-                  )
+                ? Border.all(color: tint.withValues(alpha: 0.22), width: 0.8)
                 : null,
           ),
           child: Icon(icon, color: tint, size: hasAccent ? 17 : 16),

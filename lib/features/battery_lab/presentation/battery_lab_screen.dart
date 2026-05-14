@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/state/auto_refresh.dart';
 import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
@@ -29,52 +30,54 @@ class BatteryLabScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final snap = ref.watch(batteryLabProvider);
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('مختبر البطارية'),
+    // v101 — 30 s auto-refresh. Live SoC and AC-IN diagnostics drift
+    // quickly so this matches Home's cadence.
+    return AutoRefreshScope(
+      interval: const Duration(seconds: 30),
+      targets: [batteryLabProvider],
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE0E7FF),
-              Color(0xFFF1F5FF),
-              Color(0xFFF8FAFC),
-            ],
-            stops: [0.0, 0.35, 0.85],
-          ),
+        appBar: AppBar(
+          title: const Text('مختبر البطارية'),
+          backgroundColor: Colors.transparent,
+          scrolledUnderElevation: 0,
         ),
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: AppTheme.indigoPrimary,
-            onRefresh: () async {
-              ref.invalidate(batteryLabProvider);
-              await ref.read(batteryLabProvider.future);
-            },
-            child: snap.when(
-              loading: () => const Center(
-                child: AppLoading(message: 'جارٍ تحميل مختبر البطارية...'),
+        body: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFE0E7FF), Color(0xFFF1F5FF), Color(0xFFF8FAFC)],
+              stops: [0.0, 0.35, 0.85],
+            ),
+          ),
+          child: SafeArea(
+            child: RefreshIndicator(
+              color: AppTheme.indigoPrimary,
+              onRefresh: () async {
+                ref.invalidate(batteryLabProvider);
+                await ref.read(batteryLabProvider.future);
+              },
+              child: snap.when(
+                loading: () => const Center(
+                  child: AppLoading(message: 'جارٍ تحميل مختبر البطارية...'),
+                ),
+                error: (err, _) => ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    AppErrorState(
+                      error: err is ApiException
+                          ? err
+                          : ApiException(
+                              message: 'تعذّر تحميل مختبر البطارية.',
+                              kind: ApiErrorKind.unknown,
+                            ),
+                      onRetry: () => ref.invalidate(batteryLabProvider),
+                    ),
+                  ],
+                ),
+                data: (data) => _Body(snapshot: data),
               ),
-              error: (err, _) => ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  AppErrorState(
-                    error: err is ApiException
-                        ? err
-                        : ApiException(
-                            message: 'تعذّر تحميل مختبر البطارية.',
-                            kind: ApiErrorKind.unknown,
-                          ),
-                    onRetry: () => ref.invalidate(batteryLabProvider),
-                  ),
-                ],
-              ),
-              data: (data) => _Body(snapshot: data),
             ),
           ),
         ),
@@ -135,13 +138,13 @@ class _StateHero extends StatelessWidget {
     final socColor = soc >= 50
         ? AppTheme.success
         : soc >= 20
-            ? AppTheme.warning
-            : AppTheme.danger;
+        ? AppTheme.warning
+        : AppTheme.danger;
     final (modeText, modeIcon) = insights.liveFlowDirection == 'charging'
         ? ('شحن', Icons.bolt_rounded)
         : insights.liveFlowDirection == 'discharging'
-            ? ('تفريغ', Icons.south_rounded)
-            : ('خامل', Icons.pause_circle_filled_rounded);
+        ? ('تفريغ', Icons.south_rounded)
+        : ('خامل', Icons.pause_circle_filled_rounded);
 
     return Container(
       decoration: BoxDecoration(
@@ -161,11 +164,7 @@ class _StateHero extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
-              colors: [
-                Color(0xFF1B2C4A),
-                Color(0xFF152340),
-                Color(0xFF0E1A2E),
-              ],
+              colors: [Color(0xFF1B2C4A), Color(0xFF152340), Color(0xFF0E1A2E)],
             ),
           ),
           child: Stack(
@@ -247,7 +246,9 @@ class _StateHero extends StatelessWidget {
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
@@ -296,8 +297,7 @@ class _StateHero extends StatelessWidget {
                                   letterSpacing: -2,
                                   shadows: [
                                     Shadow(
-                                      color:
-                                          socColor.withValues(alpha: 0.50),
+                                      color: socColor.withValues(alpha: 0.50),
                                       blurRadius: 22,
                                     ),
                                   ],
@@ -366,8 +366,7 @@ class _StateHero extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(999),
                                   boxShadow: [
                                     BoxShadow(
-                                      color:
-                                          socColor.withValues(alpha: 0.55),
+                                      color: socColor.withValues(alpha: 0.55),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -385,7 +384,9 @@ class _StateHero extends StatelessWidget {
                         insights.activeTimeLabel.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(12),
@@ -396,8 +397,11 @@ class _StateHero extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.schedule_rounded,
-                                size: 14, color: Color(0xCCFFFFFF)),
+                            const Icon(
+                              Icons.schedule_rounded,
+                              size: 14,
+                              color: Color(0xCCFFFFFF),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               insights.activeTimeCaption,
@@ -491,7 +495,8 @@ class _CapacitySection extends StatelessWidget {
               Expanded(
                 child: _StatTile(
                   label: 'المتبقي للامتلاء',
-                  value: '${insights.remainingToFullKwh.toStringAsFixed(2)} kWh',
+                  value:
+                      '${insights.remainingToFullKwh.toStringAsFixed(2)} kWh',
                   tone: AppTheme.warning,
                   icon: Icons.arrow_circle_up_rounded,
                 ),
@@ -649,8 +654,11 @@ class _ExternalInputSection extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      size: 18, color: AppTheme.warning),
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 18,
+                    color: AppTheme.warning,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -681,8 +689,11 @@ class _ExternalInputSection extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.calculate_rounded,
-                      size: 18, color: AppTheme.indigoPrimary),
+                  const Icon(
+                    Icons.calculate_rounded,
+                    size: 18,
+                    color: AppTheme.indigoPrimary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -819,8 +830,11 @@ class _DetailsSection extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.flag_rounded,
-                      size: 16, color: AppTheme.indigoPrimary),
+                  const Icon(
+                    Icons.flag_rounded,
+                    size: 16,
+                    color: AppTheme.indigoPrimary,
+                  ),
                   const SizedBox(width: 8),
                   const Text(
                     'حالة البطارية: ',
@@ -876,7 +890,8 @@ class _TrendChart extends StatelessWidget {
     }
 
     final spots = <FlSpot>[
-      for (var i = 0; i < hourly.length; i++) FlSpot(i.toDouble(), hourly[i].soc),
+      for (var i = 0; i < hourly.length; i++)
+        FlSpot(i.toDouble(), hourly[i].soc),
     ];
     final maxX = (hourly.length - 1).toDouble();
     return _GlassCard(
@@ -904,9 +919,11 @@ class _TrendChart extends StatelessWidget {
             ),
             titlesData: FlTitlesData(
               topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false)),
+                sideTitles: SideTitles(showTitles: false),
+              ),
               rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false)),
+                sideTitles: SideTitles(showTitles: false),
+              ),
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
@@ -932,7 +949,8 @@ class _TrendChart extends StatelessWidget {
                   interval: maxX / 4,
                   getTitlesWidget: (value, meta) {
                     final i = value.round();
-                    if (i < 0 || i >= hourly.length) return const SizedBox.shrink();
+                    if (i < 0 || i >= hourly.length)
+                      return const SizedBox.shrink();
                     return Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
@@ -1011,8 +1029,11 @@ class _GeneratedAtFooter extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.schedule_rounded,
-              size: 14, color: AppTheme.faintMuted),
+          const Icon(
+            Icons.schedule_rounded,
+            size: 14,
+            color: AppTheme.faintMuted,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

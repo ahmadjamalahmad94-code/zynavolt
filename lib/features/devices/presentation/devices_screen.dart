@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/state/auto_refresh.dart';
 // v100 — app_card import removed; the redesigned tile uses a
 // hand-rolled glossy gradient container instead.
 import '../../../core/widgets/app_empty_state.dart';
@@ -25,106 +26,113 @@ class DevicesScreen extends ConsumerWidget {
 
     // v100 — Devices on the design system: gradient backdrop +
     // glossy device tiles + branded FAB.
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('الأجهزة'),
+    // v101 — 60 s auto-refresh. The list view's main job is showing
+    // online/offline + name + plant — none of that drifts as fast as
+    // live readings, so a longer cadence is plenty.
+    return AutoRefreshScope(
+      interval: const Duration(seconds: 60),
+      targets: [devicesListProvider],
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-      ),
-      extendBody: true,
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.indigoPrimary.withValues(alpha: 0.45),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: FloatingActionButton.extended(
-          onPressed: () => _openAddDeviceFlow(context, ref),
-          elevation: 0,
+        appBar: AppBar(
+          title: const Text('الأجهزة'),
           backgroundColor: Colors.transparent,
-          icon: const Icon(Icons.add_rounded, color: Colors.white),
-          label: const Text(
-            'إضافة جهاز',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.2,
-            ),
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
-          ),
-          extendedPadding: const EdgeInsets.symmetric(horizontal: 22),
-          // Direct background gradient via a foreground decoration trick:
-          // we wrap the FAB in a Container with shadow above and let the
-          // FAB's own gradient come through the foreground.
+          scrolledUnderElevation: 0,
         ),
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: AppTheme.indigoPrimary,
-            onRefresh: () async => ref.invalidate(devicesListProvider),
-            child: devices.when(
-              loading: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                children: const [
-                  AppLoading(message: 'جارٍ تحميل أجهزتك...'),
-                ],
+        extendBody: true,
+        floatingActionButton: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.indigoPrimary.withValues(alpha: 0.45),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
-              error: (err, _) => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                children: [
-                  AppErrorState(
-                    error: err is ApiException
-                        ? err
-                        : ApiException(
-                            message: 'تعذّر تحميل الأجهزة.',
-                            kind: ApiErrorKind.unknown,
-                          ),
-                    onRetry: () => ref.invalidate(devicesListProvider),
-                  ),
-                ],
+            ],
+          ),
+          child: FloatingActionButton.extended(
+            onPressed: () => _openAddDeviceFlow(context, ref),
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            icon: const Icon(Icons.add_rounded, color: Colors.white),
+            label: const Text(
+              'إضافة جهاز',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.2,
               ),
-              data: (items) {
-                if (items.isEmpty) {
-                  return ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    children: const [
-                      AppEmptyState(
-                        icon: Icons.solar_power_outlined,
-                        title: 'لا توجد أجهزة بعد',
-                        subtitle:
-                            'اضغط زر «إضافة جهاز» في الأسفل لربط جهازك الأول.',
-                      ),
-                    ],
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (_, i) {
-                    final d = items[i];
-                    final isSelected = activeId == d.id;
-                    return _DeviceTile(
-                      device: d,
-                      isSelected: isSelected,
-                      onTap: () => context.push(AppRoutes.deviceDetail(d.id)),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+            extendedPadding: const EdgeInsets.symmetric(horizontal: 22),
+            // Direct background gradient via a foreground decoration trick:
+            // we wrap the FAB in a Container with shadow above and let the
+            // FAB's own gradient come through the foreground.
+          ),
+        ),
+        body: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: AppTheme.pageBackdropGradient,
+          ),
+          child: SafeArea(
+            child: RefreshIndicator(
+              color: AppTheme.indigoPrimary,
+              onRefresh: () async => ref.invalidate(devicesListProvider),
+              child: devices.when(
+                loading: () => ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(vertical: 48),
+                  children: const [AppLoading(message: 'جارٍ تحميل أجهزتك...')],
+                ),
+                error: (err, _) => ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    AppErrorState(
+                      error: err is ApiException
+                          ? err
+                          : ApiException(
+                              message: 'تعذّر تحميل الأجهزة.',
+                              kind: ApiErrorKind.unknown,
+                            ),
+                      onRetry: () => ref.invalidate(devicesListProvider),
+                    ),
+                  ],
+                ),
+                data: (items) {
+                  if (items.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      children: const [
+                        AppEmptyState(
+                          icon: Icons.solar_power_outlined,
+                          title: 'لا توجد أجهزة بعد',
+                          subtitle:
+                              'اضغط زر «إضافة جهاز» في الأسفل لربط جهازك الأول.',
+                        ),
+                      ],
                     );
-                  },
-                );
-              },
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) {
+                      final d = items[i];
+                      final isSelected = activeId == d.id;
+                      return _DeviceTile(
+                        device: d,
+                        isSelected: isSelected,
+                        onTap: () => context.push(AppRoutes.deviceDetail(d.id)),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -137,9 +145,9 @@ class DevicesScreen extends ConsumerWidget {
   /// of a go_router-named route because the v48 brief's allow-list
   /// does not include `lib/app/app_router.dart`.
   Future<void> _openAddDeviceFlow(BuildContext context, WidgetRef ref) async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const AddDeviceScreen()),
-    );
+    final created = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const AddDeviceScreen()));
     if (created == true) {
       ref.invalidate(devicesListProvider);
     }
@@ -160,8 +168,7 @@ class _DeviceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // v100 — glossy gradient tile with a filled gradient icon glyph.
-    final accent =
-        isSelected ? AppTheme.indigoPrimary : AppTheme.indigoBright;
+    final accent = isSelected ? AppTheme.indigoPrimary : AppTheme.indigoBright;
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(18),

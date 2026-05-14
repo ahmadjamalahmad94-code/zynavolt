@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/state/auto_refresh.dart';
 import '../core/state/font_pref.dart';
 import '../core/state/time_format_provider.dart';
 import 'app_config.dart';
@@ -24,16 +25,19 @@ class SolarDeyeApp extends ConsumerWidget {
     // the Settings card rebuilds `MaterialApp.router` with a fresh
     // theme that uses the new typeface app-wide.
     final activeFont = ref.watch(appFontPrefProvider);
+    // v101 — mount the shared AppLifecycle observer once, here at
+    // the root, so every screen using AutoRefreshScope can react to
+    // foreground / background transitions. Without this watch the
+    // observer would never be added and timers would keep ticking
+    // while the app sits in the background.
+    ref.watch(appLifecycleObserverProvider);
 
     return MaterialApp.router(
       title: 'Zynavolt',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(font: activeFont),
       locale: const Locale(AppConfig.defaultLocale),
-      supportedLocales: const [
-        Locale('ar'),
-        Locale('en'),
-      ],
+      supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

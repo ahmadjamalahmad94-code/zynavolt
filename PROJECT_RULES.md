@@ -421,6 +421,41 @@ If the foreground crops awkwardly on Android 8+, adjust the
 * Auto-refetch on device change: watch `effectiveDeviceIdProvider`
   inside the provider.
 
+### 8.1 Auto-refresh (`AutoRefreshScope`) — `#convention`
+
+Live screens auto-refresh via `lib/core/state/auto_refresh.dart`. The
+shared `WidgetsBindingObserver` is mounted exactly once from
+`solar_deye_app.dart` (`ref.watch(appLifecycleObserverProvider)`).
+Screens that want periodic refresh wrap their body in
+`AutoRefreshScope(interval:, targets:, child:)` — the scope owns a
+`Timer.periodic`, invalidates each target on tick, pauses while
+the app is backgrounded, and fires an immediate tick on resume if
+the previous tick is stale.
+
+**Canonical cadence table** (owner-chosen 2026-05-14):
+
+| Screen | Interval | Providers |
+|---|---|---|
+| Home | 30 s | `dashboardProvider`, `insightsProvider`, `statisticsProvider`, `energyChartSeriesProvider` |
+| Battery Lab | 30 s | `batteryLabProvider` |
+| Devices list | 60 s | `devicesListProvider` |
+| Notifications inbox | 60 s | (custom `silentRefresh()` on the controller — does not use `AutoRefreshScope` so the feed never flickers) |
+| Everything else | — | pull-to-refresh only |
+
+**Rules:**
+
+* Don't add `AutoRefreshScope` to non-live screens (settings, account,
+  add-device flow). The extra invalidations waste data and battery.
+* `targets:` is a non-const `List<ProviderOrFamily>` — provider
+  instances aren't compile-time constants, so the list literal can't
+  be `const`. Wrap individual values in `const Duration(...)` etc.
+* For a flicker-free silent refresh (Notifications inbox pattern),
+  listen to `appLifecycleProvider` directly and call a custom
+  `silentRefresh()` on the controller — see
+  `notifications_screen.dart` for the pattern.
+* Pull-to-refresh stays on every screen that already had it. The
+  auto-refresh is additive, not a replacement.
+
 ---
 
 ## 9. RTL & accessibility — `#a11y`
@@ -528,3 +563,6 @@ When a rule changes:
 * **2026-05-14** — Initial draft. Captures v100 design system, font
   picker trial, branding two-file convention, removal/addition
   workflows, backend contract, RTL/perf notes.
+* **2026-05-14** — Added §8.1 (`AutoRefreshScope` + canonical cadence
+  table) for v101 auto-refresh foundation. Home / Battery Lab at 30 s,
+  Devices / Notifications at 60 s. All timers pause on background.

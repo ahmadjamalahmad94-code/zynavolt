@@ -8,6 +8,7 @@ import '../../../app/app_router.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/state/app_session.dart';
+import '../../../core/state/auto_refresh.dart';
 import '../../../core/utils/backend_time.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_empty_state.dart';
@@ -64,17 +65,26 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   /// after the first auto-jump fires.
   bool _autoSwitched = false;
 
-  /// 10-second auto-refresh polling cadence (v96).
-  static const Duration _pollInterval = Duration(seconds: 10);
+  /// v101 — bumped from 10 s → 60 s. The 10 s cadence made sense
+  /// before push notifications were on the roadmap; once push lands
+  /// (v102) the inbox barely needs to poll at all. Keeping a slow
+  /// background poll for the gap and for users who disable push.
+  static const Duration _pollInterval = Duration(seconds: 60);
 
   /// Single Timer guarded by [_pollTimer == null] so screen rebuilds
-  /// can never accidentally start a second poller.
+  /// can never accidentally start a second poller. Cleared on
+  /// background by the AppLifecycleState listener.
   Timer? _pollTimer;
+
+  /// Last successful tick — used to fire an immediate refresh on
+  /// resume if more than [_pollInterval] has elapsed since the app
+  /// was backgrounded.
+  DateTime _lastTick = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _pollTimer = Timer.periodic(_pollInterval, _tick);
+    _startTimer();
   }
 
   @override
@@ -84,12 +94,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     super.dispose();
   }
 
-  void _tick(Timer _) {
+  void _startTimer() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(_pollInterval, (_) => _doTick());
+  }
+
+  void _stopTimer() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  void _doTick() {
     if (!mounted) return;
     final current = ref.read(notificationsControllerProvider).valueOrNull;
     if (current == null) return;
     if (current.isLoadingMore || current.isMarkingAll) return;
     ref.read(notificationsControllerProvider.notifier).silentRefresh();
+    _lastTick = DateTime.now();
   }
 
   void _onScopePicked(NotificationScope s) {
@@ -167,8 +188,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     // the device local TZ (see `_humanizeTimestamp` docs for why), but
     // surfacing the profile string lets the user verify what the
     // system thinks their zone is.
-    final userTimezone =
-        ref.read(appSessionProvider).user?.timezone ?? '';
+    final userTimezone = ref.read(appSessionProvider).user?.timezone ?? '';
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -187,9 +207,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Future<void> _runMarkOne(int id) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref
-          .read(notificationsControllerProvider.notifier)
-          .markRead(id);
+      await ref.read(notificationsControllerProvider.notifier).markRead(id);
     } on ApiException catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -206,13 +224,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           .read(notificationsControllerProvider.notifier)
           .markAllRead();
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(
-        content: Text(
-          changed > 0
-              ? 'تم تعليم $changed إشعاراً كمقروء.'
-              : 'لا توجد إشعارات غير مقروءة.',
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            changed > 0
+                ? 'تم تعليم $changed إشعاراً كمقروء.'
+                : 'لا توجد إشعارات غير مقروءة.',
+          ),
         ),
-      ));
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -228,8 +248,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Widget build(BuildContext context) {
     final feed = ref.watch(notificationsControllerProvider);
     final filtersActive =
-        _unreadOnly || (_scope == NotificationScope.energy &&
+        _unreadOnly ||
+        (_scope == NotificationScope.energy &&
             _energyCategory != EnergyCategory.all);
+
+    // v101 — react to foreground / background. Pause polling while
+    // the app is hidden, and on resume fire an immediate silent
+    // refresh if the last tick is stale. The shared
+    // `appLifecycleObserverProvider` is mounted from `SolarDeyeApp`,
+    // so by the time this screen builds the state is up-to-date.
+    ref.listen<AppLifecycleState>(appLifecycleProvider, (previous, next) {
+      switch (next) {
+        case AppLifecycleState.resumed:
+          final stale = DateTime.now().difference(_lastTick) >= _pollInterval;
+          if (stale) _doTick();
+          if (_pollTimer == null) _startTimer();
+        case AppLifecycleState.paused:
+        case AppLifecycleState.inactive:
+        case AppLifecycleState.hidden:
+        case AppLifecycleState.detached:
+          _stopTimer();
+      }
+    });
 
     // v100 — gradient backdrop for visual continuity.
     return Scaffold(
@@ -280,45 +320,47 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ],
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
-        child: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () =>
-              ref.read(notificationsControllerProvider.notifier).refresh(),
-          child: feed.when(
-            loading: () => const _LoadingScroll(),
-            error: (err, _) => _ErrorScroll(
-              error: err is ApiException
-                  ? err
-                  : ApiException(
-                      message: 'تعذّر تحميل الإشعارات.',
-                      kind: ApiErrorKind.unknown,
-                    ),
-              onRetry: () => ref
-                  .read(notificationsControllerProvider.notifier)
-                  .refresh(),
-            ),
-            data: (state) {
-              _maybeAutoSwitchScope(state);
-              return _FeedBody(
-                state: state,
-                scope: _scope,
-                unreadOnly: _unreadOnly,
-                energyCategory: _energyCategory,
-                onScopeChanged: _onScopePicked,
-                onEnergyCategoryChanged: (c) =>
-                    setState(() => _energyCategory = c),
-                onMarkAll: _runMarkAll,
-                onTileTap: _openDetailSheet,
-                onClearFilters: () => setState(() {
-                  _unreadOnly = false;
-                  _energyCategory = EnergyCategory.all;
-                }),
-              );
-            },
-          ),
+        decoration: const BoxDecoration(
+          gradient: AppTheme.pageBackdropGradient,
         ),
-        ),  // close DecoratedBox child SafeArea (v100)
+        child: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: () =>
+                ref.read(notificationsControllerProvider.notifier).refresh(),
+            child: feed.when(
+              loading: () => const _LoadingScroll(),
+              error: (err, _) => _ErrorScroll(
+                error: err is ApiException
+                    ? err
+                    : ApiException(
+                        message: 'تعذّر تحميل الإشعارات.',
+                        kind: ApiErrorKind.unknown,
+                      ),
+                onRetry: () => ref
+                    .read(notificationsControllerProvider.notifier)
+                    .refresh(),
+              ),
+              data: (state) {
+                _maybeAutoSwitchScope(state);
+                return _FeedBody(
+                  state: state,
+                  scope: _scope,
+                  unreadOnly: _unreadOnly,
+                  energyCategory: _energyCategory,
+                  onScopeChanged: _onScopePicked,
+                  onEnergyCategoryChanged: (c) =>
+                      setState(() => _energyCategory = c),
+                  onMarkAll: _runMarkAll,
+                  onTileTap: _openDetailSheet,
+                  onClearFilters: () => setState(() {
+                    _unreadOnly = false;
+                    _energyCategory = EnergyCategory.all;
+                  }),
+                );
+              },
+            ),
+          ),
+        ), // close DecoratedBox child SafeArea (v100)
       ),
     );
   }
@@ -390,8 +432,9 @@ class _FeedBody extends ConsumerWidget {
       }
     }
 
-    final scopedItems =
-        scope == NotificationScope.energy ? energyItems : appItems;
+    final scopedItems = scope == NotificationScope.energy
+        ? energyItems
+        : appItems;
 
     final List<AppNotification> categoryFiltered;
     if (scope == NotificationScope.energy &&
@@ -403,8 +446,7 @@ class _FeedBody extends ConsumerWidget {
       categoryFiltered = scopedItems;
     }
 
-    final unreadInScope =
-        categoryFiltered.where((n) => !n.isRead).length;
+    final unreadInScope = categoryFiltered.where((n) => !n.isRead).length;
     final visible = unreadOnly
         ? categoryFiltered.where((n) => !n.isRead).toList(growable: false)
         : categoryFiltered;
@@ -413,10 +455,12 @@ class _FeedBody extends ConsumerWidget {
     final otherScope = scope == NotificationScope.app
         ? NotificationScope.energy
         : NotificationScope.app;
-    final otherScopeItems =
-        otherScope == NotificationScope.energy ? energyItems : appItems;
+    final otherScopeItems = otherScope == NotificationScope.energy
+        ? energyItems
+        : appItems;
 
-    final bool filtersActive = unreadOnly ||
+    final bool filtersActive =
+        unreadOnly ||
         (scope == NotificationScope.energy &&
             energyCategory != EnergyCategory.all);
 
@@ -446,8 +490,9 @@ class _FeedBody extends ConsumerWidget {
         const SizedBox(height: 6),
         _ActiveFiltersChip(
           unreadOnly: unreadOnly,
-          energyCategory:
-              scope == NotificationScope.energy ? energyCategory : null,
+          energyCategory: scope == NotificationScope.energy
+              ? energyCategory
+              : null,
           onClear: onClearFilters,
         ),
       ],
@@ -459,7 +504,8 @@ class _FeedBody extends ConsumerWidget {
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      itemCount: headerCount +
+      itemCount:
+          headerCount +
           (hasItems ? visible.length : 1) +
           (showLoadMore ? 1 : 0),
       separatorBuilder: (_, index) {
@@ -477,8 +523,7 @@ class _FeedBody extends ConsumerWidget {
             energyCategory: scope == NotificationScope.energy
                 ? energyCategory
                 : null,
-            otherScopeUnread:
-                otherScopeItems.where((n) => !n.isRead).length,
+            otherScopeUnread: otherScopeItems.where((n) => !n.isRead).length,
             otherScopeTotal: otherScopeItems.length,
             onJumpToOther: otherScopeItems.isNotEmpty
                 ? () => onScopeChanged(otherScope)
@@ -499,8 +544,8 @@ class _FeedBody extends ConsumerWidget {
           onPressed: state.isLoadingMore
               ? null
               : () => ref
-                  .read(notificationsControllerProvider.notifier)
-                  .loadMore(),
+                    .read(notificationsControllerProvider.notifier)
+                    .loadMore(),
         );
       },
     );
@@ -545,9 +590,7 @@ class _CompactSummaryBar extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              hasUnread
-                  ? '$unreadCount غير مقروء'
-                  : 'كل الإشعارات مقروءة',
+              hasUnread ? '$unreadCount غير مقروء' : 'كل الإشعارات مقروءة',
               style: const TextStyle(
                 color: AppTheme.ink,
                 fontSize: 12.5,
@@ -560,8 +603,7 @@ class _CompactSummaryBar extends StatelessWidget {
               onTap: onMarkAll,
               borderRadius: BorderRadius.circular(8),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -572,8 +614,11 @@ class _CompactSummaryBar extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     else
-                      const Icon(Icons.done_all,
-                          size: 14, color: AppTheme.indigoPrimary),
+                      const Icon(
+                        Icons.done_all,
+                        size: 14,
+                        color: AppTheme.indigoPrimary,
+                      ),
                     const SizedBox(width: 4),
                     const Text(
                       'اقرأ الكل',
@@ -663,8 +708,7 @@ class _MicroPill extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(999),
@@ -714,20 +758,20 @@ class _ActiveFiltersChip extends StatelessWidget {
         onTap: onClear,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: AppTheme.violet.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: AppTheme.violet.withValues(alpha: 0.30),
-            ),
+            border: Border.all(color: AppTheme.violet.withValues(alpha: 0.30)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.filter_alt_outlined,
-                  size: 14, color: AppTheme.violet),
+              const Icon(
+                Icons.filter_alt_outlined,
+                size: 14,
+                color: AppTheme.violet,
+              ),
               const SizedBox(width: 6),
               Text(
                 'تصفية: ${parts.join(' • ')}',
@@ -824,11 +868,13 @@ class _CompactTile extends StatelessWidget {
               Expanded(
                 child: AppCard(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 10),
-                  background:
-                      unread ? const Color(0xFFFAF8FF) : AppTheme.surface,
-                  borderColor:
-                      unread ? const Color(0xFFE9E2FF) : AppTheme.line,
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                  background: unread
+                      ? const Color(0xFFFAF8FF)
+                      : AppTheme.surface,
+                  borderColor: unread ? const Color(0xFFE9E2FF) : AppTheme.line,
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -1048,8 +1094,7 @@ class _ScopeTab extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(
-              horizontal: 8, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(9),
@@ -1080,7 +1125,9 @@ class _ScopeTab extends StatelessWidget {
                 const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 1),
+                    horizontal: 6,
+                    vertical: 1,
+                  ),
                   decoration: BoxDecoration(
                     color: selected ? Colors.white : AppTheme.indigoSoft,
                     borderRadius: BorderRadius.circular(999),
@@ -1194,16 +1241,15 @@ class _EmptyStateCard extends StatelessWidget {
             icon: unreadOnly
                 ? Icons.mark_email_read_outlined
                 : (scope == NotificationScope.energy
-                    ? Icons.bolt_outlined
-                    : Icons.notifications_none_outlined),
+                      ? Icons.bolt_outlined
+                      : Icons.notifications_none_outlined),
             title: _title,
             subtitle: _subtitle,
           ),
           if (_unreadHint != null) ...[
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: AppTheme.violet.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(8),
@@ -1213,8 +1259,11 @@ class _EmptyStateCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.filter_alt_outlined,
-                      size: 14, color: AppTheme.violet),
+                  const Icon(
+                    Icons.filter_alt_outlined,
+                    size: 14,
+                    color: AppTheme.violet,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -1233,8 +1282,7 @@ class _EmptyStateCard extends StatelessWidget {
           if (hasOther) ...[
             const SizedBox(height: 12),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 color: AppTheme.indigoSoft,
                 borderRadius: BorderRadius.circular(AppTheme.radiusCard),
@@ -1333,10 +1381,10 @@ class _DetailSheet extends StatelessWidget {
       eventType: n.eventType,
       sourceType: n.sourceType,
     );
-    final isEnergy = n.sourceType.toLowerCase() == 'energy' ||
+    final isEnergy =
+        n.sourceType.toLowerCase() == 'energy' ||
         classifyNotification(n) == NotificationScope.energy;
-    final accent =
-        isEnergy ? AppTheme.emerald : AppTheme.indigoPrimary;
+    final accent = isEnergy ? AppTheme.emerald : AppTheme.indigoPrimary;
     return SafeArea(
       top: false,
       child: Padding(
@@ -1360,9 +1408,7 @@ class _DetailSheet extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      isEnergy
-                          ? _energyIconFor(n)
-                          : _appIconFor(n),
+                      isEnergy ? _energyIconFor(n) : _appIconFor(n),
                       size: 18,
                       color: accent,
                     ),
@@ -1376,10 +1422,11 @@ class _DetailSheet extends StatelessWidget {
                         if (tag.isNotEmpty)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                              color:
-                                  accent.withValues(alpha: 0.10),
+                              color: accent.withValues(alpha: 0.10),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
@@ -1559,26 +1606,39 @@ class _PayloadSummary extends StatelessWidget {
       case 'periodic_day':
       case 'periodic_night':
         rows.addAll([
-          _PayloadRow('نسبة البطارية',
-              NotificationLabels.formatSocPercent(payload['soc'])),
-          _PayloadRow('الإنتاج الشمسي الحالي',
-              NotificationLabels.formatWatts(payload['solar_w'])),
-          _PayloadRow('استهلاك المنزل الحالي',
-              NotificationLabels.formatWatts(payload['home_w'])),
+          _PayloadRow(
+            'نسبة البطارية',
+            NotificationLabels.formatSocPercent(payload['soc']),
+          ),
+          _PayloadRow(
+            'الإنتاج الشمسي الحالي',
+            NotificationLabels.formatWatts(payload['solar_w']),
+          ),
+          _PayloadRow(
+            'استهلاك المنزل الحالي',
+            NotificationLabels.formatWatts(payload['home_w']),
+          ),
         ]);
         final weather = payload['weather_summary'];
-        if (weather != null &&
-            weather.toString().trim().isNotEmpty) {
-          rows.add(_PayloadRow('ملخص الطقس',
-              NotificationLabels.formatFreeText(weather)));
+        if (weather != null && weather.toString().trim().isNotEmpty) {
+          rows.add(
+            _PayloadRow(
+              'ملخص الطقس',
+              NotificationLabels.formatFreeText(weather),
+            ),
+          );
         }
         break;
       case 'pre_sunset':
         rows.addAll([
-          _PayloadRow('الوقت المتبقي للغروب',
-              NotificationLabels.formatMinutes(payload['minutes_to_sunset'])),
-          _PayloadRow('نسبة البطارية الآن',
-              NotificationLabels.formatSocPercent(payload['soc_now'])),
+          _PayloadRow(
+            'الوقت المتبقي للغروب',
+            NotificationLabels.formatMinutes(payload['minutes_to_sunset']),
+          ),
+          _PayloadRow(
+            'نسبة البطارية الآن',
+            NotificationLabels.formatSocPercent(payload['soc_now']),
+          ),
           _PayloadRow(
             'اكتمال الشحن قبل الغروب',
             NotificationLabels.formatWillFullBeforeSunset(
@@ -1593,12 +1653,18 @@ class _PayloadSummary extends StatelessWidget {
         break;
       case 'daily_report':
         rows.addAll([
-          _PayloadRow('إنتاج اليوم السابق',
-              NotificationLabels.formatKwh(payload['yesterday_kwh'])),
-          _PayloadRow('إنتاج الشهر',
-              NotificationLabels.formatKwh(payload['month_kwh'])),
-          _PayloadRow('الإجمالي التراكمي',
-              NotificationLabels.formatKwh(payload['lifetime_kwh'])),
+          _PayloadRow(
+            'إنتاج اليوم السابق',
+            NotificationLabels.formatKwh(payload['yesterday_kwh']),
+          ),
+          _PayloadRow(
+            'إنتاج الشهر',
+            NotificationLabels.formatKwh(payload['month_kwh']),
+          ),
+          _PayloadRow(
+            'الإجمالي التراكمي',
+            NotificationLabels.formatKwh(payload['lifetime_kwh']),
+          ),
         ]);
         break;
     }
@@ -1608,14 +1674,11 @@ class _PayloadSummary extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 14),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: AppTheme.emerald.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: AppTheme.emerald.withValues(alpha: 0.25),
-          ),
+          border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.25)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1754,10 +1817,8 @@ class _DetailKvBlockState extends State<_DetailKvBlock> {
           if (n.sourceId != null)
             _KvRow(label: 'رقم المرجع', value: '#${n.sourceId}'),
           _KvRow(label: 'الحالة', value: statusLabel),
-          if (created != null)
-            _KvRow(label: 'وقت الإنشاء', value: created),
-          if (read != null)
-            _KvRow(label: 'وقت القراءة', value: read),
+          if (created != null) _KvRow(label: 'وقت الإنشاء', value: created),
+          if (read != null) _KvRow(label: 'وقت القراءة', value: read),
           if (widget.userTimezone.isNotEmpty)
             _KvRow(label: 'نطاق الملف الشخصي', value: widget.userTimezone),
           const SizedBox(height: 6),
@@ -1833,12 +1894,10 @@ class _TechDetailsToggle extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           child: Row(
             children: [
-              const Icon(Icons.terminal,
-                  size: 14, color: AppTheme.faintMuted),
+              const Icon(Icons.terminal, size: 14, color: AppTheme.faintMuted),
               const SizedBox(width: 6),
               const Expanded(
                 child: Text(
@@ -1897,8 +1956,7 @@ class _TechDetailsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final n = notification;
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(8),
@@ -2023,10 +2081,7 @@ class _RawKvRow extends StatelessWidget {
 /// via Navigator.pop so the caller can apply the new selection in one
 /// `setState` call.
 class _FilterResult {
-  const _FilterResult({
-    required this.unreadOnly,
-    required this.energyCategory,
-  });
+  const _FilterResult({required this.unreadOnly, required this.energyCategory});
   final bool unreadOnly;
   final EnergyCategory energyCategory;
 }
@@ -2066,10 +2121,7 @@ class _FilterSheetState extends State<_FilterSheet> {
 
   void _apply() {
     Navigator.of(context).pop(
-      _FilterResult(
-        unreadOnly: _unreadOnly,
-        energyCategory: _energyCategory,
-      ),
+      _FilterResult(unreadOnly: _unreadOnly, energyCategory: _energyCategory),
     );
   }
 
@@ -2223,7 +2275,8 @@ class _HelpSheet extends StatelessWidget {
                   icon: Icons.bolt_outlined,
                   tone: AppTheme.emerald,
                   title: notificationScopeTitle(NotificationScope.energy),
-                  body: 'تظهر هنا تنبيهات الطاقة والأحمال التي يحفظها '
+                  body:
+                      'تظهر هنا تنبيهات الطاقة والأحمال التي يحفظها '
                       'النظام: البطارية، الأحمال، الشمس، الفائض، '
                       'والتقارير الدورية.',
                 ),
@@ -2232,7 +2285,8 @@ class _HelpSheet extends StatelessWidget {
                   icon: Icons.notifications_paused_outlined,
                   tone: AppTheme.amber,
                   title: 'إشعارات الجوال المباشرة',
-                  body: 'إشعارات الجوال المباشرة ستُفعّل في مرحلة لاحقة. '
+                  body:
+                      'إشعارات الجوال المباشرة ستُفعّل في مرحلة لاحقة. '
                       'حالياً تظهر التنبيهات داخل التطبيق فقط، وتُحدَّث '
                       'كل عشر ثوانٍ تلقائياً أثناء فتح هذه الشاشة.',
                 ),
@@ -2241,7 +2295,8 @@ class _HelpSheet extends StatelessWidget {
                   icon: Icons.schedule,
                   tone: AppTheme.faintMuted,
                   title: 'النطاق الزمني للتنبيهات',
-                  body: 'تُحفظ أوقات التنبيهات على الخادم بصيغة UTC، '
+                  body:
+                      'تُحفظ أوقات التنبيهات على الخادم بصيغة UTC، '
                       'وتُعرض على هذه الشاشة بحسب توقيت جهازك. '
                       'إذا اخترتَ نطاقاً زمنياً مختلفاً في ملفك الشخصي '
                       'فقد يختلف العرض حتى تتوفر تحويلات النطاقات '
