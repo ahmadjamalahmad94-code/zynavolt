@@ -1,5 +1,11 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/design/zyn_components.dart';
@@ -8,13 +14,15 @@ import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
 import '../../devices/state/selected_device_provider.dart';
 import '../data/statistics_models.dart';
+import '../data/statistics_pdf.dart';
 import '../data/statistics_repository.dart';
 
-/// v102 DS v1 — الإحصاءات.
+/// v102d — الإحصاءات.
 ///
-/// Subscriber-facing day/month view over `/api/v1/devices/<id>/statistics`.
-/// View selector pills + anchor picker; totals card + per-bucket detail
-/// table. PDF/CSV export is web-only (honest note at the bottom).
+/// Subscriber-facing day/month view over
+/// `/api/v1/devices/<id>/statistics` + on-device PDF export
+/// (download-and-open / download-and-share) using the bundled
+/// Alexandria font for Arabic shaping.
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
 
@@ -25,6 +33,8 @@ class StatisticsScreen extends ConsumerStatefulWidget {
 class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   String _view = 'day';
   DateTime _anchor = _todayDateOnly();
+  bool _opening = false;
+  bool _sharing = false;
 
   static DateTime _todayDateOnly() {
     final n = DateTime.now();
@@ -54,6 +64,99 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   void _setView(String next) {
     if (next == _view) return;
     setState(() => _view = next);
+  }
+
+  Future<({Uint8List bytes, String filename})> _build(
+    StatisticsSnapshot snapshot,
+  ) async {
+    final deviceName = ref.read(effectiveDeviceProvider)?.name ?? '';
+    final bytes = await StatisticsPdfBuilder.generate(
+      snapshot: snapshot,
+      deviceName: deviceName,
+    );
+    final stamp = snapshot.anchor.isNotEmpty
+        ? snapshot.anchor.replaceAll(RegExp(r'[^0-9A-Za-z-]'), '')
+        : 'statistics';
+    final filename = 'zynavolt-stats-${snapshot.view}-$stamp.pdf';
+    return (bytes: bytes, filename: filename);
+  }
+
+  /// تنزيل وفتح: persist the PDF in the app's documents directory
+  /// then hand off to the system PDF viewer.
+  Future<void> _downloadAndOpen(StatisticsSnapshot snapshot) async {
+    if (_opening || _sharing) return;
+    setState(() => _opening = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final out = await _build(snapshot);
+      final dir = await getApplicationDocumentsDirectory();
+      final reportsDir = Directory('${dir.path}/reports');
+      if (!await reportsDir.exists()) {
+        await reportsDir.create(recursive: true);
+      }
+      final file = File('${reportsDir.path}/${out.filename}');
+      await file.writeAsBytes(out.bytes, flush: true);
+      if (!mounted) return;
+      final result = await OpenFilex.open(file.path);
+      if (!mounted) return;
+      switch (result.type) {
+        case ResultType.done:
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              duration: const Duration(seconds: 3),
+              content: Text('تم الحفظ: ${out.filename}'),
+            ));
+        case ResultType.noAppToOpen:
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(const SnackBar(
+              duration: Duration(seconds: 3),
+              content: Text(
+                'تم الحفظ، لكن لا يوجد تطبيق على الجهاز يفتح ملفات PDF.',
+              ),
+            ));
+        case ResultType.fileNotFound:
+        case ResultType.permissionDenied:
+        case ResultType.error:
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              duration: const Duration(seconds: 3),
+              content: Text(
+                result.message.isNotEmpty
+                    ? 'تعذّر الفتح: ${result.message}'
+                    : 'تعذّر فتح الملف.',
+              ),
+            ));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('تعذّر إنشاء التقرير: $e')));
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  /// تنزيل ومشاركة: open the OS share / save sheet.
+  Future<void> _downloadAndShare(StatisticsSnapshot snapshot) async {
+    if (_opening || _sharing) return;
+    setState(() => _sharing = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final out = await _build(snapshot);
+      if (!mounted) return;
+      await Printing.sharePdf(bytes: out.bytes, filename: out.filename);
+    } catch (e) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('تعذّر إنشاء التقرير: $e')));
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
   }
 
   @override
@@ -129,9 +232,29 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           ),
         _TotalsCard(totals: s.totals),
         const SizedBox(height: ZynSpacing.md),
-        if (s.empty) const _EmptyState() else _BucketsCard(buckets: s.buckets, view: s.view),
-        const SizedBox(height: ZynSpacing.lg),
-        const _HonestNote(),
+        if (s.empty)
+          const _EmptyState()
+        else
+          _BucketsCard(buckets: s.buckets, view: s.view),
+        if (!s.empty) ...[
+          const SizedBox(height: ZynSpacing.lg),
+          ZynButton(
+            label: 'تنزيل وفتح (PDF)',
+            icon: Icons.picture_as_pdf_rounded,
+            busy: _opening,
+            onTap:
+                (_opening || _sharing) ? null : () => _downloadAndOpen(s),
+          ),
+          const SizedBox(height: ZynSpacing.sm),
+          ZynButton(
+            label: 'تنزيل ومشاركة',
+            icon: Icons.ios_share_rounded,
+            variant: ZynButtonVariant.secondary,
+            busy: _sharing,
+            onTap:
+                (_opening || _sharing) ? null : () => _downloadAndShare(s),
+          ),
+        ],
       ],
     );
   }
@@ -625,24 +748,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _HonestNote extends StatelessWidget {
-  const _HonestNote();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'هذه شاشة الإحصاءات الأساسية. الرسم البياني التفصيلي وعرض السنة '
-      'سيُضافان في تحديث لاحق. لتنزيل تقرير قابل للطباعة استخدم نسخة الويب.',
-      style: TextStyle(
-        color: ZynColors.muted,
-        fontSize: 11.5,
-        fontWeight: FontWeight.w500,
-        height: 1.65,
-      ),
-      textAlign: TextAlign.center,
-    );
-  }
-}
 
 class _NoDeviceState extends StatelessWidget {
   const _NoDeviceState();
