@@ -71,11 +71,39 @@ dependencies:
   # back to the app on completion (success / cancel deep-link or
   # plain "return to app" gesture).
   url_launcher: ^6.3.1
+  # v100-fonts (TEMPORARY): runtime Arabic-font A/B testing.
+  # `google_fonts` fetches fonts on first use and caches them on
+  # disk, so previewing Cairo / Tajawal / Almarai / IBM Plex /
+  # Readex / Noto Arabic / El Messiri doesn't bloat the APK.
+  # After the owner picks a winner we either bundle that single
+  # font as an asset (and drop this dep) or keep `google_fonts`
+  # for the chosen font alone. The Settings → نوع الخط card and
+  # AppFontPref enum / provider should be removed alongside this
+  # dependency when the trial is over.
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # v100-icons — generates the Android launcher icons (mipmap-*/
+  # ic_launcher.png + adaptive variants) from a single source PNG.
+  # Run `flutter pub get && dart run flutter_launcher_icons` after
+  # changing the source asset to regenerate every density bucket.
+  flutter_launcher_icons: ^0.14.4
+
+# v100-icons — flutter_launcher_icons config. The source PNG must
+# be 1024×1024 with transparent or matte background. Adaptive icon
+# uses a navy fill behind the foreground glyph so older devices
+# show a clean rounded square instead of a transparent crop.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/branding/zynavolt_app_icon.png"
+  adaptive_icon_background: "#0E1A2E"
+  adaptive_icon_foreground: "assets/branding/zynavolt_app_icon.png"
+  min_sdk_android: 23
+  remove_alpha_ios: false
 
 flutter:
   uses-material-design: true
