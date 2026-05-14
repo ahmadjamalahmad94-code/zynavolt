@@ -56,6 +56,23 @@ class PushService {
 
   /// One-shot bootstrap. Called from a Riverpod provider so the
   /// lifecycle is tied to the app's container disposal.
+  ///
+  /// On cold start the user is almost always unauthenticated for the
+  /// first frame — `appSessionProvider` is still in the `unknown`
+  /// phase while it restores tokens from secure storage. So we:
+  ///
+  ///   1. Request notification permission immediately (cheap).
+  ///   2. Fetch the FCM token immediately (independent of auth).
+  ///   3. Try a backend register — if no bearer is set yet the
+  ///      request fails with 401 (caught, logged) and we move on.
+  ///   4. Subscribe to session changes via `pushServiceProvider`;
+  ///      every transition into the authenticated phase fires a
+  ///      retry of the register through [registerCurrentTokenIfReady].
+  ///
+  /// Net effect: a cold-started user opening the app gets the system
+  /// permission prompt right away, and the moment they finish the
+  /// login screen the token lands on the backend — no manual
+  /// hot-restart required.
   Future<void> start() async {
     final settings = await _fcm.requestPermission(
       alert: true,
@@ -81,16 +98,18 @@ class PushService {
         '[push] token=${token == null ? '<null>' : '${token.substring(0, 12)}…'}',
       );
     }
-    if (token != null) {
-      await _sendToBackend(token);
-    }
+    // First attempt — usually a no-op on cold start because the
+    // session hasn't restored yet. The session-change listener below
+    // (wired in `pushServiceProvider`) retries the moment we're
+    // authenticated.
+    await registerCurrentTokenIfReady();
 
     _tokenRefreshSub = _fcm.onTokenRefresh.listen((newToken) {
       _currentToken = newToken;
       if (kDebugMode) {
         debugPrint('[push] token refreshed → ${newToken.substring(0, 12)}…');
       }
-      _sendToBackend(newToken);
+      registerCurrentTokenIfReady();
     });
 
     _foregroundSub = FirebaseMessaging.onMessage.listen((message) {
@@ -102,6 +121,25 @@ class PushService {
       // TODO(v102): bubble through a Riverpod provider so the
       // Notifications inbox can refresh and a banner can appear.
     });
+  }
+
+  /// Register the current FCM token with the backend, but ONLY when
+  /// the app session is authenticated. Idempotent and non-throwing —
+  /// safe to call from anywhere (cold start, login, token refresh,
+  /// foreground resume).
+  Future<void> registerCurrentTokenIfReady() async {
+    final token = _currentToken;
+    if (token == null) return;
+    final session = _ref.read(appSessionProvider);
+    if (!session.isAuthenticated) {
+      if (kDebugMode) {
+        debugPrint(
+          '[push] register deferred — session=${session.phase.name}',
+        );
+      }
+      return;
+    }
+    await _sendToBackend(token);
   }
 
   /// POSTs the FCM token to the backend so server-side rule
@@ -166,12 +204,25 @@ class PushService {
 /// Mounts a single [PushService] for the app's lifetime. Watched
 /// from `solar_deye_app.dart` so the bootstrap kicks off on the
 /// first frame.
+///
+/// The session listener is the second half of the cold-start race
+/// fix: the user is unauthenticated for the very first frame while
+/// `appSessionProvider` restores tokens from secure storage, so the
+/// initial `_sendToBackend` call returns 401. The moment the session
+/// flips into the authenticated phase (either via restored tokens
+/// or after the user types a password) we retry the register.
 final pushServiceProvider = Provider<PushService>((ref) {
   final service = PushService(ref);
   // Fire-and-forget: `start()` does its own awaiting internally.
   // We don't `await` it from the provider factory because providers
   // must return synchronously.
   unawaited(service.start());
+  ref.listen<AppSessionState>(appSessionProvider, (previous, next) {
+    final wasAuthed = previous?.isAuthenticated ?? false;
+    if (!wasAuthed && next.isAuthenticated) {
+      unawaited(service.registerCurrentTokenIfReady());
+    }
+  });
   ref.onDispose(() {
     unawaited(service.dispose());
   });
