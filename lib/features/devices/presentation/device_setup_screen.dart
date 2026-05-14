@@ -153,33 +153,30 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
     );
 
     if (option.fields.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'لا توجد حقول إعداد متاحة لهذا المزوّد',
-                style: TextStyle(
-                  color: ZynColors.ink,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
+      return AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'لا توجد حقول إعداد متاحة لهذا المزوّد',
+              style: TextStyle(
+                color: ZynColors.ink,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
               ),
-              const SizedBox(height: 6),
-              Text(
-                'يبدو أن المزوّد «${option.displayName}» لا يعرّف حقول '
-                'إعداد قابلة للتعبئة من التطبيق حالياً. تواصل مع الدعم '
-                'إذا كنت بحاجة إلى تكوين خاص.',
-                style: const TextStyle(
-                  color: ZynColors.inkSoft,
-                  fontSize: 12.5,
-                  height: 1.7,
-                ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'يبدو أن المزوّد «${option.displayName}» لا يعرّف حقول '
+              'إعداد قابلة للتعبئة من التطبيق حالياً. تواصل مع الدعم '
+              'إذا كنت بحاجة إلى تكوين خاص.',
+              style: const TextStyle(
+                color: ZynColors.inkSoft,
+                fontSize: 12.5,
+                height: 1.7,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -187,12 +184,10 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
     final required = option.fields.where((f) => f.required).toList();
     final optional = option.fields.where((f) => !f.required).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Form(
-        key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: Column(
+    return Form(
+      key: _formKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _Header(option: option, deviceName: widget.device.name),
@@ -252,10 +247,8 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                 label: const Text('حفظ بيانات الإعداد'),
               ),
             ),
-            const SizedBox(height: 24),
           ],
         ),
-      ),
     );
   }
 }

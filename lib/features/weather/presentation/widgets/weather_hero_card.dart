@@ -71,6 +71,7 @@ class WeatherHeroCard extends StatelessWidget {
                 ZynSpacing.lg,
               ),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _TopRow(current: current),
