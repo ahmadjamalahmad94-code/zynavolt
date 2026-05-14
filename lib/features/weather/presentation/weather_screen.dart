@@ -1,671 +1,241 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../core/api/api_exception.dart';
-import '../../../core/widgets/app_card.dart';
+import '../../../core/design/zyn_tokens.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading.dart';
+import '../../devices/state/selected_device_provider.dart';
+import '../../statistics/data/statistics_repository.dart';
 import '../data/weather_models.dart';
 import '../data/weather_repository.dart';
+import 'widgets/day_periods_strip.dart';
+import 'widgets/next_hour_card.dart';
+import 'widgets/sun_times_card.dart';
+import 'widgets/today_chart_strip.dart';
+import 'widgets/weather_header.dart';
+import 'widgets/weather_hero_card.dart';
 
-/// v63 — subscriber-facing weather tab.
+/// v102 DS v1 — "الطاقة والطقس" subscriber screen.
 ///
-/// Consumes `GET /api/v1/devices/<id>/weather` (v62). Honest by
-/// construction: when the backend says `available=false`, the screen
-/// shows a calm explanation card and **nothing else** — no fabricated
-/// temperatures, no placeholder sunrise/sunset, no fake forecast.
+/// Full rebuild of the v63 weather screen on the Modern Mobile SaaS
+/// Energy DS. Six honest blocks, each backed by real data from
+/// existing backend endpoints:
 ///
-/// Phase-1 scope (mirrors the v62 contract + v61 audit):
-///   * Current header (icon + temp + condition_ar + wind / cloud).
-///   * Sun row (sunrise / sunset, with effective sunset caption).
-///   * Next-hour insight card (advice + solar rating).
-///   * Three day-part chips (morning / noon / afternoon).
-///   * Timeline strip (horizontal scroll of `timeline[]` entries).
-///   * `generated_at` footer.
+///   1. [WeatherHeader] — page title + active-device pill.
+///   2. [WeatherHeroCard] — `weather.current` + today's kWh from
+///      `/statistics?view=day` + the next-hour `solar_rating` as a
+///      production verdict.
+///   3. [SunTimesCard] — `weather.sun.sunrise/sunset` + a helper
+///      line computed from `effective_sunrise_time` /
+///      `effective_sunset_time` (when production typically kicks in
+///      and when it tapers off).
+///   4. [NextHourCard] — `weather.next_hour` slot (rating + advice).
+///   5. [DayPeriodsStrip] — `weather.day_parts.morning/noon/afternoon`.
+///   6. [TodayChartStrip] — `weather.timeline` (horizontal hourly
+///      strip with per-hour temperature, cloud %, and rating).
 ///
-/// Deliberately NOT in v63:
-///   * Pre-sunset prediction / smart energy forecast (energy-coupled).
-///   * Multi-day forecast (backend currently fetches 2 days).
-///   * Weather notification preferences (admin-scoped today).
+/// Honesty rules carried over from v63:
+///   * `available == false` → header + calm explanation card. No
+///     fabricated current/sun/forecast values.
+///   * Optional blocks (`current` / `sun` / `next_hour` / `day_parts`
+///     / `timeline`) render only when the backend supplies them.
+///   * Statistics is best-effort: if it errors or hasn't loaded, the
+///     hero's production inset hides honestly rather than showing
+///     `0.0 kWh`.
 class WeatherScreen extends ConsumerWidget {
   const WeatherScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final snap = ref.watch(weatherProvider);
+    final deviceId = ref.watch(effectiveDeviceIdProvider);
 
-    // v100 — gradient backdrop for visual continuity.
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('الطقس'),
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-      ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.pageBackdropGradient),
+        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
         child: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(weatherProvider);
-            await ref.read(weatherProvider.future);
-          },
-          child: snap.when(
-            loading: () => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              children: const [
-                AppLoading(message: 'جارٍ تحميل بيانات الطقس...'),
-              ],
-            ),
-            error: (err, _) => ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              children: [
-                AppErrorState(
-                  error: err is ApiException
-                      ? err
-                      : ApiException(
-                          message: 'تعذّر تحميل بيانات الطقس.',
-                          kind: ApiErrorKind.unknown,
-                        ),
-                  onRetry: () => ref.invalidate(weatherProvider),
-                ),
-              ],
-            ),
-            data: (data) {
-              if (data == null) {
-                return ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  children: const [_NoDeviceCard()],
-                );
-              }
-              return _WeatherBody(snapshot: data);
+          child: RefreshIndicator(
+            color: ZynColors.primary500,
+            onRefresh: () async {
+              ref.invalidate(weatherProvider);
+              await ref.read(weatherProvider.future);
             },
+            child: snap.when(
+              loading: () => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                children: const [
+                  AppLoading(message: 'جارٍ تحميل بيانات الطقس...'),
+                ],
+              ),
+              error: (err, _) => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(ZynSpacing.lg),
+                children: [
+                  AppErrorState(
+                    error: err is ApiException
+                        ? err
+                        : ApiException(
+                            message: 'تعذّر تحميل بيانات الطقس.',
+                            kind: ApiErrorKind.unknown,
+                          ),
+                    onRetry: () => ref.invalidate(weatherProvider),
+                  ),
+                ],
+              ),
+              data: (data) {
+                if (data == null) {
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(ZynSpacing.lg),
+                    children: const [
+                      _WeatherHeaderFallback(),
+                      SizedBox(height: ZynSpacing.lg),
+                      _NoDeviceCard(),
+                    ],
+                  );
+                }
+                return _WeatherBody(snapshot: data, deviceId: deviceId);
+              },
+            ),
           ),
         ),
-        ),  // close DecoratedBox child SafeArea
       ),
     );
   }
 }
 
-// ─── Body ────────────────────────────────────────────────────────────
-
-class _WeatherBody extends StatelessWidget {
-  const _WeatherBody({required this.snapshot});
+class _WeatherBody extends ConsumerWidget {
+  const _WeatherBody({required this.snapshot, required this.deviceId});
 
   final WeatherSnapshot snapshot;
+  final int? deviceId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final deviceName = snapshot.device.name;
+
     if (!snapshot.available) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(
+          ZynSpacing.lg,
+          ZynSpacing.md,
+          ZynSpacing.lg,
+          ZynSpacing.xxl,
+        ),
         children: [
-          _DeviceHeader(device: snapshot.device),
-          const SizedBox(height: 12),
+          WeatherHeader(deviceName: deviceName),
+          const SizedBox(height: ZynSpacing.lg),
           _UnavailableCard(
             reason: snapshot.reason,
             backendMessage: snapshot.message,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: ZynSpacing.md),
           _GeneratedAtFooter(generatedAt: snapshot.generatedAt),
-          const SizedBox(height: 24),
         ],
       );
     }
 
+    // Best-effort fetch of today's kWh — anchor='' so the backend
+    // resolves "today" in the device's local timezone. If statistics
+    // fails or hasn't loaded yet, `kwh` stays null and the hero card
+    // hides the production inset honestly.
+    double? kwh;
+    if (deviceId != null) {
+      final stats = ref.watch(
+        statisticsProvider(
+          StatisticsQuery(deviceId: deviceId!, view: 'day', anchor: ''),
+        ),
+      );
+      kwh = stats.valueOrNull?.totals.productionKwh;
+    }
+
+    final current = snapshot.current!;
+    final sun = snapshot.sun;
+    final nextHour = snapshot.nextHour;
+    final dayParts = snapshot.dayParts;
+    final timeline = snapshot.timeline;
+
+    // Verdict carried over from next-hour rating so the wording in
+    // the hero stays consistent with the rest of the screen. Empty
+    // string → the inset hides its verdict line.
+    final verdict =
+        nextHour != null && nextHour.solarRating.isNotEmpty
+            ? nextHour.solarRating
+            : null;
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(
+        ZynSpacing.lg,
+        ZynSpacing.md,
+        ZynSpacing.lg,
+        ZynSpacing.xxl,
+      ),
       children: [
-        _DeviceHeader(device: snapshot.device),
-        const SizedBox(height: 12),
-        if (snapshot.current != null)
-          _CurrentCard(current: snapshot.current!),
-        if (snapshot.sun != null) ...[
-          const SizedBox(height: 12),
-          _SunRow(sun: snapshot.sun!),
+        WeatherHeader(deviceName: deviceName),
+        const SizedBox(height: ZynSpacing.lg),
+        WeatherHeroCard(
+          current: current,
+          productionKwhToday: kwh,
+          productionVerdict: verdict,
+        ),
+        if (sun != null) ...[
+          const SizedBox(height: ZynSpacing.md),
+          SunTimesCard(
+            sun: sun,
+            productionKickInLabel: _productionKickInLabel(sun),
+            darknessInLabel: _darknessInLabel(sun),
+          ),
         ],
-        if (snapshot.nextHour != null) ...[
-          const SizedBox(height: 12),
-          _NextHourCard(slot: snapshot.nextHour!),
+        if (nextHour != null) ...[
+          const SizedBox(height: ZynSpacing.md),
+          NextHourCard(slot: nextHour),
         ],
-        if (snapshot.dayParts != null) ...[
-          const SizedBox(height: 12),
-          _DayPartsCard(dayParts: snapshot.dayParts!),
+        if (dayParts != null) ...[
+          const SizedBox(height: ZynSpacing.md),
+          DayPeriodsStrip(dayParts: dayParts),
         ],
-        if (snapshot.timeline.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _TimelineCard(timeline: snapshot.timeline),
+        if (timeline.isNotEmpty) ...[
+          const SizedBox(height: ZynSpacing.md),
+          TodayChartStrip(timeline: timeline),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: ZynSpacing.md),
         _GeneratedAtFooter(generatedAt: snapshot.generatedAt),
-        const SizedBox(height: 24),
       ],
     );
   }
-}
 
-// ─── Header ──────────────────────────────────────────────────────────
+  /// Helper line for the sunrise column: when active solar
+  /// production typically kicks in (effective sunrise from
+  /// the backend's panel-tilt-aware computation).
+  String _productionKickInLabel(WeatherSun sun) {
+    final s = sun.effectiveSunriseTime;
+    if (s == null || s.isEmpty) return '';
+    return 'الإنتاج الفعّال يبدأ نحو $s';
+  }
 
-class _DeviceHeader extends StatelessWidget {
-  const _DeviceHeader({required this.device});
-  final WeatherDevice device;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasName = device.name.trim().isNotEmpty;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: AppTheme.indigoBright.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.cloud_outlined,
-              color: AppTheme.indigoPrimary, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              hasName
-                  ? 'حالة الطقس الحالية لجهاز: ${device.name}'
-                  : 'حالة الطقس الحالية',
-              style: const TextStyle(
-                color: AppTheme.indigoPrimary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w800,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Helper line for the sunset column: when active solar
+  /// production typically tapers off.
+  String _darknessInLabel(WeatherSun sun) {
+    final s = sun.effectiveSunsetTime;
+    if (s == null || s.isEmpty) return '';
+    return 'الإنتاج يقترب من الانتهاء عند $s';
   }
 }
 
-// ─── Current conditions ──────────────────────────────────────────────
+// ─── Empty / unavailable states ──────────────────────────────────────
 
-class _CurrentCard extends StatelessWidget {
-  const _CurrentCard({required this.current});
-  final WeatherCurrent current;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                current.icon.isNotEmpty ? current.icon : '🌤️',
-                style: const TextStyle(fontSize: 44, height: 1.0),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _formatTemperature(current.temperatureC),
-                      style: const TextStyle(
-                        color: AppTheme.ink,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
-                        height: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      current.conditionAr.isNotEmpty
-                          ? current.conditionAr
-                          : 'حالة الطقس غير متاحة',
-                      style: const TextStyle(
-                        color: AppTheme.softInk,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 14,
-            runSpacing: 8,
-            children: [
-              _MetaChip(
-                icon: Icons.cloud_outlined,
-                label: 'الغيوم',
-                value: _formatPercent(current.cloudCoverPercent),
-              ),
-              _MetaChip(
-                icon: Icons.air_outlined,
-                label: 'الرياح',
-                value: _formatWind(current.windSpeed),
-              ),
-              _MetaChip(
-                icon: Icons.water_drop_outlined,
-                label: 'احتمالية المطر',
-                value: _formatPercent(current.precipitationProbabilityPercent),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Sun row ─────────────────────────────────────────────────────────
-
-class _SunRow extends StatelessWidget {
-  const _SunRow({required this.sun});
-  final WeatherSun sun;
+class _WeatherHeaderFallback extends StatelessWidget {
+  const _WeatherHeaderFallback();
 
   @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _SectionTitle(label: 'الشروق والغروب'),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _SunPill(
-                  icon: Icons.wb_twilight_outlined,
-                  label: 'الشروق',
-                  value: sun.sunriseTime ?? '—',
-                  tone: AppTheme.warning,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _SunPill(
-                  icon: Icons.nightlight_outlined,
-                  label: 'الغروب',
-                  value: sun.sunsetTime ?? '—',
-                  tone: AppTheme.indigoPrimary,
-                ),
-              ),
-            ],
-          ),
-          if (sun.effectiveSunsetTime != null &&
-              sun.effectiveSunsetTime!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'الإنتاج الشمسي الفعّال يقترب من ${sun.effectiveSunsetTime}.',
-              style: const TextStyle(
-                color: AppTheme.faintMuted,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                height: 1.6,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      const WeatherHeader(deviceName: '');
 }
-
-class _SunPill extends StatelessWidget {
-  const _SunPill({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.tone,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-        border: Border.all(color: tone.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: tone, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: tone,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: AppTheme.ink,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Next-hour insight ───────────────────────────────────────────────
-
-class _NextHourCard extends StatelessWidget {
-  const _NextHourCard({required this.slot});
-  final WeatherSlot slot;
-
-  @override
-  Widget build(BuildContext context) {
-    final timeLabel =
-        slot.displayTime.isNotEmpty ? slot.displayTime : 'الساعة القادمة';
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const _SectionTitle(label: 'الساعة القادمة'),
-              const Spacer(),
-              Text(
-                timeLabel,
-                style: const TextStyle(
-                  color: AppTheme.faintMuted,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                slot.icon.isNotEmpty ? slot.icon : '🌤️',
-                style: const TextStyle(fontSize: 32, height: 1.0),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      slot.conditionAr.isNotEmpty
-                          ? slot.conditionAr
-                          : '—',
-                      style: const TextStyle(
-                        color: AppTheme.ink,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _formatTemperature(slot.temperature),
-                      style: const TextStyle(
-                        color: AppTheme.softInk,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (slot.solarRating.isNotEmpty)
-            _SlotBadge(label: slot.solarRating),
-          if (slot.advice.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              slot.advice,
-              style: const TextStyle(
-                color: AppTheme.softInk,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                height: 1.65,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Day-parts (morning / noon / afternoon) ──────────────────────────
-
-class _DayPartsCard extends StatelessWidget {
-  const _DayPartsCard({required this.dayParts});
-  final WeatherDayParts dayParts;
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = <Widget>[];
-    void add(String label, WeatherSlot? slot) {
-      if (slot == null) return;
-      cards.add(_DayPartChip(label: label, slot: slot));
-    }
-
-    add('الصباح', dayParts.morning);
-    add('الظهر', dayParts.noon);
-    add('بعد الظهر', dayParts.afternoon);
-
-    if (cards.isEmpty) return const SizedBox.shrink();
-
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _SectionTitle(label: 'فترات اليوم'),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                Expanded(child: cards[i]),
-                if (i < cards.length - 1) const SizedBox(width: 8),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DayPartChip extends StatelessWidget {
-  const _DayPartChip({required this.label, required this.slot});
-  final String label;
-  final WeatherSlot slot;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.softBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppTheme.faintMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            slot.icon.isNotEmpty ? slot.icon : '🌤️',
-            style: const TextStyle(fontSize: 22, height: 1.0),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatTemperature(slot.temperature),
-            style: const TextStyle(
-              color: AppTheme.ink,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            slot.conditionAr.isNotEmpty ? slot.conditionAr : '—',
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppTheme.softInk,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Timeline strip ──────────────────────────────────────────────────
-
-class _TimelineCard extends StatelessWidget {
-  const _TimelineCard({required this.timeline});
-  final List<WeatherSlot> timeline;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _SectionTitle(label: 'مخطط اليوم'),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 124,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: timeline.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (_, i) => _TimelineTile(slot: timeline[i]),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TimelineTile extends StatelessWidget {
-  const _TimelineTile({required this.slot});
-  final WeatherSlot slot;
-
-  @override
-  Widget build(BuildContext context) {
-    final time = slot.displayTime;
-    return Container(
-      width: 96,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.softBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            time.isNotEmpty ? time : '—',
-            style: const TextStyle(
-              color: AppTheme.faintMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            slot.icon.isNotEmpty ? slot.icon : '🌤️',
-            style: const TextStyle(fontSize: 22, height: 1.0),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatTemperature(slot.temperature),
-            style: const TextStyle(
-              color: AppTheme.ink,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            _formatPercent(slot.cloudCover),
-            style: const TextStyle(
-              color: AppTheme.softInk,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (slot.solarRating.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              slot.solarRating,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppTheme.indigoPrimary,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Unavailable / no-device cards ───────────────────────────────────
 
 class _UnavailableCard extends StatelessWidget {
   const _UnavailableCard({required this.reason, required this.backendMessage});
@@ -701,13 +271,23 @@ class _UnavailableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline,
-              color: AppTheme.faintMuted, size: 20),
-          const SizedBox(width: 10),
+          const Icon(
+            Icons.info_outline_rounded,
+            color: ZynColors.muted,
+            size: 20,
+          ),
+          const SizedBox(width: ZynSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -715,19 +295,20 @@ class _UnavailableCard extends StatelessWidget {
                 Text(
                   _title,
                   style: const TextStyle(
-                    color: AppTheme.ink,
+                    color: ZynColors.ink,
                     fontSize: 14,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
+                    height: 1.3,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _detail,
                   style: const TextStyle(
-                    color: AppTheme.softInk,
+                    color: ZynColors.inkSoft,
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    height: 1.7,
+                    fontWeight: FontWeight.w400,
+                    height: 1.6,
                   ),
                 ),
               ],
@@ -744,16 +325,24 @@ class _NoDeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: ZynColors.surface,
+        borderRadius: BorderRadius.circular(ZynRadii.card),
+        border: Border.all(color: ZynColors.line, width: 1),
+        boxShadow: ZynShadows.soft(),
+      ),
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: const [
+        children: [
           Text(
             'لا يوجد جهاز محدّد',
             style: TextStyle(
-              color: AppTheme.ink,
+              color: ZynColors.ink,
               fontSize: 14,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
+              height: 1.3,
             ),
           ),
           SizedBox(height: 6),
@@ -761,95 +350,13 @@ class _NoDeviceCard extends StatelessWidget {
             'لعرض الطقس، أضف جهازاً واحداً على الأقل من تبويب الأجهزة، '
             'ثم اختره كجهاز فعّال.',
             style: TextStyle(
-              color: AppTheme.softInk,
+              color: ZynColors.inkSoft,
               fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              height: 1.7,
+              fontWeight: FontWeight.w400,
+              height: 1.6,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Atoms ───────────────────────────────────────────────────────────
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Text(
-        label,
-        style: const TextStyle(
-          color: AppTheme.ink,
-          fontSize: 14,
-          fontWeight: FontWeight.w800,
-        ),
-      );
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: AppTheme.faintMuted, size: 14),
-        const SizedBox(width: 4),
-        Text(
-          '$label: ',
-          style: const TextStyle(
-            color: AppTheme.faintMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: AppTheme.ink,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SlotBadge extends StatelessWidget {
-  const _SlotBadge({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppTheme.indigoSoft,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.indigoBright.withValues(alpha: 0.25)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: AppTheme.indigoPrimary,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.3,
-        ),
       ),
     );
   }
@@ -862,10 +369,7 @@ class _GeneratedAtFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (generatedAt.isEmpty) return const SizedBox.shrink();
-    // The backend ships an ISO timestamp; we surface just the HH:MM
-    // portion when it parses, otherwise the raw string. We never
-    // localize aggressively — keep it honest and read-only.
-    String label = generatedAt;
+    var label = generatedAt;
     if (generatedAt.length >= 16) {
       label = generatedAt.substring(11, 16);
     }
@@ -873,28 +377,13 @@ class _GeneratedAtFooter extends StatelessWidget {
       child: Text(
         'آخر تحديث: $label',
         style: const TextStyle(
-          color: AppTheme.faintMuted,
+          color: ZynColors.muted,
           fontSize: 11.5,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
+          height: 1.3,
+          fontFeatures: [FontFeature.tabularFigures()],
         ),
       ),
     );
   }
-}
-
-// ─── Formatters ──────────────────────────────────────────────────────
-
-String _formatTemperature(double? c) {
-  if (c == null) return '--°';
-  return '${c.toStringAsFixed(1)}°';
-}
-
-String _formatPercent(double? p) {
-  if (p == null) return '--';
-  return '${p.toStringAsFixed(0)}%';
-}
-
-String _formatWind(double? w) {
-  if (w == null) return '--';
-  return '${w.toStringAsFixed(1)} km/h';
 }
