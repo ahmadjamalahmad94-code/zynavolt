@@ -16,40 +16,44 @@ import '../state/notifications_controller.dart';
 import 'widgets/notif_detail_sheet.dart';
 import 'widgets/notif_filter_sheet.dart';
 import 'widgets/notif_header.dart';
+import 'widgets/notif_mini_empty.dart';
 import 'widgets/notif_search_bar.dart';
 import 'widgets/notif_section_header.dart';
 import 'widgets/notif_summary_strip.dart';
 import 'widgets/notif_tile.dart';
 
-/// v102 DS v1 — Notifications screen, rebuilt from scratch.
+/// v102 DS v1 — Notifications screen.
 ///
-/// Visual layer follows the 2026-05-14 reference image: header
-/// (title + subtitle + avatar), search bar (filter + AI sparkle +
-/// search), three summary stat cards (battery / critical / unread),
-/// and three semantic sections (Critical / Suggestions / Updates)
-/// rendered in a single scroll instead of the v96 App/Energy tabs.
+/// Single scroll, three permanently-visible buckets (critical /
+/// suggestion / update). When a bucket has no items it renders a
+/// compact "all quiet" placeholder via [NotifMiniEmpty] so the
+/// screen's three-section structure stays visible.
 ///
-/// What this rewrite explicitly preserves from v96:
-///   * The `notificationsControllerProvider` data flow.
-///   * `silentRefresh()` polling on a 60 s timer, paused on app
-///     background via `appLifecycleProvider`.
-///   * Mark-read via `NotificationsController.markRead(id)` — the
-///     UI never mutates the local list optimistically; the server
-///     response is the source of truth.
-///   * Deep-link from a tapped push lands here (the route hasn't
-///     moved). The push overlay's `_refreshNotificationsInbox`
-///     hook continues to call `silentRefresh()` so the inbox stays
-///     in sync with arriving pushes.
-///   * Phase D's push toggle / banner / logout-revoke wiring is
-///     untouched.
+/// Auto mark-read
+/// --------------
+/// Once the screen has data and the user has either lingered for
+/// a short debounce window OR scrolled inside the list, every
+/// currently-loaded unread notification is marked read in a
+/// single parallel batch via the existing
+/// `NotificationsController.markRead` path. Behaviour:
 ///
-/// What's deliberately gone:
-///   * App / Energy tabs (the new design is a single scroll).
-///   * Help bottom sheet (the long explanation cards).
-///   * Auto-jump scope switcher (`_userPickedScope`, `_autoSwitched`).
-///   * Energy-category chip strip.
-///   * Heavy filter UI inside a fixed top bar (filters live in a
-///     compact button-opened sheet now).
+///   * Fires at most once per State instance (i.e. once per
+///     screen-visit). New unread items that arrive via push
+///     afterwards stay unread until the user opens them or
+///     re-enters the screen.
+///   * Throttled by either a 2 s post-data debounce OR an
+///     8 dp scroll-offset threshold, whichever happens first.
+///   * Backend writes happen via the same per-item endpoint the
+///     detail sheet uses (no new API). `Future.wait` fires them
+///     in parallel and the controller's local state updates as
+///     each response lands, so the unread counter and tile
+///     styling decay smoothly instead of jumping at the end.
+///   * Failures are swallowed silently — auto mark-read is a
+///     comfort feature, not a critical operation.
+///
+/// Manual mark-read from the detail sheet is unchanged. The
+/// `markRead` controller method is the same source of truth for
+/// both paths.
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -64,22 +68,34 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Set<NotificationBucket> _buckets = const {};
   String _query = '';
 
-  // ── Polling ─────────────────────────────────────────────────────
-  /// v101 — same 60 s silent-poll cadence approved by the owner.
+  // ── Polling (unchanged from Phase 2) ────────────────────────────
   static const Duration _pollInterval = Duration(seconds: 60);
   Timer? _pollTimer;
   DateTime _lastTick = DateTime.now();
+
+  // ── Auto mark-read ──────────────────────────────────────────────
+  static const Duration _autoMarkDebounce = Duration(seconds: 2);
+  static const double _scrollThreshold = 8;
+  late final ScrollController _scrollCtrl;
+  Timer? _autoMarkTimer;
+  bool _autoMarkFired = false;
 
   @override
   void initState() {
     super.initState();
     _startTimer();
+    _scrollCtrl = ScrollController()..addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _autoMarkTimer?.cancel();
+    _autoMarkTimer = null;
+    _scrollCtrl
+      ..removeListener(_onScroll)
+      ..dispose();
     super.dispose();
   }
 
@@ -100,6 +116,50 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     if (current.isLoadingMore || current.isMarkingAll) return;
     ref.read(notificationsControllerProvider.notifier).silentRefresh();
     _lastTick = DateTime.now();
+  }
+
+  // ── Auto mark-read helpers ──────────────────────────────────────
+
+  void _onScroll() {
+    if (_autoMarkFired) return;
+    if (!_scrollCtrl.hasClients) return;
+    if (_scrollCtrl.offset > _scrollThreshold) {
+      // The user has clearly seen the list — flush the debounce
+      // and fire immediately.
+      _autoMarkTimer?.cancel();
+      _autoMarkTimer = null;
+      _fireAutoMarkRead();
+    }
+  }
+
+  void _scheduleAutoMarkRead() {
+    if (_autoMarkFired) return;
+    if (_autoMarkTimer != null && _autoMarkTimer!.isActive) return;
+    _autoMarkTimer = Timer(_autoMarkDebounce, _fireAutoMarkRead);
+  }
+
+  Future<void> _fireAutoMarkRead() async {
+    _autoMarkTimer = null;
+    if (_autoMarkFired || !mounted) return;
+    final feed = ref.read(notificationsControllerProvider).valueOrNull;
+    if (feed == null) return;
+    final unreadIds = [
+      for (final n in feed.items)
+        if (!n.isRead) n.id,
+    ];
+    if (unreadIds.isEmpty) return;
+    _autoMarkFired = true;
+    final ctrl = ref.read(notificationsControllerProvider.notifier);
+    // Fire in parallel; per-item failures are swallowed so one bad
+    // response can't tank the batch. The controller updates local
+    // state per response so the unread counter decays smoothly.
+    await Future.wait(
+      unreadIds.map(
+        (id) => ctrl
+            .markRead(id)
+            .catchError((Object _, StackTrace _) => false),
+      ),
+    );
   }
 
   // ── Sheet openers ───────────────────────────────────────────────
@@ -153,8 +213,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Lifecycle — pause polling on background, fire immediate refresh
-    // on resume when the last tick is stale.
+    // Lifecycle — pause polling on background, fire immediate
+    // refresh on resume when the last tick is stale.
     ref.listen<AppLifecycleState>(appLifecycleProvider, (prev, next) {
       switch (next) {
         case AppLifecycleState.resumed:
@@ -169,6 +229,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           _stopTimer();
       }
     });
+
+    // Whenever fresh data lands with unread items, schedule the
+    // debounce. The debounce is a one-shot per State instance —
+    // see `_autoMarkFired` for why we don't refire across data
+    // updates after the user has been seen-by-us.
+    ref.listen<AsyncValue<NotificationsFeedState>>(
+      notificationsControllerProvider,
+      (prev, next) {
+        if (_autoMarkFired) return;
+        next.whenData((state) {
+          final hasUnread = state.items.any((n) => !n.isRead);
+          if (hasUnread) _scheduleAutoMarkRead();
+        });
+      },
+    );
 
     final feed = ref.watch(notificationsControllerProvider);
     final filtersActive = _unreadOnly || _buckets.isNotEmpty;
@@ -220,8 +295,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final grouped = _groupAndFilter(state.items);
     final criticalCount = grouped[NotificationBucket.critical]?.length ?? 0;
     final batteryStable = criticalCount == 0;
+    final allEmpty = _isAllEmpty(grouped);
 
     return ListView(
+      controller: _scrollCtrl,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
         ZynSpacing.lg,
@@ -249,16 +326,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ),
         const SizedBox(height: ZynSpacing.xl),
 
-        // Three buckets, in priority order.
-        for (final bucket in NotificationBucket.values)
-          if ((grouped[bucket] ?? const []).isNotEmpty) ...[
-            NotifSectionHeader(
-              label: notificationBucketLabel(bucket),
-              count: grouped[bucket]!.length,
-              tone: _toneFor(bucket),
-              icon: _iconFor(bucket),
-            ),
-            const SizedBox(height: ZynSpacing.md),
+        // All three sections, always — empty ones render the
+        // compact "all quiet" placeholder via NotifMiniEmpty so
+        // the screen's structure stays visible.
+        for (final bucket in NotificationBucket.values) ...[
+          NotifSectionHeader(
+            label: notificationBucketLabel(bucket),
+            count: grouped[bucket]?.length ?? 0,
+            tone: _toneFor(bucket),
+            icon: _iconFor(bucket),
+          ),
+          const SizedBox(height: ZynSpacing.md),
+          if ((grouped[bucket] ?? const []).isEmpty)
+            NotifMiniEmpty(bucket: bucket)
+          else
             for (final n in grouped[bucket]!) ...[
               NotifTile(
                 notification: n,
@@ -267,13 +348,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               ),
               const SizedBox(height: ZynSpacing.sm),
             ],
-            const SizedBox(height: ZynSpacing.lg),
-          ],
+          const SizedBox(height: ZynSpacing.lg),
+        ],
 
-        if (_isAllEmpty(grouped))
+        // Big empty state only when filters are narrowing the
+        // result to zero — without a filter, the three
+        // mini-empties already speak for the state.
+        if (filtersActive && allEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: ZynSpacing.xxxl),
-            child: _EmptyState(filtersActive: filtersActive),
+            padding: const EdgeInsets.only(top: ZynSpacing.xl),
+            child: _FilteredEmptyState(),
           ),
 
         if (state.hasMore && !filtersActive)
@@ -296,7 +380,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: ZynColors.primary700,
                         side: BorderSide(
-                          color: ZynColors.primary500.withValues(alpha: 0.30),
+                          color: ZynColors.primary500
+                              .withValues(alpha: 0.30),
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius:
@@ -350,11 +435,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       };
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.filtersActive});
-
-  final bool filtersActive;
-
+class _FilteredEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -362,36 +443,32 @@ class _EmptyState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 64,
-            height: 64,
+            width: 56,
+            height: 56,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: ZynColors.primary50,
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.notifications_off_outlined,
+              Icons.filter_alt_off_rounded,
               color: ZynColors.primary500,
-              size: 28,
+              size: 24,
             ),
           ),
           const SizedBox(height: ZynSpacing.md),
-          Text(
-            filtersActive
-                ? 'لا إشعارات تطابق الفلتر'
-                : 'لا توجد إشعارات بعد',
-            style: const TextStyle(
+          const Text(
+            'لا إشعارات تطابق الفلتر',
+            style: TextStyle(
               color: ZynColors.ink,
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            filtersActive
-                ? 'جرّب تخفيف الفلتر أو مسح البحث.'
-                : 'النظام الذكي يتابع طاقتك ويُعلِمك عند الحاجة.',
-            style: const TextStyle(
+          const Text(
+            'جرّب تخفيف الفلتر أو مسح البحث.',
+            style: TextStyle(
               color: ZynColors.muted,
               fontSize: 12.5,
               fontWeight: FontWeight.w400,
