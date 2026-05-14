@@ -213,26 +213,26 @@ class _DevicePill extends StatelessWidget {
           vertical: 6,
         ),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.10),
+          color: ZynColors.primary50,
           borderRadius: BorderRadius.circular(ZynRadii.pill),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.20),
+            color: ZynColors.primary500.withValues(alpha: 0.25),
             width: 0.8,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            const Icon(
               Icons.solar_power_outlined,
-              color: Colors.white.withValues(alpha: 0.85),
+              color: ZynColors.primary700,
               size: 14,
             ),
             const SizedBox(width: 6),
             Text(
               name,
               style: const TextStyle(
-                color: Colors.white,
+                color: ZynColors.primary700,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -385,12 +385,12 @@ class _GeneratedAtFooter extends StatelessWidget {
     return Center(
       child: Text(
         'آخر تحديث: $label',
-        style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.60),
+        style: const TextStyle(
+          color: ZynColors.muted,
           fontSize: 11.5,
           fontWeight: FontWeight.w600,
           height: 1.3,
-          fontFeatures: const [FontFeature.tabularFigures()],
+          fontFeatures: [FontFeature.tabularFigures()],
         ),
       ),
     );

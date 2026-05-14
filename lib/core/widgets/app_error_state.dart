@@ -11,15 +11,15 @@ class AppErrorState extends StatelessWidget {
     required this.error,
     this.onRetry,
     this.retryLabel,
-    this.onDark = true,
+    this.onDark = false,
   });
 
   final ApiException error;
   final VoidCallback? onRetry;
   final String? retryLabel;
 
-  /// True (default) when rendered on the v102 dark navy backdrop.
-  /// Set `false` inside a white card on a light surface.
+  /// True when rendered on a dark navy surface. Defaults to false
+  /// for the v102b light lavender page backdrop.
   final bool onDark;
 
   @override

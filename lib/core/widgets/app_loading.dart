@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../design/zyn_tokens.dart';
 
-/// Centralised loading state. Defaults to light text + bright
-/// primary500 spinner so it reads cleanly on the v102 dark navy
-/// page backdrop. Pass `onDark: false` when rendering inside a
-/// white card on a light surface.
+/// Centralised loading state. Renders as a primary spinner + muted
+/// message on the v102b light lavender page backdrop. Set
+/// `onDark: true` when rendering on a dark navy surface (the hero
+/// strip itself, rarely needed).
 class AppLoading extends StatelessWidget {
-  const AppLoading({super.key, this.message, this.onDark = true});
+  const AppLoading({super.key, this.message, this.onDark = false});
 
   final String? message;
   final bool onDark;

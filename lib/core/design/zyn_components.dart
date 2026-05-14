@@ -48,16 +48,17 @@ class ZynSectionHeader extends StatelessWidget {
     required this.label,
     required this.icon,
     this.trailing,
-    this.onDark = true,
+    this.onDark = false,
   });
 
   final String label;
   final IconData icon;
   final Widget? trailing;
 
-  /// True (default) when rendered on the v102 dark navy backdrop —
-  /// label + icon use white tones. Set to `false` when rendered on
-  /// a light surface (rare in v102; kept for completeness).
+  /// True when rendered on a dark navy surface (the hero strip).
+  /// Defaults to false — every non-Home page body uses the light
+  /// lavender backdrop in v102b, so section headers render as
+  /// dark text on a light surface by default.
   final bool onDark;
 
   @override
@@ -658,7 +659,7 @@ class ZynEmptyState extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.action,
-    this.onDark = true,
+    this.onDark = false,
   });
 
   final IconData icon;
@@ -666,9 +667,9 @@ class ZynEmptyState extends StatelessWidget {
   final String? subtitle;
   final Widget? action;
 
-  /// True (default) when rendered on the v102 dark navy backdrop.
-  /// Set `false` when shown inside a white card or on a light
-  /// surface.
+  /// True when rendered on a dark navy surface. Defaults to false
+  /// — v102b restores the light lavender page backdrop so empty
+  /// states sit on a light surface.
   final bool onDark;
 
   @override
@@ -816,32 +817,36 @@ class ZynPageHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top;
+    // v102b — compact hero. Trimmed top + bottom padding and the
+    // gaps between rows so the first content card lands higher
+    // on the screen on small phones. Typography unchanged.
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(gradient: ZynColors.navyHero),
       padding: EdgeInsets.fromLTRB(
         ZynSpacing.lg,
-        topInset + ZynSpacing.sm,
+        topInset + 2,
         ZynSpacing.lg,
-        ZynSpacing.xl,
+        ZynSpacing.md,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            height: 40,
+            height: 36,
             child: Row(
               children: [
                 if (showBackButton)
                   const _HeroBackButton()
                 else
-                  const SizedBox(width: 40),
+                  const SizedBox(width: 36),
                 const Spacer(),
                 ?trailing,
               ],
             ),
           ),
-          const SizedBox(height: ZynSpacing.md),
+          const SizedBox(height: ZynSpacing.sm),
           Center(
             child: Text(
               title,
@@ -857,7 +862,7 @@ class ZynPageHero extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           Center(
             child: Text(
               subtitle,
@@ -865,7 +870,7 @@ class ZynPageHero extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.72),
                 fontSize: 12.5,
                 fontWeight: FontWeight.w500,
-                height: 1.4,
+                height: 1.35,
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -888,11 +893,11 @@ class _HeroBackButton extends StatelessWidget {
       shape: const CircleBorder(),
       child: InkResponse(
         onTap: () => Navigator.of(context).maybePop(),
-        radius: 22,
+        radius: 20,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 40,
-          height: 40,
+          width: 36,
+          height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -904,7 +909,7 @@ class _HeroBackButton extends StatelessWidget {
           child: const Icon(
             Icons.arrow_forward_rounded, // RTL: visually "back"
             color: Colors.white,
-            size: 20,
+            size: 18,
           ),
         ),
       ),
@@ -934,11 +939,11 @@ class ZynHeroActionButton extends StatelessWidget {
       shape: const CircleBorder(),
       child: InkResponse(
         onTap: onPressed,
-        radius: 22,
+        radius: 20,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 40,
-          height: 40,
+          width: 36,
+          height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -947,7 +952,7 @@ class ZynHeroActionButton extends StatelessWidget {
               width: 0.8,
             ),
           ),
-          child: Icon(icon, color: Colors.white, size: 20),
+          child: Icon(icon, color: Colors.white, size: 18),
         ),
       ),
     );
@@ -969,7 +974,7 @@ class ZynScreen extends StatelessWidget {
     required this.child,
     this.scrollable = true,
     this.padding = const EdgeInsets.fromLTRB(
-      ZynSpacing.lg, ZynSpacing.lg, ZynSpacing.lg, ZynSpacing.xxl,
+      ZynSpacing.lg, ZynSpacing.md, ZynSpacing.lg, ZynSpacing.xxl,
     ),
     this.floatingActionButton,
     this.bottomNavigationBar,
@@ -993,13 +998,17 @@ class ZynScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v102b — light page backdrop returned. The dark navy hero
+    // floats above a soft lavender backdrop (same as the rest of
+    // the app), so short pages no longer leave a heavy dark band
+    // below the content.
     return Scaffold(
-      backgroundColor: ZynColors.navy900,
+      backgroundColor: Colors.transparent,
       extendBody: extendBody,
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: bottomNavigationBar,
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: ZynColors.navyHero),
+        decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
