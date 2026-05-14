@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/state/font_pref.dart';
 import '../core/state/time_format_provider.dart';
 import 'app_config.dart';
 import 'app_router.dart';
@@ -19,11 +20,15 @@ class SolarDeyeApp extends ConsumerWidget {
     // before this watch returns will use the default (12-hour),
     // then re-rendering after hydration picks up the saved value.
     ref.watch(timeFormatPrefProvider);
+    // v100-fonts — watch the font preference so changing it from
+    // the Settings card rebuilds `MaterialApp.router` with a fresh
+    // theme that uses the new typeface app-wide.
+    final activeFont = ref.watch(appFontPrefProvider);
 
     return MaterialApp.router(
       title: 'Zynavolt',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
+      theme: AppTheme.light(font: activeFont),
       locale: const Locale(AppConfig.defaultLocale),
       supportedLocales: const [
         Locale('ar'),

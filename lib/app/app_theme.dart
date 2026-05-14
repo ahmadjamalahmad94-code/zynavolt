@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/state/font_pref.dart';
+
 /// SolarDeye theme tokens.
 ///
 /// Distilled from `docs/design/v35_solardeye_ui_ux_consistency_system.md` in
@@ -148,7 +150,13 @@ class AppTheme {
   static Color get glassSurface => Colors.white.withValues(alpha: 0.96);
   static Color get glassBorder => line;
 
-  static ThemeData light() {
+  /// v100-fonts — `light()` now accepts an optional [AppFontPref]
+  /// so the Settings screen can swap the entire app's typeface at
+  /// runtime. The default (`AppFontPref.alexandria`) preserves the
+  /// pre-v100 behaviour, so any caller that doesn't pass a font
+  /// keeps rendering exactly as before.
+  static ThemeData light({AppFontPref? font}) {
+    final activeFont = font ?? AppFontPref.alexandria;
     const colorScheme = ColorScheme.light(
       primary: indigoPrimary,
       onPrimary: Colors.white,
@@ -161,37 +169,28 @@ class AppTheme {
       outline: line,
     );
 
+    // v95 → v100-fonts: Arabic typography is now ALWAYS configured
+    // through `AppFontPref.applyToTextTheme(...)` so the bundled
+    // Alexandria + every google_fonts variant flow through the same
+    // path. Setting `fontFamily` on the raw `ThemeData` is preserved
+    // for Alexandria (so Material's auto-cascade still works) but
+    // skipped for google_fonts variants — those provide their own
+    // family strings via the `apply(...)` helper below.
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: softBg,
-      // v95: Arabic typography wired. All nine Alexandria weight .ttf
-      // files live under `assets/fonts/` (Thin … Black) and are declared
-      // in `pubspec.yaml` under `flutter.fonts`. Every Text widget in the
-      // app now renders in Alexandria — no per-widget change needed.
-      // Flutter resolves any `FontWeight.wXXX` request straight to the
-      // matching cut.
-      //
-      // v99c: belt-and-suspenders — apply Alexandria explicitly to every
-      // entry of the generated TextTheme + primaryTextTheme. The base
-      // `fontFamily: 'Alexandria'` SHOULD propagate via `DefaultTextStyle`,
-      // but custom `TextStyle()` instances created without `inherit:true`
-      // (or built before the theme is wired) can fall back to system
-      // fonts. Explicit `.apply(fontFamily:)` guarantees Alexandria
-      // everywhere regardless of how a widget constructs its style.
-      fontFamily: 'Alexandria',
+      fontFamily: activeFont == AppFontPref.alexandria ? 'Alexandria' : null,
     );
 
-    // v99c — apply Alexandria explicitly to primaryTextTheme; the
-    // textTheme override at the bottom of copyWith (below) already
-    // applies Alexandria via `.apply(bodyColor:, displayColor:)`
-    // because `fontFamily` was set on `base` at the top, but the
-    // primary variant doesn't get that flow, so we wire it here.
-    final alexandriaPrimaryTextTheme =
-        base.primaryTextTheme.apply(fontFamily: 'Alexandria');
+    // Apply the active font to `primaryTextTheme` (used by app-bar
+    // titles, dark surfaces, etc.) and to the main `textTheme` in
+    // the copyWith block below.
+    final styledPrimaryTextTheme =
+        activeFont.applyToTextTheme(base.primaryTextTheme);
 
     return base.copyWith(
-      primaryTextTheme: alexandriaPrimaryTextTheme,
+      primaryTextTheme: styledPrimaryTextTheme,
       appBarTheme: const AppBarTheme(
         backgroundColor: surface,
         foregroundColor: ink,
@@ -303,15 +302,24 @@ class AppTheme {
         elevation: 6,
       ),
       dividerTheme: const DividerThemeData(color: line, thickness: 1, space: 1),
-      // v99c — chain Alexandria explicitly on top of the existing
-      // bodyColor / displayColor ink-mapping so the text theme
-      // honours both the colour spec AND the Arabic typography
-      // baseline.
-      textTheme: base.textTheme
-          .apply(bodyColor: ink, displayColor: ink, fontFamily: 'Alexandria')
+      // v100-fonts — text theme now flows through the active font.
+      // First we colour-map (`apply(bodyColor:, displayColor:)`),
+      // then the active `AppFontPref` swaps the family across every
+      // entry. The two `bodySmall` / `labelSmall` overrides keep
+      // the colour-distinct caption styles but resolve their font
+      // dynamically too (so the picker's preview affects the whole
+      // typography scale, not just the body / display lines).
+      textTheme: activeFont
+          .applyToTextTheme(
+            base.textTheme.apply(bodyColor: ink, displayColor: ink),
+          )
           .copyWith(
-            bodySmall: const TextStyle(color: faintMuted, fontSize: 12, fontFamily: 'Alexandria'),
-            labelSmall: const TextStyle(color: muted, fontSize: 12, fontFamily: 'Alexandria'),
+            bodySmall: activeFont.toTextStyle(
+              base: const TextStyle(color: faintMuted, fontSize: 12),
+            ),
+            labelSmall: activeFont.toTextStyle(
+              base: const TextStyle(color: muted, fontSize: 12),
+            ),
           ),
     );
   }
