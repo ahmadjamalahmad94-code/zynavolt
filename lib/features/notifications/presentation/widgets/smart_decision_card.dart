@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/design/zyn_tokens.dart';
 import '../../../../core/utils/backend_time.dart';
+import '../../../../core/api/api_exception.dart';
 import '../../../insights/data/insights_models.dart';
 import '../../../insights/data/insights_repository.dart';
 
@@ -31,24 +32,45 @@ class SmartDecisionCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(insightsProvider);
+    void retry() => ref.invalidate(insightsProvider);
     return async.when(
       loading: _LoadingShell.new,
-      error: (_, _) => const _UnavailableShell(
-        message: 'تعذّر تحميل القرار الحالي للنظام.',
-      ),
+      error: (err, _) {
+        // v102d — surface a clearer cause whenever we can pull one
+        // out of the network exception. Most "تعذّر تحميل" reports
+        // turn out to be either the upstream weather/Deye API quota
+        // being hit or transient network blips; the eyebrow line +
+        // retry chip turn it from a dead-end into a recoverable
+        // state.
+        final detail = _errorDetail(err);
+        return _UnavailableShell(
+          title: 'تعذّر تحليل القرار الحالي',
+          message: detail.message,
+          hint: detail.hint,
+          onRetry: retry,
+        );
+      },
       data: (snap) {
         if (snap == null) {
-          return const _UnavailableShell(
+          return _UnavailableShell(
             message: 'اختَر جهازاً لعرض القرار الحالي.',
+            onRetry: retry,
           );
         }
         if (!snap.available) {
-          return _UnavailableShell(message: _reasonCopy(snap.reason));
+          return _UnavailableShell(
+            message: _reasonCopy(snap.reason),
+            hint: snap.reason == 'weather_unreachable'
+                ? 'قد يكون مزوّد الطقس قد بلغ حصة الاستدعاءات اليومية — يعود تلقائيًا.'
+                : null,
+            onRetry: retry,
+          );
         }
         final advice = snap.energyAdvice;
         if (advice == null || advice.isEmpty) {
-          return const _UnavailableShell(
+          return _UnavailableShell(
             message: 'القرار الحالي غير جاهز بعد.',
+            onRetry: retry,
           );
         }
         return _DecisionBody(
@@ -66,10 +88,42 @@ class SmartDecisionCard extends ConsumerWidget {
       case 'station_coords_unavailable':
         return 'بيانات الموقع للجهاز غير مكتملة — لا يمكن استنتاج قرار طقس.';
       case 'weather_unreachable':
-        return 'تعذّر الوصول إلى مزود الطقس الآن. حاول لاحقاً.';
+        return 'مزوّد الطقس غير متاح الآن.';
       default:
         return 'القرار الحالي غير متوفر الآن.';
     }
+  }
+
+  ({String message, String? hint}) _errorDetail(Object err) {
+    if (err is ApiException) {
+      // Quota / rate-limit signals coming through ApiException —
+      // map them to honest copy that names the cause so the user
+      // doesn't read it as "the app is broken".
+      final msg = err.message.toLowerCase();
+      final isQuota = err.status == 429 ||
+          msg.contains('quota') ||
+          msg.contains('rate limit') ||
+          msg.contains('استدعاء') ||
+          msg.contains('حصة');
+      if (isQuota) {
+        return (
+          message: 'تم بلوغ حصة استدعاءات الـ API لهذا اليوم.',
+          hint:
+              'سيُستأنف التحليل تلقائيًا عند تجدّد الحصة. لا حاجة لأي إجراء.',
+        );
+      }
+      if (err.status != null && err.status! >= 500) {
+        return (
+          message: 'الخادم لا يستجيب الآن.',
+          hint: 'حاول التحديث بعد لحظات.',
+        );
+      }
+      return (message: err.message, hint: null);
+    }
+    return (
+      message: 'تعذّر تحميل القرار الحالي.',
+      hint: 'تحقّق من الاتصال أو حاول التحديث.',
+    );
   }
 }
 
@@ -234,9 +288,17 @@ class _DecisionBody extends StatelessWidget {
 }
 
 class _UnavailableShell extends StatelessWidget {
-  const _UnavailableShell({required this.message});
+  const _UnavailableShell({
+    required this.message,
+    this.title = 'القرار الحالي للنظام',
+    this.hint,
+    this.onRetry,
+  });
 
+  final String title;
   final String message;
+  final String? hint;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -247,51 +309,107 @@ class _UnavailableShell extends StatelessWidget {
         borderRadius: BorderRadius.circular(ZynRadii.card),
         border: Border.all(color: ZynColors.line, width: 1),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: ZynColors.primary50,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.hourglass_empty_rounded,
-              color: ZynColors.primary500,
-              size: 18,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: ZynColors.primary50,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.hourglass_empty_rounded,
+                  color: ZynColors.primary500,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: ZynSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: ZynColors.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      message,
+                      style: const TextStyle(
+                        color: ZynColors.ink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        height: 1.4,
+                      ),
+                      maxLines: 3,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: ZynSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'القرار الحالي للنظام',
-                  style: TextStyle(
-                    color: ZynColors.muted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+          if (hint != null && hint!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+              decoration: BoxDecoration(
+                color: ZynColors.primary50.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(ZynRadii.card),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: ZynColors.primary700,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      hint!,
+                      style: const TextStyle(
+                        color: ZynColors.primary700,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (onRetry != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('إعادة المحاولة'),
+                style: TextButton.styleFrom(
+                  foregroundColor: ZynColors.primary700,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  message,
-                  style: const TextStyle(
-                    color: ZynColors.ink,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    height: 1.4,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

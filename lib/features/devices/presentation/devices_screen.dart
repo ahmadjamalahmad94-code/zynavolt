@@ -99,6 +99,9 @@ class DevicesScreen extends ConsumerWidget {
                     isSelected: activeId == items[i].id,
                     onTap: () =>
                         context.push(AppRoutes.deviceDetail(items[i].id)),
+                    onSetActive: () => ref
+                        .read(selectedDeviceProvider.notifier)
+                        .select(items[i].id),
                   ),
                   if (i < items.length - 1)
                     const SizedBox(height: ZynSpacing.md),
@@ -130,11 +133,13 @@ class _DeviceTile extends StatelessWidget {
     required this.device,
     required this.isSelected,
     required this.onTap,
+    required this.onSetActive,
   });
 
   final Device device;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onSetActive;
 
   @override
   Widget build(BuildContext context) {
@@ -246,12 +251,71 @@ class _DeviceTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _StatusPill(
-                  active: device.isActive,
-                  status: device.connectionStatus,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _StatusPill(
+                      active: device.isActive,
+                      status: device.connectionStatus,
+                    ),
+                    if (!isSelected) ...[
+                      const SizedBox(height: 6),
+                      // v102d — fast path: switch active without
+                      // having to open the device detail screen.
+                      _SetActiveButton(onTap: onSetActive),
+                    ],
+                  ],
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SetActiveButton extends StatelessWidget {
+  const _SetActiveButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: ZynColors.primary50,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: ZynColors.primary500.withValues(alpha: 0.30),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.swap_horiz_rounded,
+                size: 13,
+                color: ZynColors.primary700,
+              ),
+              const SizedBox(width: 4),
+              const Text(
+                'نشّط',
+                style: TextStyle(
+                  color: ZynColors.primary700,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
           ),
         ),
       ),

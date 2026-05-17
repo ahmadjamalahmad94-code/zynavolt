@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0E1A2E</color>
+    <!-- Navy backdrop pulled from the new Zynavolt logo so the cold-start
+         splash, the adaptive icon background and the in-app splash all
+         read as one continuous brand surface. -->
+    <color name="ic_launcher_background">#0B1224</color>
+    <color name="splash_background">#0B1224</color>
 </resources>

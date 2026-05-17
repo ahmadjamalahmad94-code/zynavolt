@@ -198,6 +198,7 @@ class WeatherSnapshot {
     required this.nextHour,
     required this.dayParts,
     required this.timeline,
+    required this.timelineForDay,
     required this.reason,
     required this.message,
     required this.generatedAt,
@@ -221,6 +222,12 @@ class WeatherSnapshot {
       nextHour = WeatherSlot.fromJson(rawNext.cast<String, dynamic>());
     }
 
+    final rawForDay = (json['timeline_for_day'] ?? 'today')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final forDay = rawForDay == 'tomorrow' ? 'tomorrow' : 'today';
+
     return WeatherSnapshot(
       available: available,
       device: WeatherDevice.fromJson(
@@ -239,6 +246,7 @@ class WeatherSnapshot {
               (json['day_parts'] as Map?)?.cast<String, dynamic>())
           : null,
       timeline: available ? timeline : const <WeatherSlot>[],
+      timelineForDay: forDay,
       reason: _asNullableString(json['reason']),
       message: _asNullableString(json['message']),
       generatedAt: (json['generated_at'] ?? '').toString(),
@@ -252,6 +260,11 @@ class WeatherSnapshot {
   final WeatherSlot? nextHour;
   final WeatherDayParts? dayParts;
   final List<WeatherSlot> timeline;
+
+  /// v102d — `'today'` (before sunset) or `'tomorrow'` (after).
+  /// Drives the chart strip title between "مخطط اليوم" and
+  /// "مخطط الغد" so the screen stays useful at night.
+  final String timelineForDay;
 
   /// Stable machine code when `available == false`. Known values
   /// (v62 backend): `station_coords_unavailable`, `weather_unreachable`.

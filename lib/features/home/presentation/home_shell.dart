@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -35,19 +37,12 @@ class HomeShell extends StatefulWidget {
 
   final Widget child;
 
+  // v102d — owner-asked: anchor "الرئيسية" in the visual centre of
+  // the bar so the floating bubble sits on the home tab as the
+  // hub. Index 2 is the centre slot in a 5-tab bar regardless of
+  // RTL/LTR (the Directionality flips render order, but the middle
+  // index stays the middle).
   static const List<_Tab> _tabs = [
-    _Tab(
-      label: 'الرئيسية',
-      iconActive: Icons.dashboard_rounded,
-      iconInactive: Icons.dashboard_outlined,
-      route: AppRoutes.home,
-    ),
-    _Tab(
-      label: 'البطارية',
-      iconActive: Icons.battery_charging_full_rounded,
-      iconInactive: Icons.battery_charging_full_outlined,
-      route: AppRoutes.batteryLab,
-    ),
     _Tab(
       label: 'الطقس',
       iconActive: Icons.cloud_rounded,
@@ -59,6 +54,18 @@ class HomeShell extends StatefulWidget {
       iconActive: Icons.notifications_rounded,
       iconInactive: Icons.notifications_none_outlined,
       route: AppRoutes.notifications,
+    ),
+    _Tab(
+      label: 'الرئيسية',
+      iconActive: Icons.dashboard_rounded,
+      iconInactive: Icons.dashboard_outlined,
+      route: AppRoutes.home,
+    ),
+    _Tab(
+      label: 'البطارية',
+      iconActive: Icons.battery_charging_full_rounded,
+      iconInactive: Icons.battery_charging_full_outlined,
+      route: AppRoutes.batteryLab,
     ),
     _Tab(
       label: 'المزيد',
@@ -82,7 +89,9 @@ class _HomeShellState extends State<HomeShell> {
     for (var i = 0; i < HomeShell._tabs.length; i++) {
       if (location.startsWith(HomeShell._tabs[i].route)) return i;
     }
-    return 0;
+    // v102d — Home moved to the centre slot; fall back to it instead
+    // of index 0 (which is now "المزيد").
+    return HomeShell._tabs.indexWhere((t) => t.route == AppRoutes.home);
   }
 
   /// Pops every PopupRoute (bottom sheets, dialogs, modals) from
@@ -268,9 +277,9 @@ class _ZynBottomNavState extends State<_ZynBottomNav>
   }
 }
 
-/// White bar with rounded ends + a circular notch cut into the top
-/// edge under the active tab. Uses [PhysicalShape] so the drop
-/// shadow follows the notch silhouette automatically.
+/// v102d — navy bar matching the hero strip. PhysicalShape keeps
+/// the drop shadow tracing the notched silhouette; inside, a
+/// gradient + faint sun-and-rays watermark mirror the page hero.
 class _NotchedBarSurface extends StatelessWidget {
   const _NotchedBarSurface({
     required this.notchCentreX,
@@ -285,23 +294,145 @@ class _NotchedBarSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PhysicalShape(
-      color: Colors.white,
-      elevation: 8,
-      shadowColor: ZynColors.primary700.withValues(alpha: 0.35),
+      color: ZynColors.navy900,
+      elevation: 10,
+      shadowColor: ZynColors.navy900.withValues(alpha: 0.40),
       clipper: _NotchedBarClipper(
         notchCentreX: notchCentreX,
         notchRadius: _ZynBottomNav.notchRadius,
         cornerRadius: _ZynBottomNav.barCornerRadius,
       ),
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomPadding),
-        child: SizedBox(
-          height: _ZynBottomNav.barHeight,
-          child: child,
-        ),
+      child: Stack(
+        children: [
+          // Hero-style navy gradient overlaid on the solid navy900
+          // fill so the bar reads as a continuation of the hero
+          // strip at the top of the screen.
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(gradient: ZynColors.navyHero),
+            ),
+          ),
+          // Quiet sun-and-rays watermark — same vocabulary as the
+          // hero, scaled for the shorter bar.
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: _BottomNavWatermark()),
+            ),
+          ),
+          // Top inner highlight — single hairline of light along
+          // the upper edge so the bar feels lifted off the page.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 1,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.0),
+                    Colors.white.withValues(alpha: 0.20),
+                    Colors.white.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(bottom: bottomPadding),
+            child: SizedBox(
+              height: _ZynBottomNav.barHeight,
+              child: child,
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+/// v102d — bar-sized watermark. A soft sun bloom in one corner,
+/// short rays, and a tiny solar-panel strip on the opposite side.
+/// All at low alpha (0.05–0.10) over the navy gradient.
+class _BottomNavWatermark extends CustomPainter {
+  const _BottomNavWatermark();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // Sun bloom — leading side (right in RTL, left in LTR; we
+    // paint at fixed canvas coords).
+    final sunCx = w * 0.92;
+    final sunCy = h * 0.50;
+    final sunR = h * 0.30;
+
+    final halo = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white.withValues(alpha: 0.06),
+          Colors.white.withValues(alpha: 0.0),
+        ],
+      ).createShader(
+        Rect.fromCircle(center: Offset(sunCx, sunCy), radius: sunR * 2.6),
+      );
+    canvas.drawCircle(Offset(sunCx, sunCy), sunR * 2.6, halo);
+
+    final sun = Paint()..color = Colors.white.withValues(alpha: 0.08);
+    canvas.drawCircle(Offset(sunCx, sunCy), sunR, sun);
+
+    final rayPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.06)
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 8; i++) {
+      final angle = (i / 8) * 2 * math.pi;
+      final start = Offset(
+        sunCx + math.cos(angle) * sunR * 1.30,
+        sunCy + math.sin(angle) * sunR * 1.30,
+      );
+      final end = Offset(
+        sunCx + math.cos(angle) * sunR * 1.55,
+        sunCy + math.sin(angle) * sunR * 1.55,
+      );
+      canvas.drawLine(start, end, rayPaint);
+    }
+
+    // Tiny solar-panel strip on the trailing side.
+    canvas.save();
+    canvas.translate(w * 0.04, h * 0.55);
+    canvas.transform(_skew(skewX: -0.30, skewY: 0.14).storage);
+
+    final panel = Paint()..color = Colors.white.withValues(alpha: 0.05);
+    final cell = Paint()
+      ..color = Colors.white.withValues(alpha: 0.08)
+      ..strokeWidth = 0.6
+      ..style = PaintingStyle.stroke;
+
+    final p1 = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(-4, -14, 56, 22),
+      const Radius.circular(3),
+    );
+    canvas.drawRRect(p1, panel);
+    for (var i = 1; i < 4; i++) {
+      final x = -4 + (56.0 * i / 4);
+      canvas.drawLine(Offset(x, -14), Offset(x, 8), cell);
+    }
+    canvas.drawLine(const Offset(-4, -3), const Offset(52, -3), cell);
+
+    canvas.restore();
+  }
+
+  Matrix4 _skew({required double skewX, required double skewY}) {
+    return Matrix4.identity()
+      ..setEntry(0, 1, skewX)
+      ..setEntry(1, 0, skewY);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BottomNavWatermark oldDelegate) => false;
 }
 
 class _NotchedBarClipper extends CustomClipper<Path> {
@@ -399,9 +530,12 @@ class _FlatTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v102d — light text/icon tones since the bar surface is now
+    // the navy hero gradient. The active tab's icon lives in the
+    // floating white bubble above; only its label shows in the bar.
     final color = active
-        ? ZynColors.primary700
-        : ZynColors.muted.withValues(alpha: 0.85);
+        ? Colors.white
+        : Colors.white.withValues(alpha: 0.62);
     return Material(
       color: Colors.transparent,
       child: InkResponse(
@@ -414,10 +548,6 @@ class _FlatTab extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Reserve the icon's vertical slot for unselected tabs;
-              // selected tabs spend that slot under the floating
-              // bubble (which sits above the bar) and leave a gap so
-              // the label centres nicely below.
               SizedBox(
                 height: 24,
                 child: active

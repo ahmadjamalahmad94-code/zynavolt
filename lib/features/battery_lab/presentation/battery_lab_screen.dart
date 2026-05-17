@@ -95,16 +95,15 @@ class _Body extends StatelessWidget {
     final details = snapshot.details;
     final hasReading =
         insights.capacityKwh > 0 || (snapshot.latest != null);
+    // v102d (owner-asked reorder): battery hero on top, then loads
+    // recommendations strip, then the smart decision card. Owner's
+    // mental model is "show me the battery first, then what loads
+    // are safe to run, then the system's overall verdict" — the
+    // suggestion bucket sat above the live state before, which
+    // forced a scroll just to glance at SoC.
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
       children: [
-        // v102d — Smart Decision + Loads Recommendations now live
-        // on the Battery tab. Same widgets the Notifications
-        // screen used; they self-handle loading/empty/error.
-        const SmartDecisionCard(),
-        const SizedBox(height: 14),
-        const LoadsRecommendationsStrip(),
-        const SizedBox(height: 14),
         if (!hasReading)
           const AppEmptyState(
             icon: Icons.battery_unknown_outlined,
@@ -114,6 +113,10 @@ class _Body extends StatelessWidget {
           )
         else ...[
           _StateHero(insights: insights),
+          const SizedBox(height: 14),
+          const LoadsRecommendationsStrip(),
+          const SizedBox(height: 14),
+          const SmartDecisionCard(),
           const SizedBox(height: 14),
           _CapacitySection(insights: insights),
           const SizedBox(height: 14),

@@ -16,23 +16,33 @@ import '../../data/weather_models.dart';
 /// When the timeline is empty, the strip collapses to a single
 /// honest placeholder line instead of fabricating values.
 class TodayChartStrip extends StatelessWidget {
-  const TodayChartStrip({super.key, required this.timeline});
+  const TodayChartStrip({
+    super.key,
+    required this.timeline,
+    this.timelineForDay = 'today',
+  });
 
   final List<WeatherSlot> timeline;
 
+  /// `'today'` (default) or `'tomorrow'` — switches the strip title
+  /// after sunset so the screen stays useful at night.
+  final String timelineForDay;
+
   @override
   Widget build(BuildContext context) {
+    final title =
+        timelineForDay == 'tomorrow' ? 'مخطط الغد' : 'مخطط اليوم';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(
+        Padding(
+          padding: const EdgeInsets.symmetric(
             horizontal: ZynSpacing.xs,
             vertical: ZynSpacing.xs,
           ),
           child: Text(
-            'مخطط اليوم',
-            style: TextStyle(
+            title,
+            style: const TextStyle(
               color: ZynColors.ink,
               fontSize: 14,
               fontWeight: FontWeight.w800,

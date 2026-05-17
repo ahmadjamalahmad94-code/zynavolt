@@ -132,7 +132,13 @@ class EnergyChartSeries {
       gridInKwh: s.totals.gridInKwh,
       avgSocPercent: s.totals.avgBatterySocPercent,
       maxSolarW: s.totals.maxSolarW,
-      empty: s.empty || out.isEmpty,
+      // Trust the bucket array: as long as the backend returned even
+      // one bucket we render the chart, even if the period totals are
+      // zero. The backend's `empty` flag still gets surfaced when the
+      // bucket array itself is empty (truly nothing to plot), but a
+      // fresh local day with one early-morning reading should not be
+      // hidden behind the "no readings" empty state.
+      empty: out.isEmpty,
       titleHint: s.titleHint,
       scope: scope,
       anchor: anchor,

@@ -81,6 +81,10 @@ const Set<String> _criticalEvents = {
   'inverter_overheat',
   'grid_outage',
   'system_alert',
+  // v102d-fix — upstream API quota events. The 100% one is critical
+  // because some screens degrade when it's hit; the 80% warning sits
+  // in the suggestion bucket below so it doesn't read as alarming.
+  'api_quota_exhausted',
 };
 
 const Set<String> _suggestionEvents = {
@@ -88,6 +92,9 @@ const Set<String> _suggestionEvents = {
   'solar_surplus',
   'energy_optimization',
   'smart_suggestion',
+  // v102d-fix — proactive heads-up that the upstream API is filling
+  // up. Calmer than a hard "exhausted" alert; lives in suggestions.
+  'api_quota_warning',
 };
 
 const Set<String> _updateEvents = {

@@ -285,6 +285,32 @@ class _CardHeader extends StatelessWidget {
   }
 }
 
+/// True when [q.anchor] points to the current local day/month, so
+/// the empty state can soften its copy from "no data" to "the day
+/// is still warming up". Defensive — any parse failure returns
+/// false so we keep the existing strict copy.
+bool _isTodayAnchor(EnergyChartQuery q) {
+  try {
+    final now = DateTime.now();
+    if (q.scope == ChartScope.day) {
+      final parts = q.anchor.split('-');
+      if (parts.length != 3) return false;
+      return parts[0] == now.year.toString().padLeft(4, '0') &&
+          parts[1] == now.month.toString().padLeft(2, '0') &&
+          parts[2] == now.day.toString().padLeft(2, '0');
+    }
+    if (q.scope == ChartScope.month) {
+      final parts = q.anchor.split('-');
+      if (parts.length < 2) return false;
+      return parts[0] == now.year.toString().padLeft(4, '0') &&
+          parts[1] == now.month.toString().padLeft(2, '0');
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
 class _ChartBody extends ConsumerWidget {
   const _ChartBody({required this.query});
   final EnergyChartQuery query;
@@ -309,17 +335,30 @@ class _ChartBody extends ConsumerWidget {
       ),
       data: (series) {
         if (series.empty) {
+          // Honest empty state, but context-aware: when the user is
+          // looking at *today* and the day just started (or only has
+          // a stray reading), the energy integration needs at least
+          // two consecutive readings to build the curve. Calling
+          // that out as "البيانات تتراكم" is far less alarming than
+          // "no readings for this period" which sounds like the
+          // device is broken.
+          final isToday = _isTodayAnchor(query);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (series.titleHint.isNotEmpty)
                 _TitleHintRow(text: series.titleHint),
               const SizedBox(height: 12),
-              const _ChartStatePanel(
-                icon: Icons.cloud_off_outlined,
-                title: 'لا توجد قراءات لهذه الفترة',
-                subtitle:
-                    'تظهر القراءات بعد أوّل مزامنة من الجهاز.',
+              _ChartStatePanel(
+                icon: isToday
+                    ? Icons.schedule_outlined
+                    : Icons.cloud_off_outlined,
+                title: isToday
+                    ? 'اليوم بدأ — البيانات تتراكم'
+                    : 'لا توجد قراءات لهذه الفترة',
+                subtitle: isToday
+                    ? 'يحتاج المنحنى لعدة قراءات متتالية ليرسم الإنتاج والاستهلاك بدقة.'
+                    : 'تظهر القراءات بعد أوّل مزامنة من الجهاز.',
               ),
             ],
           );

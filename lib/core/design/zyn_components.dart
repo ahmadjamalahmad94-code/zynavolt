@@ -843,7 +843,7 @@ class ZynPageHero extends StatelessWidget {
               // Subtle energy watermark — sun, solar panels, bolt.
               const Positioned.fill(
                 child: IgnorePointer(
-                  child: CustomPaint(painter: _HeroWatermark()),
+                  child: CustomPaint(painter: ZynHeroWatermark()),
                 ),
               ),
               // Centred title + subtitle block.
@@ -916,8 +916,8 @@ class ZynPageHero extends StatelessWidget {
 /// Sun disc + radial rays in one corner, tilted solar-panel strip
 /// in the opposite corner, and a small lightning bolt. Painted at
 /// low alpha so the title + subtitle always read clearly.
-class _HeroWatermark extends CustomPainter {
-  const _HeroWatermark();
+class ZynHeroWatermark extends CustomPainter {
+  const ZynHeroWatermark();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1024,7 +1024,7 @@ class _HeroWatermark extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _HeroWatermark oldDelegate) => false;
+  bool shouldRepaint(covariant ZynHeroWatermark oldDelegate) => false;
 }
 
 class _HeroBackButton extends StatelessWidget {

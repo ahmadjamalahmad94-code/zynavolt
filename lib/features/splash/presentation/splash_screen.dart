@@ -39,47 +39,41 @@ class SplashScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Logo tile with gradient ring + glow.
+                    // Logo — the brand mark already ships with its
+                    // own navy rounded-square background and orange
+                    // arc, so we render it as-is and just sit it on
+                    // a soft amber bloom that picks up the bolt's
+                    // accent. No gradient ring, no clip — the asset
+                    // is the identity.
                     Container(
-                      width: 108,
-                      height: 108,
+                      width: 132,
+                      height: 132,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFF38BDF8),
-                            ZynColors.indigoBright,
-                            ZynColors.indigoDeep,
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(26),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.20),
-                          width: 1.6,
-                        ),
+                        borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: ZynColors.indigoBright
-                                .withValues(alpha: 0.50),
-                            blurRadius: 28,
-                            offset: const Offset(0, 12),
+                            color:
+                                const Color(0xFFFFA227).withValues(alpha: 0.32),
+                            blurRadius: 36,
+                            offset: const Offset(0, 14),
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.35),
+                            blurRadius: 22,
+                            offset: const Offset(0, 8),
                           ),
                         ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(22),
-                        child: Image.asset(
-                          'assets/branding/zynavolt_logo.png',
-                          width: 96,
-                          height: 96,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const Icon(
-                            Icons.wb_sunny_outlined,
-                            color: Colors.white,
-                            size: 50,
-                          ),
+                      child: Image.asset(
+                        'assets/branding/zynavolt_logo.png',
+                        width: 132,
+                        height: 132,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.wb_sunny_outlined,
+                          color: Colors.white,
+                          size: 60,
                         ),
                       ),
                     ),

@@ -165,7 +165,10 @@ class _WeatherBody extends ConsumerWidget {
         ],
         if (timeline.isNotEmpty) ...[
           const SizedBox(height: ZynSpacing.md),
-          TodayChartStrip(timeline: timeline),
+          TodayChartStrip(
+            timeline: timeline,
+            timelineForDay: snapshot.timelineForDay,
+          ),
         ],
         const SizedBox(height: ZynSpacing.md),
         _GeneratedAtFooter(generatedAt: snapshot.generatedAt),

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/design/zyn_components.dart';
 import '../../../core/design/zyn_tokens.dart';
 import '../../../core/state/app_session.dart';
 import '../../../core/state/auto_refresh.dart';
@@ -19,6 +20,7 @@ import '../../charts/presentation/home_energy_chart_card.dart';
 import '../../dashboard/data/dashboard_models.dart';
 import '../../dashboard/data/dashboard_repository.dart';
 import '../../devices/data/device_models.dart';
+import '../../devices/presentation/widgets/device_switcher.dart';
 import '../../devices/state/selected_device_provider.dart';
 import '../../insights/data/insights_repository.dart';
 import '../../insights/presentation/insights_card.dart';
@@ -79,9 +81,13 @@ class _ScreenBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v102d — drop the top SafeArea so the unified-style hero can
+    // paint into the status-bar area exactly like every other
+    // screen. Bottom inset still respected by the body's padding +
+    // the bottom-nav clearance.
     return DecoratedBox(
       decoration: const BoxDecoration(gradient: ZynColors.pageBackdrop),
-      child: SafeArea(child: child),
+      child: child,
     );
   }
 }
@@ -96,65 +102,59 @@ class _HomeBody extends ConsumerWidget {
     final activeDeviceId = ref.watch(effectiveDeviceIdProvider);
     final dashboard = ref.watch(dashboardProvider);
 
-    return RefreshIndicator(
-      color: ZynColors.primary700,
-      onRefresh: () async {
-        ref.invalidate(dashboardProvider);
-        // v75: also refresh the insights card so pull-to-refresh
-        // updates the "what should I do right now?" guidance
-        // alongside the live cards.
-        ref.invalidate(insightsProvider);
-        // v77: invalidate the advanced energy chart's underlying
-        // statistics + derived series so the curve and the period
-        // split bars also re-fetch on pull-to-refresh. We invalidate
-        // both layers because the chart provider memoizes on its
-        // own EnergyChartQuery key.
-        ref.invalidate(statisticsProvider);
-        ref.invalidate(energyChartSeriesProvider);
-        await ref.read(dashboardProvider.future);
-      },
-      child: ListView(
-        // v46: no AppBar above, SafeArea already accounts for the status
-        // bar — just a small 12 dp breathing margin before the hero.
-        // v62: bump bottom padding so the last card has room to breathe
-        // above the home-indicator gesture area on tall phones.
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 36),
-        children: [
-          _HomeHero(
-            user: session.user,
-            device: activeDevice,
-            snapshot: dashboard.valueOrNull,
-            onRefresh: () {
+    // v102d — Hero floats full-width at the top (same shape as the
+    // unified ZynPageHero), the dashboard cards live in a padded
+    // scroll body underneath. RefreshIndicator wraps only the
+    // scrollable body so pull-to-refresh still works.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _HomeHero(
+          user: session.user,
+          device: activeDevice,
+          snapshot: dashboard.valueOrNull,
+          onRefresh: () {
+            ref.invalidate(dashboardProvider);
+            ref.invalidate(insightsProvider);
+            ref.invalidate(statisticsProvider);
+            ref.invalidate(energyChartSeriesProvider);
+          },
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            color: ZynColors.primary700,
+            onRefresh: () async {
               ref.invalidate(dashboardProvider);
-              // v75: pair the hero refresh button with the
-              // insights provider so the user sees both fresh.
               ref.invalidate(insightsProvider);
-              // v77: also refresh the advanced energy chart layers so
-              // tapping the hero refresh button feels consistent with
-              // pull-to-refresh.
               ref.invalidate(statisticsProvider);
               ref.invalidate(energyChartSeriesProvider);
+              await ref.read(dashboardProvider.future);
             },
-          ),
-          const SizedBox(height: 12),
-          if (activeDeviceId == null)
-            const _NoDeviceState()
-          else
-            dashboard.when(
-              loading: _LoadingBlock.new,
-              error: (err, _) => _ErrorBlock(
-                error: err is ApiException
-                    ? err
-                    : ApiException(
-                        message: 'تعذّر تحميل بيانات اللوحة.',
-                        kind: ApiErrorKind.unknown,
-                      ),
-                onRetry: () => ref.invalidate(dashboardProvider),
-              ),
-              data: (snapshot) => _DashboardBody(snapshot: snapshot),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+              children: [
+                if (activeDeviceId == null)
+                  const _NoDeviceState()
+                else
+                  dashboard.when(
+                    loading: _LoadingBlock.new,
+                    error: (err, _) => _ErrorBlock(
+                      error: err is ApiException
+                          ? err
+                          : ApiException(
+                              message: 'تعذّر تحميل بيانات اللوحة.',
+                              kind: ApiErrorKind.unknown,
+                            ),
+                      onRetry: () => ref.invalidate(dashboardProvider),
+                    ),
+                    data: (snapshot) => _DashboardBody(snapshot: snapshot),
+                  ),
+              ],
             ),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -186,53 +186,57 @@ class _HomeHero extends StatelessWidget {
     // UTC wall-clock as if it were local time — three hours behind
     // for users in Asia/Hebron during summer.
     final lastReading = formatBackendHm(snapshot?.latest.createdAt);
-    final deviceName = device == null
-        ? null
-        : (device!.name.isNotEmpty ? device!.name : '#${device!.id}');
     // v85: surface today's production directly in the hero so the hero
     // becomes more than a name + greeting. Value is server-computed
     // (cards.daily_production_kwh) — no client-side derivation.
     final daily = snapshot?.cards.dailyProductionKwh ?? 0;
     final dailyText = daily > 0 ? '${_fmtKwh(daily)} kWh اليوم' : null;
 
-    // v99b — exact-replica hero per the owner's reference design:
-    //   * deep night-sky gradient (#0E1A2E → #1B2C4A) instead of
-    //     the previous indigo gradient
-    //   * sun + tilted solar-panel illustration anchored on the LEFT
-    //     drawn via CustomPaint so we don't need an image asset
-    //   * top row: refresh circle button on the LEFT, "ZYNAVOLT" mark
-    //     on the RIGHT (mirrors the design, which is RTL-aware)
-    //   * centred greeting with a wave 👋 emoji, three pills stacked
-    //     in the right column (kWh today / device / last reading)
-    // v99d — Hero collapsed to a tight 2-row layout that's ~40 % shorter
-    // than v99c. Row 1 carries the brand chrome (refresh + greeting +
-    // wordmark on a single line); Row 2 holds the pills inline. The
-    // sun illustration sits behind everything as glass-tinted backdrop
-    // art. Multi-layer shadows + a subtle top highlight give the card
-    // genuine 3-D depth instead of the previous flat slab.
-    return Container(
-      decoration: zynNavyHeroDecoration(radius: ZynRadii.hero),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(ZynRadii.hero),
-        child: DecoratedBox(
-          decoration: const BoxDecoration(gradient: ZynColors.navyHero),
+    // v102d — Home hero now mirrors the unified ZynPageHero look:
+    // navy gradient runs into the status-bar area, the same quiet
+    // sun + solar-panel + bolt watermark shared with every other
+    // page, single light-icons AnnotatedRegion. The home-only
+    // content (refresh on the start side, brand wordmark on the
+    // end side, centred greeting + pills strip below) sits on top
+    // of that shared canvas so Home reads as part of the family.
+    final topInset = MediaQuery.of(context).padding.top;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(gradient: ZynColors.navyHero),
+        padding: EdgeInsets.only(top: topInset),
+        // v102d-fix — match ZynPageHero's fixed 112 dp height so the
+        // Home hero feels identical in size to every other screen.
+        // The greeting + pills strip are laid out as a centred
+        // Column with breathing room (Spacer at top/bottom), and the
+        // top-edge action row (refresh / brand) overlays the hero
+        // exactly like ZynPageHero overlays the back button + trailing
+        // action, so the content reads as "two rows on the same
+        // canvas" rather than the previous compressed stack.
+        // v102d-fix3 — owner-asked: drop the height by 20% (168→135)
+        // and split the top row clearly — greeting + subscriber name
+        // on the start side (right in RTL), brand mark + ZYNAVOLT on
+        // the end side (left in RTL). Pills strip stays underneath,
+        // centred. The dedicated refresh button is folded into the
+        // brand block as a small icon so pull-to-refresh stays
+        // available without crowding the action row.
+        child: SizedBox(
+          height: 135,
           child: Stack(
             children: [
-              // Sun + solar-panel illustration anchored on the LEFT,
-              // softly faded so it's an atmospheric backdrop, not the
-              // visual focal point.
-              const Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 150,
-                child: Opacity(
-                  opacity: 0.85,
-                  child: CustomPaint(painter: _SunPanelsPainter()),
+              // Shared energy watermark (sun + panels + bolt).
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(painter: ZynHeroWatermark()),
                 ),
               ),
-              // Top-edge specular highlight — fakes the look of glass
-              // catching the light at the upper rim of the card.
+              // Top-edge specular highlight — keeps the glass-rim
+              // feel that helped the previous hero read as 3-D.
               Positioned(
                 top: 0,
                 left: 0,
@@ -243,7 +247,7 @@ class _HomeHero extends StatelessWidget {
                     gradient: LinearGradient(
                       colors: [
                         Colors.white.withValues(alpha: 0.0),
-                        Colors.white.withValues(alpha: 0.28),
+                        Colors.white.withValues(alpha: 0.24),
                         Colors.white.withValues(alpha: 0.0),
                       ],
                     ),
@@ -251,57 +255,71 @@ class _HomeHero extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 11),
+                padding: const EdgeInsets.fromLTRB(14, 24, 14, 10),
                 child: Column(
+                  mainAxisSize: MainAxisSize.max,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Row 1: refresh · greeting · brand on ONE line so
-                    // the hero stays low-profile.
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        _HeroIconButton(
-                          icon: Icons.refresh,
-                          tooltip: 'تحديث',
-                          onPressed: onRefresh,
-                        ),
-                        const SizedBox(width: 10),
+                        // Start side (right in RTL): مرحبًا + name.
                         Expanded(
-                          child: Text(
-                            greetingName.isNotEmpty
-                                ? 'مرحبًا، $greetingName 👋'
-                                : 'مرحبًا بعودتك 👋',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              height: 1.2,
-                            ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'مرحبًا',
+                                style: TextStyle(
+                                  color: Colors.white
+                                      .withValues(alpha: 0.72),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.1,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                greetingName.isNotEmpty
+                                    ? '$greetingName 👋'
+                                    : 'بعودتك 👋',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.15,
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const _BrandWordmark(),
+                        // End side (left in RTL): logo + ZYNAVOLT
+                        // stacked vertically so the brand reads as
+                        // a balanced block opposite the greeting.
+                        _BrandBlock(onRefresh: onRefresh),
                       ],
                     ),
-                    const SizedBox(height: 9),
-                    // Row 2: pills inline, wrapping only when necessary.
+                    const Spacer(),
+                    // Pills strip — centred under both columns so it
+                    // reads as a system summary, not tied to one side.
                     Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 5,
-                      runSpacing: 5,
+                      alignment: WrapAlignment.center,
+                      spacing: 6,
+                      runSpacing: 6,
                       children: [
                         if (dailyText != null)
                           _HeroPill(
                             icon: Icons.wb_sunny_outlined,
                             text: dailyText,
                           ),
-                        _HeroPill(
-                          icon: Icons.person_outline,
-                          text: deviceName ?? 'لم يتم اختيار جهاز',
-                        ),
+                        const DeviceSwitcherChip(),
                         if (lastReading != null)
                           _HeroPill(
                             icon: Icons.schedule_outlined,
@@ -320,151 +338,67 @@ class _HomeHero extends StatelessWidget {
   }
 }
 
-/// v99b — Hand-painted sun + solar panels for the hero illustration.
-/// Drawn with `CustomPaint` so the home screen doesn't depend on a
-/// raster asset and the colours track the dark hero gradient.
-class _SunPanelsPainter extends CustomPainter {
-  const _SunPanelsPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // Sun — soft glow + warm core in the upper-right of the painter
-    // box, so it sits visually between the panels and the rising
-    // brand wordmark.
-    final sunCenter = Offset(w * 0.78, h * 0.36);
-    final sunRadius = h * 0.18;
-
-    // Outer halo
-    final halo = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              const Color(0xFFFFC766).withValues(alpha: 0.45),
-              const Color(0xFFFFC766).withValues(alpha: 0.00),
-            ],
-          ).createShader(
-            Rect.fromCircle(center: sunCenter, radius: sunRadius * 2.4),
-          );
-    canvas.drawCircle(sunCenter, sunRadius * 2.4, halo);
-
-    // Sun core (warm yellow / amber gradient)
-    final sun = Paint()
-      ..shader = RadialGradient(
-        colors: [const Color(0xFFFFE5A6), const Color(0xFFFFB347)],
-      ).createShader(Rect.fromCircle(center: sunCenter, radius: sunRadius));
-    canvas.drawCircle(sunCenter, sunRadius, sun);
-
-    // Solar panels — two tilted rounded rectangles in the lower half,
-    // tinted with subtle grid lines. We draw with a transform to
-    // achieve the perspective tilt without trigonometry headaches.
-    canvas.save();
-    canvas.translate(w * 0.30, h * 0.62);
-    canvas.transform(_skewMatrix(skewX: -0.35, skewY: 0.18).storage);
-
-    final panelBase = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF3B5A8C), Color(0xFF24385F)],
-      ).createShader(const Rect.fromLTWH(0, 0, 130, 60));
-    final panelBorder = Paint()
-      ..color = const Color(0xFF6B86B5).withValues(alpha: 0.65)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    final cellLine = Paint()
-      ..color = const Color(0xFF6B86B5).withValues(alpha: 0.45)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8;
-
-    // First (rear) panel
-    final p1 = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(-10, -36, 130, 60),
-      const Radius.circular(6),
-    );
-    canvas.drawRRect(p1, panelBase);
-    canvas.drawRRect(p1, panelBorder);
-    // Cell grid for p1
-    for (var i = 1; i < 4; i++) {
-      final x = -10 + (130.0 * i / 4);
-      canvas.drawLine(Offset(x, -36), Offset(x, 24), cellLine);
-    }
-    canvas.drawLine(const Offset(-10, -6), const Offset(120, -6), cellLine);
-
-    // Second (front) panel slightly lower
-    final p2 = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(-22, 14, 138, 56),
-      const Radius.circular(6),
-    );
-    canvas.drawRRect(p2, panelBase);
-    canvas.drawRRect(p2, panelBorder);
-    for (var i = 1; i < 4; i++) {
-      final x = -22 + (138.0 * i / 4);
-      canvas.drawLine(Offset(x, 14), Offset(x, 70), cellLine);
-    }
-    canvas.drawLine(const Offset(-22, 42), const Offset(116, 42), cellLine);
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _SunPanelsPainter oldDelegate) => false;
-}
-
-/// Helper for `Canvas.transform` — Flutter's API wants a flat
-/// `Float64List` of 16 doubles representing a 4×4 column-major
-/// matrix. This builds an X/Y skew transform.
-Matrix4 _skewMatrix({required double skewX, required double skewY}) {
-  return Matrix4.identity()
-    ..setEntry(0, 1, skewX)
-    ..setEntry(1, 0, skewY);
-}
-
-class _BrandWordmark extends StatelessWidget {
-  const _BrandWordmark();
+/// v102d-fix3 — brand block for the home hero's end-side (left in
+/// RTL). Logo on top, ZYNAVOLT wordmark underneath, and a small
+/// refresh icon at the bottom — so pull-to-refresh has a visible
+/// tap surface without spending a separate row of hero height.
+class _BrandBlock extends StatelessWidget {
+  const _BrandBlock({required this.onRefresh});
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.asset(
-            _kBrandLogoPath,
-            width: 28,
-            height: 28,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Container(
-              width: 28,
-              height: 28,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.20),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'Z',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                _kBrandLogoPath,
+                width: 38,
+                height: 38,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.20),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Z',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        const Text(
-          'ZYNAVOLT',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 2.4,
-          ),
+            const SizedBox(width: 8),
+            const Text(
+              'ZYNAVOLT',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2.4,
+              ),
+            ),
+            const SizedBox(width: 6),
+            _HeroIconButton(
+              icon: Icons.refresh,
+              tooltip: 'تحديث',
+              onPressed: onRefresh,
+            ),
+          ],
         ),
       ],
     );
