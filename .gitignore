@@ -55,3 +55,4 @@ app.*.map.json
 **/*-firebase-adminsdk-*.json
 **/serviceAccountKey.json
 **/firebase-service-account*.json
+.claude/
